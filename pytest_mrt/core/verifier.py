@@ -1,43 +1,72 @@
-from dataclasses import dataclass
+from __future__ import annotations
+from dataclasses import dataclass, field
+
+from .runner import MigrationRunner
+from .schema import SchemaSnapshot, SchemaDiff
+from .seeder import SmartSeeder
 
 
 @dataclass
-class SeedRecord:
-    table: str
-    pk_col: str
-    pk_vals: list
-    expected_rows: list[dict]
+class RevisionResult:
+    revision: str
+    passed: bool
+    failures: list[str] = field(default_factory=list)
+
+    def failure_summary(self) -> str:
+        return "\n".join(f"  - {f}" for f in self.failures)
 
 
 class RollbackVerifier:
-    def __init__(self, runner):
+    """
+    For each revision under test:
+      1. Seed data into tables that exist BEFORE this migration (pre-upgrade state)
+      2. Upgrade to the revision
+      3. Downgrade one step
+      4. Verify schema is exactly restored + seeded data survived
+    """
+
+    def __init__(self, runner: MigrationRunner):
         self.runner = runner
-        self._seeds: list[SeedRecord] = []
 
-    def seed(self, table: str, rows: list[dict], pk_col: str = "id") -> None:
-        from sqlalchemy import text
-        pk_vals = []
-        with self.runner.engine.begin() as conn:
-            for row in rows:
-                conn.execute(
-                    text(f"INSERT INTO {table} ({', '.join(row)}) VALUES ({', '.join(f':{k}' for k in row)})"),
-                    row,
-                )
-                pk_vals.append(row[pk_col])
-        self._seeds.append(SeedRecord(table, pk_col, pk_vals, rows))
+    def check_revision(self, revision: str) -> RevisionResult:
+        seeder = SmartSeeder(self.runner.engine)
+        failures: list[str] = []
 
-    def verify(self) -> list[str]:
-        failures = []
-        for record in self._seeds:
-            surviving = self.runner.fetch_rows(record.table, record.pk_col, record.pk_vals)
-            surviving_pks = {r[record.pk_col] for r in surviving}
-            lost_pks = [v for v in record.pk_vals if v not in surviving_pks]
-            if lost_pks:
-                failures.append(
-                    f"Table '{record.table}': {len(lost_pks)} row(s) lost after rollback "
-                    f"(pk={record.pk_col}, values={lost_pks})"
-                )
-        return failures
+        # Capture state before this migration
+        schema_before = SchemaSnapshot.capture(self.runner.engine)
 
-    def reset(self) -> None:
-        self._seeds.clear()
+        # Seed into pre-existing tables — these rows must survive rollback
+        seeder.seed_all(schema_before.tables)
+
+        # Apply and then revert the migration
+        self.runner.upgrade(revision)
+        self.runner.downgrade()
+
+        schema_restored = SchemaSnapshot.capture(self.runner.engine)
+
+        # Schema must be exactly as before (no missing tables, no leftover tables)
+        diff = SchemaDiff()
+        for issue in diff.verify_restored(schema_before, schema_restored):
+            failures.append(issue.message)
+
+        # Data seeded before upgrade must survive the round-trip
+        failures.extend(seeder.verify())
+
+        return RevisionResult(
+            revision=revision,
+            passed=len(failures) == 0,
+            failures=failures,
+        )
+
+    def check_all(self) -> list[RevisionResult]:
+        """Test every revision independently in sequence."""
+        results: list[RevisionResult] = []
+        self.runner.downgrade_base()
+
+        for rev in self.runner.get_revisions():
+            result = self.check_revision(rev.revision)
+            results.append(result)
+            # Advance to this revision so the next check starts from correct state
+            self.runner.upgrade(rev.revision)
+
+        return results
