@@ -50,7 +50,9 @@ class MRTFixture:
             pytest.fail(f"Migration {revision} is not safely reversible:\n{result.failure_summary()}")
 
     def assert_all_reversible(self) -> None:
+        from .reporter import print_check_all_summary
         results = self._verifier.check_all()
+        print_check_all_summary(results)
         failed = [r for r in results if not r.passed]
         if failed:
             lines = []

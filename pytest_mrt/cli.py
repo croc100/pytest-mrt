@@ -1,23 +1,33 @@
-import sys
 import typer
 from rich.console import Console
 from rich.table import Table
 from rich import box
 
-from .core.detector import RiskWarning, analyze_migrations
+from . import __version__
+from .core.detector import analyze_migrations
 
-app = typer.Typer(help="MRT — Migration Rollback Tester")
+app = typer.Typer(
+    name="mrt",
+    help="MRT — Migration Rollback Tester",
+    no_args_is_help=True,
+)
 console = Console()
+
+
+@app.command("version")
+def version_cmd() -> None:
+    """Show version."""
+    console.print(f"pytest-mrt {__version__}")
 
 
 def _severity_color(s: str) -> str:
     return "red" if s == "error" else "yellow"
 
 
-@app.command()
+@app.command("check")
 def check(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
-    fail_on_warning: bool = typer.Option(False, "--strict", help="Exit 1 on warnings too"),
+    strict: bool = typer.Option(False, "--strict", help="Exit 1 on warnings too"),
 ) -> None:
     """Statically analyze migrations for rollback risk patterns."""
     warnings = analyze_migrations(versions_dir)
@@ -45,7 +55,7 @@ def check(
     if errors:
         console.print(f"[red]{len(errors)} error(s)[/red], [yellow]{len(warns)} warning(s)[/yellow]")
         raise typer.Exit(1)
-    elif warns and fail_on_warning:
+    elif warns and strict:
         console.print(f"[yellow]{len(warns)} warning(s)[/yellow] (--strict mode)")
         raise typer.Exit(1)
     else:
