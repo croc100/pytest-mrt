@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-mrt"
-version = "0.1.0"
+version = "0.2.0"
 description = "Catch database migration rollback failures before they reach production"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -18,7 +18,7 @@ classifiers = [
     "Framework :: Pytest",
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -37,6 +37,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/croc100/pytest-mrt"
+Documentation = "https://github.com/croc100/pytest-mrt#readme"
 Repository = "https://github.com/croc100/pytest-mrt"
 Issues = "https://github.com/croc100/pytest-mrt/issues"
 Changelog = "https://github.com/croc100/pytest-mrt/releases"
