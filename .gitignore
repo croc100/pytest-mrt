@@ -1,6 +1,18 @@
+# dependencies & build
 .venv/
 __pycache__/
 *.pyc
 *.egg-info/
 dist/
 .pytest_cache/
+
+# PyPI credentials — never commit
+.pypirc
+*.token
+
+# example DB files
+examples/**/*.db
+
+# secrets
+.env
+.env.*
