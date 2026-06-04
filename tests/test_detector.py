@@ -192,6 +192,109 @@ def test_column_type_change_warning(tmp_path):
     assert "Column type change" in patterns
 
 
+# ── new patterns ──────────────────────────────────────────────────────
+
+def test_rename_table_without_reverse(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            op.rename_table('users', 'accounts')
+        def downgrade():
+            pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "rename_table without reverse" in patterns
+
+
+def test_rename_table_with_reverse_is_fine(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            op.rename_table('users', 'accounts')
+        def downgrade():
+            op.rename_table('accounts', 'users')
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "rename_table without reverse" not in patterns
+
+
+def test_enum_value_added(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            op.execute("ALTER TYPE user_status ADD VALUE 'suspended'")
+        def downgrade():
+            pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "ENUM value added" in patterns
+
+
+def test_multi_step_destructive(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            op.add_column('users', sa.Column('full_name', sa.String))
+            op.execute("UPDATE users SET full_name = first_name || ' ' || last_name")
+            op.drop_column('users', 'first_name')
+            op.drop_column('users', 'last_name')
+        def downgrade():
+            op.add_column('users', sa.Column('first_name', sa.String))
+            op.add_column('users', sa.Column('last_name', sa.String))
+            op.drop_column('users', 'full_name')
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "Multi-step destructive migration" in patterns
+
+
+def test_drop_view_without_reverse(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            op.execute("DROP VIEW active_users")
+        def downgrade():
+            pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "DROP VIEW without reverse" in patterns
+
+
+def test_drop_index_without_reverse(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            op.drop_index('ix_users_email', table_name='users')
+        def downgrade():
+            pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "DROP INDEX without reverse" in patterns
+
+
+def test_drop_index_with_reverse_is_fine(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            op.drop_index('ix_users_email', table_name='users')
+        def downgrade():
+            op.create_index('ix_users_email', 'users', ['email'])
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "DROP INDEX without reverse" not in patterns
+
+
+def test_sequence_modification_warning(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            op.execute("ALTER SEQUENCE users_id_seq RESTART WITH 1000")
+        def downgrade():
+            pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "SEQUENCE modification" in patterns
+
+
 # ── clean migration — no warnings ─────────────────────────────────────
 
 def test_clean_migration_no_warnings(tmp_path):

@@ -102,6 +102,15 @@ $ pytest test_migrations.py -s
 | `ADD COLUMN` with `DEFAULT` | 🟡 warning | Full table rewrite on PostgreSQL < 11 |
 | `CREATE UNIQUE CONSTRAINT` | 🟡 warning | Will fail if duplicates exist |
 | `NOT NULL` without restoring `nullable` | 🟡 warning | Downgrade leaves column in wrong state |
+| `rename_table` without reverse | 🔴 error | Table stays under new name after rollback |
+| `rename_column` without reverse | 🔴 error | App code referencing old name breaks after rollback |
+| `DROP VIEW` without reverse | 🔴 error | Application queries against this view will fail |
+| `ALTER TYPE ... ADD VALUE` (ENUM) | 🔴 error | Cannot rollback if rows already use the new value |
+| Multi-step: add + migrate + drop | 🔴 error | Combined operation is irreversible |
+| `DROP INDEX` without reverse | 🟡 warning | Query performance degraded, unique index not restored |
+| `DROP CONSTRAINT` without reverse | 🟡 warning | Data integrity guarantees permanently removed |
+| `ALTER SEQUENCE` / `setval` | 🟡 warning | Sequences don't roll back — gaps or duplicates appear |
+| `NOT NULL` via raw SQL without reverse | 🟡 warning | Rollback leaves column as NOT NULL |
 
 Run static analysis without a database:
 

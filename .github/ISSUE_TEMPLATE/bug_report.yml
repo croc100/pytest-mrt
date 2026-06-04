@@ -1,0 +1,53 @@
+name: Bug Report
+description: Something isn't being caught, or a false positive is reported
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. The more detail you provide, the faster it gets fixed.
+
+  - type: textarea
+    id: migration
+    attributes:
+      label: Migration file (or relevant snippet)
+      description: Paste the migration that's causing the issue
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should pytest-mrt have caught (or not caught)?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What did pytest-mrt actually do?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: pytest-mrt version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: db
+    attributes:
+      label: Database
+      options:
+        - PostgreSQL
+        - SQLite
+        - MySQL / MariaDB
+        - Other
+    validations:
+      required: true

@@ -224,6 +224,137 @@ def _check_drop_not_null(source: str, rev: str, fname: str) -> list[RiskWarning]
     return []
 
 
+def _check_rename_without_reverse(source: str, rev: str, fname: str) -> list[RiskWarning]:
+    """op.rename_table / op.rename_column in upgrade but downgrade doesn't reverse it."""
+    warnings = []
+    up = _upgrade_body(source)
+    down = _downgrade_body(source)
+
+    if re.search(r"op\.rename_table\s*\(", up):
+        if not re.search(r"op\.rename_table\s*\(", down):
+            warnings.append(RiskWarning(
+                rev, fname, "rename_table without reverse",
+                "Table renamed in upgrade but downgrade does not rename it back — "
+                "rollback leaves the table under the new name",
+                "error",
+            ))
+
+    if re.search(r"op\.rename_column\s*\(|op\.alter_column\s*\([^)]+new_column_name", up, re.DOTALL):
+        if not re.search(r"op\.rename_column\s*\(|op\.alter_column\s*\([^)]+new_column_name", down, re.DOTALL):
+            warnings.append(RiskWarning(
+                rev, fname, "rename_column without reverse",
+                "Column renamed in upgrade but downgrade does not rename it back — "
+                "app code referencing the old name will break after rollback",
+                "error",
+            ))
+
+    return warnings
+
+
+def _check_drop_view(source: str, rev: str, fname: str) -> list[RiskWarning]:
+    """Dropping a view that application code may still reference."""
+    body = _upgrade_body(source)
+    if re.search(r"op\.execute\s*\(\s*['\"].*DROP\s+VIEW", body, re.IGNORECASE):
+        down = _downgrade_body(source)
+        if not re.search(r"op\.execute\s*\(\s*['\"].*CREATE\s+(OR\s+REPLACE\s+)?VIEW", down, re.IGNORECASE):
+            return [RiskWarning(
+                rev, fname, "DROP VIEW without reverse",
+                "View dropped in upgrade but not recreated in downgrade — "
+                "application queries against this view will fail after rollback",
+                "error",
+            )]
+    return []
+
+
+def _check_sequence_reset(source: str, rev: str, fname: str) -> list[RiskWarning]:
+    """Sequences don't roll back — auto-increment gaps appear after rollback."""
+    body = _upgrade_body(source)
+    if re.search(r"op\.execute\s*\(\s*['\"].*(?:CREATE|ALTER)\s+SEQUENCE", body, re.IGNORECASE) or \
+       re.search(r"op\.execute\s*\(\s*['\"].*setval\s*\(", body, re.IGNORECASE):
+        return [RiskWarning(
+            rev, fname, "SEQUENCE modification",
+            "Sequence changes are not transactional in PostgreSQL — "
+            "sequence counter will not revert after rollback, causing gaps or duplicates",
+            "warning",
+        )]
+    return []
+
+
+def _check_multi_step_destructive(source: str, rev: str, fname: str) -> list[RiskWarning]:
+    """Classic zero-downtime anti-pattern: add column + migrate data + drop old column in one migration."""
+    up = _upgrade_body(source)
+    has_add = bool(re.search(r"op\.add_column\s*\(", up))
+    has_drop = bool(re.search(r"op\.drop_column\s*\(", up))
+    has_data = bool(re.search(r"op\.execute\s*\(\s*['\"].*UPDATE", up, re.IGNORECASE))
+    if has_add and has_drop and has_data:
+        return [RiskWarning(
+            rev, fname, "Multi-step destructive migration",
+            "Migration adds a column, migrates data, then drops the original in one step — "
+            "this is irreversible: if rollback is needed, the migrated data cannot be reconstructed",
+            "error",
+        )]
+    return []
+
+
+def _check_enum_type_change(source: str, rev: str, fname: str) -> list[RiskWarning]:
+    """Adding values to a PostgreSQL ENUM type — rollback fails if rows use the new value."""
+    body = _upgrade_body(source)
+    if re.search(r"op\.execute\s*\(\s*['\"].*ALTER\s+TYPE\s+\w+\s+ADD\s+VALUE", body, re.IGNORECASE):
+        return [RiskWarning(
+            rev, fname, "ENUM value added",
+            "ALTER TYPE ... ADD VALUE cannot be rolled back in PostgreSQL if any row "
+            "already uses the new enum value — downgrade will fail with a constraint error",
+            "error",
+        )]
+    return []
+
+
+def _check_drop_index_in_upgrade(source: str, rev: str, fname: str) -> list[RiskWarning]:
+    """Dropping an index that app code or DB constraints depend on."""
+    up = _upgrade_body(source)
+    if re.search(r"op\.drop_index\s*\(", up):
+        down = _downgrade_body(source)
+        if not re.search(r"op\.create_index\s*\(", down):
+            return [RiskWarning(
+                rev, fname, "DROP INDEX without reverse",
+                "Index dropped in upgrade but not recreated in downgrade — "
+                "query performance will degrade after rollback and unique indexes won't be restored",
+                "warning",
+            )]
+    return []
+
+
+def _check_drop_constraint_in_upgrade(source: str, rev: str, fname: str) -> list[RiskWarning]:
+    """Dropping a FK or CHECK constraint — downgrade must restore it."""
+    up = _upgrade_body(source)
+    if re.search(r"op\.drop_constraint\s*\(", up):
+        down = _downgrade_body(source)
+        if not re.search(r"op\.create_(?:foreign_key|check_constraint|unique_constraint)\s*\(", down):
+            return [RiskWarning(
+                rev, fname, "DROP CONSTRAINT without reverse",
+                "Constraint dropped in upgrade but not restored in downgrade — "
+                "data integrity guarantees are permanently removed after rollback",
+                "warning",
+            )]
+    return []
+
+
+def _check_deferred_not_null(source: str, rev: str, fname: str) -> list[RiskWarning]:
+    """Two-step NOT NULL pattern where the constraint step has no reverse."""
+    up = _upgrade_body(source)
+    # Pattern: adding NOT NULL via batch_alter_table or execute
+    if re.search(r"op\.execute\s*\(\s*['\"].*ALTER\s+(?:COLUMN|TABLE).*NOT\s+NULL", up, re.IGNORECASE):
+        down = _downgrade_body(source)
+        if not re.search(r"op\.execute\s*\(\s*['\"].*ALTER\s+(?:COLUMN|TABLE).*(?:DROP\s+NOT\s+NULL|NULL(?!\s*NOT))", down, re.IGNORECASE):
+            return [RiskWarning(
+                rev, fname, "NOT NULL via raw SQL without reverse",
+                "NOT NULL constraint added via raw SQL but downgrade does not remove it — "
+                "rollback leaves column as NOT NULL, breaking inserts with null values",
+                "warning",
+            )]
+    return []
+
+
 # ──────────────────────────────────────────────
 # public API
 # ──────────────────────────────────────────────
@@ -245,6 +376,14 @@ _CHECKS = [
     _check_add_column_with_default_on_large_table,
     _check_unique_constraint_on_existing,
     _check_drop_not_null,
+    _check_rename_without_reverse,
+    _check_drop_view,
+    _check_sequence_reset,
+    _check_multi_step_destructive,
+    _check_enum_type_change,
+    _check_drop_index_in_upgrade,
+    _check_drop_constraint_in_upgrade,
+    _check_deferred_not_null,
 ]
 
 
