@@ -31,7 +31,9 @@ nav:
   - Home: index.md
   - Getting Started: quickstart.md
   - Risk Patterns: patterns.md
-  - CLI Reference: cli.md
+  - CLI & Fixture Reference: cli.md
+  - How It Works: how-it-works.md
+  - Troubleshooting: troubleshooting.md
   - Contributing: contributing.md
 
 plugins:
