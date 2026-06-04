@@ -5,14 +5,25 @@ build-backend = "hatchling.build"
 [project]
 name = "pytest-mrt"
 version = "0.1.0"
-description = "Automatically verify your database migrations can be safely rolled back"
+description = "Catch database migration rollback failures before they reach production"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
-keywords = ["pytest", "alembic", "migrations", "database", "testing", "rollback"]
+authors = [{ name = "croc100" }]
+keywords = [
+    "pytest", "alembic", "migrations", "database",
+    "testing", "rollback", "sqlalchemy",
+]
 classifiers = [
     "Framework :: Pytest",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Testing",
     "Topic :: Database",
 ]
@@ -24,12 +35,20 @@ dependencies = [
     "typer>=0.9",
 ]
 
+[project.urls]
+Homepage = "https://github.com/croc100/pytest-mrt"
+Repository = "https://github.com/croc100/pytest-mrt"
+Issues = "https://github.com/croc100/pytest-mrt/issues"
+Changelog = "https://github.com/croc100/pytest-mrt/releases"
+
 [project.optional-dependencies]
 dev = [
     "pytest",
     "psycopg2-binary",
     "hatch",
 ]
+postgres = ["psycopg2-binary"]
+asyncpg = ["asyncpg"]
 
 [project.entry-points."pytest11"]
 mrt = "pytest_mrt.plugin"
