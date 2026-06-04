@@ -34,6 +34,7 @@ nav:
   - CLI & Fixture Reference: cli.md
   - How It Works: how-it-works.md
   - Troubleshooting: troubleshooting.md
+  - Benchmarks: benchmarks.md
   - Contributing: contributing.md
 
 plugins:

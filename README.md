@@ -155,6 +155,16 @@ docker compose run test-mysql
 
 See [`docker-compose.yml`](docker-compose.yml) for the full configuration.
 
+## Performance
+
+| | 10 migrations | 50 migrations | 100 migrations |
+|---|---|---|---|
+| `mrt check` (static, no DB) | 22 ms | 108 ms | 216 ms |
+| `mrt` fixture (SQLite) | 0.33 s | 4.3 s | 15.6 s |
+
+Safe to run `mrt check` on every commit. Full dynamic suite fits in CI for most projects.  
+See [benchmarks](docs/benchmarks.md) for methodology and PostgreSQL/MySQL numbers.
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
