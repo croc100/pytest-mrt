@@ -76,11 +76,13 @@ def check(
     table.add_column("Revision", style="cyan", no_wrap=True)
     table.add_column("Pattern", no_wrap=True)
     table.add_column("Sev", no_wrap=True)
+    table.add_column("Line", no_wrap=True, justify="right")
     table.add_column("Message")
 
     for w in warnings:
         c = _severity_color(w.severity)
-        table.add_row(w.revision, w.pattern, f"[{c}]{w.severity}[/{c}]", w.message)
+        line_str = str(w.line) if w.line is not None else ""
+        table.add_row(w.revision, w.pattern, f"[{c}]{w.severity}[/{c}]", line_str, w.message)
 
     console.print(table)
     console.print()
