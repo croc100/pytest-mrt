@@ -1,36 +1,27 @@
 # pytest-mrt
 
 <p align="center">
-  <strong>Migration Rollback Tester</strong><br>
-  Catch database migration disasters before they reach production.
-</p>
-
-<p align="center">
   <a href="https://pypi.org/project/pytest-mrt"><img src="https://img.shields.io/pypi/v/pytest-mrt?color=blue" alt="PyPI"></a>
-  <a href="https://github.com/croc100/pytest-mrt/actions"><img src="https://img.shields.io/github/actions/workflow/status/croc100/pytest-mrt/ci.yml?branch=main" alt="CI"></a>
+  <a href="https://github.com/croc100/pytest-mrt/actions"><img src="https://img.shields.io/github/actions/workflow/status/croc100/pytest-mrt/ci.yml?branch=main&label=tests" alt="CI"></a>
   <a href="https://pypi.org/project/pytest-mrt"><img src="https://img.shields.io/pypi/pyversions/pytest-mrt" alt="Python"></a>
-  <a href="https://github.com/croc100/pytest-mrt/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License"></a>
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
 </p>
 
 ---
 
-## The problem
+`alembic downgrade -1` ran clean. No errors. Your monitoring went green.
 
-It's 2am. Your new feature is deployed. Something is wrong. You run `alembic downgrade -1`.
+But the users' phone numbers are gone. The column came back. The data didn't.
 
-The command succeeds. But the data is gone.
-
-The column came back. The rows didn't.
+This is what pytest-mrt exists to prevent.
 
 ---
 
-This happens because **most tools only check if your migration runs without errors** — not whether your data survives the round-trip. `alembic downgrade` can succeed while silently destroying everything it was supposed to restore.
+## What it does
 
-**pytest-mrt** tests the full cycle: seed real data → upgrade → downgrade → verify nothing was lost.
+Most tools verify that migrations *run* without errors. pytest-mrt verifies that your data *survives* a rollback — by seeding real rows before each migration, rolling back, and checking nothing was lost.
 
----
-
-## Install
+It also statically scans your migration files for 24 known dangerous patterns before you touch a database at all.
 
 ```bash
 pip install pytest-mrt
@@ -47,13 +38,13 @@ from pytest_mrt import MRTConfig
 def pytest_configure(config):
     config._mrt_config = MRTConfig(
         alembic_ini="alembic.ini",
-        db_url="postgresql://localhost/myapp_test",
+        db_url=os.environ["TEST_DATABASE_URL"],
     )
 ```
 
 ```python
 # test_migrations.py
-def test_all_migrations_are_reversible(mrt):
+def test_migrations_are_safe(mrt):
     mrt.assert_all_reversible()
 ```
 
@@ -72,214 +63,135 @@ $ pytest test_migrations.py -s
 
   ╭─────────────────────────────────────────────────────╮
   │  2 migration(s) will cause data loss on rollback.   │
-  │    004                                              │
-  │      └─ Table 'users': 3/3 rows lost after rollback │
-  │    005                                              │
-  │      └─ Table 'users' still exists after rollback   │
   ╰─────────────────────────────────────────────────────╯
+```
+
+You can also check a single revision — useful in CI to only gate new migrations in a PR:
+
+```python
+def test_this_pr(mrt):
+    result = mrt.check_revision("abc123")
+    assert result.passed, result.failure_summary()
 ```
 
 ---
 
-## What it catches
+## Static analysis
 
-### Static analysis — before you even run
-
-| Pattern | Severity | Why it's dangerous |
-|---|---|---|
-| `op.drop_column()` in upgrade | 🔴 error | Column data is permanently gone |
-| `op.drop_table()` in upgrade | 🔴 error | All table data is permanently gone |
-| `TRUNCATE` in migration | 🔴 error | Destroys data with no undo |
-| `def downgrade(): pass` | 🔴 error | Rollback silently does nothing |
-| No `downgrade()` function | 🔴 error | Migration is completely irreversible |
-| `RunPython` without `reverse_func` | 🔴 error | Data transformation cannot be undone |
-| `NOT NULL` without `server_default` | 🟡 warning | Will fail on non-empty tables |
-| `ALTER COLUMN type_=...` | 🟡 warning | Type conversion may lose data |
-| `op.execute()` with raw SQL | 🟡 warning | Cannot verify reversibility |
-| Bulk `UPDATE` without reverse | 🟡 warning | One-way data transformation |
-| `ON DELETE CASCADE` added | 🟡 warning | Child rows silently deleted |
-| `CREATE INDEX` without `CONCURRENTLY` | 🟡 warning | Locks table during index build |
-| `ADD COLUMN` with `DEFAULT` | 🟡 warning | Full table rewrite on PostgreSQL < 11 |
-| `CREATE UNIQUE CONSTRAINT` | 🟡 warning | Will fail if duplicates exist |
-| `NOT NULL` without restoring `nullable` | 🟡 warning | Downgrade leaves column in wrong state |
-| `rename_table` without reverse | 🔴 error | Table stays under new name after rollback |
-| `rename_column` without reverse | 🔴 error | App code referencing old name breaks after rollback |
-| `DROP VIEW` without reverse | 🔴 error | Application queries against this view will fail |
-| `ALTER TYPE ... ADD VALUE` (ENUM) | 🔴 error | Cannot rollback if rows already use the new value |
-| Multi-step: add + migrate + drop | 🔴 error | Combined operation is irreversible |
-| `DROP INDEX` without reverse | 🟡 warning | Query performance degraded, unique index not restored |
-| `DROP CONSTRAINT` without reverse | 🟡 warning | Data integrity guarantees permanently removed |
-| `ALTER SEQUENCE` / `setval` | 🟡 warning | Sequences don't roll back — gaps or duplicates appear |
-| `NOT NULL` via raw SQL without reverse | 🟡 warning | Rollback leaves column as NOT NULL |
-
-Run static analysis without a database:
+No database needed. Scan your migration files directly:
 
 ```bash
 mrt check migrations/versions/
 ```
 
 ```
-╭──────────────────────────────────────────────────────────────────────────────╮
-│                          Rollback Risk Analysis                              │
-├──────────┬──────────────────────┬─────────────┬───────────────────────────  │
-│ Revision │ Pattern              │ Sev         │ Message                       │
-├──────────┼──────────────────────┼─────────────┼───────────────────────────  │
-│ 004      │ DROP COLUMN          │ error       │ Data loss on rollback         │
-│ 005      │ No-op downgrade      │ error       │ downgrade() does nothing      │
-│ 006      │ INDEX without CONC.  │ warning     │ Locks table during build      │
-╰──────────────────────────────────────────────────────────────────────────────╯
-2 error(s), 1 warning(s)
+╭──────────┬──────────────────────────────┬─────────┬──────────────────────────────────────────────────╮
+│ Revision │ Pattern                      │ Sev     │ Message                                          │
+├──────────┼──────────────────────────────┼─────────┼──────────────────────────────────────────────────┤
+│ 004      │ DROP COLUMN in upgrade       │ error   │ Column dropped — data permanently lost on rollback│
+│ 005      │ No-op downgrade              │ error   │ downgrade() does nothing — migration irreversible │
+│ 006      │ ENUM value added             │ error   │ Cannot roll back if rows use the new value        │
+│ 007      │ INDEX without CONCURRENTLY   │ warning │ Locks table during index build                    │
+╰──────────┴──────────────────────────────┴─────────┴──────────────────────────────────────────────────╯
+3 error(s), 1 warning(s)
 ```
 
-### Dynamic verification — with real data
-
-pytest-mrt seeds actual rows before each migration, then checks they survive the downgrade:
-
-```python
-def test_specific_revision(mrt):
-    result = mrt.check_revision("abc123")
-    assert result.passed, result.failure_summary()
-```
-
-Or test everything at once:
-
-```python
-def test_all_migrations(mrt):
-    mrt.assert_all_reversible()
-```
+Add `--strict` to make warnings fail the build too.
 
 ---
 
-## How it works
+## What gets caught
 
-For each migration revision, pytest-mrt:
+**Errors** — these will cause data loss or a broken rollback:
 
-```
-1. Capture schema at current state
-2. Seed real data into all existing tables
-3. Run upgrade to this revision
-4. Run downgrade (one step back)
-5. Verify schema is exactly restored
-6. Verify every seeded row survived
-```
-
-This catches failures that syntax checks miss:
-- Schema comes back, but seeded rows are gone → **data loss**
-- Downgrade is a no-op, table still exists → **rollback did nothing**
-- Column returns but with wrong type → **schema drift**
-
----
-
-## Supported databases
-
-| Database | Status |
+| Pattern | Why |
 |---|---|
-| PostgreSQL | ✅ Full support |
-| SQLite | ✅ Full support (great for CI) |
-| MySQL / MariaDB | 🔜 Planned |
+| `op.drop_column()` in upgrade | Column data is gone even after rollback re-adds the column |
+| `op.drop_table()` in upgrade | Every row in the table is permanently lost |
+| `TRUNCATE` in migration | Destroys data with no undo |
+| `def downgrade(): pass` | Rollback silently does nothing |
+| No `downgrade()` function | Migration is completely irreversible |
+| `rename_table` without reverse | Table stays under new name after rollback |
+| `rename_column` without reverse | App code using old column name breaks |
+| `DROP VIEW` without recreating | Application queries fail after rollback |
+| `ALTER TYPE ... ADD VALUE` | Can't remove enum values once rows use them |
+| Add + migrate data + drop original | The combined operation cannot be undone |
+
+**Warnings** — worth reviewing before deploying:
+
+| Pattern | Why |
+|---|---|
+| `NOT NULL` without `server_default` | Fails on non-empty tables |
+| Column type change | Conversion may be lossy |
+| Raw `op.execute()` | Content can't be verified automatically |
+| Bulk `UPDATE` without reverse `UPDATE` | One-way data transformation |
+| `ON DELETE CASCADE` added | Child rows silently deleted with parent |
+| `CREATE INDEX` without `CONCURRENTLY` | Locks table during build (PostgreSQL) |
+| `ADD COLUMN` with `DEFAULT` | Full table rewrite on PostgreSQL < 11 |
+| `CREATE UNIQUE CONSTRAINT` | Fails if duplicates already exist |
+| `DROP INDEX` without recreating | Query performance and uniqueness not restored |
+| `DROP CONSTRAINT` without recreating | Data integrity guarantees removed |
+| `ALTER SEQUENCE` / `setval` | Sequences don't roll back — gaps appear |
+| `NOT NULL` via raw SQL without reverse | Column stays NOT NULL after rollback |
+| `NOT NULL` without restoring `nullable` | Downgrade leaves column in wrong state |
 
 ---
 
-## CI integration
+## How the dynamic check works
 
-Add to your GitHub Actions workflow:
+For each revision, pytest-mrt:
 
-```yaml
-- name: Test migration rollbacks
-  run: pytest tests/test_migrations.py -v -s
-```
+1. Takes a snapshot of the current schema
+2. Seeds real rows into every table (type-aware: generates valid integers, strings, timestamps, UUIDs, etc.)
+3. Runs `alembic upgrade` to the revision
+4. Runs `alembic downgrade -1`
+5. Checks the schema is exactly restored — no missing tables, no leftover tables
+6. Checks every seeded row is still there
 
-Or use the static check as a fast pre-flight:
-
-```yaml
-- name: Static migration analysis
-  run: mrt check migrations/versions/ --strict
-```
-
-`--strict` makes warnings fail the build, not just errors.
+This catches things static analysis can't: a migration where the schema comes back but the data doesn't, or a `downgrade()` that creates the table empty instead of restoring it.
 
 ---
 
-## Configuration
+## Databases
 
-```python
-# conftest.py
-from pytest_mrt import MRTConfig
+| | Static analysis | Dynamic verification |
+|---|---|---|
+| PostgreSQL | ✅ | ✅ |
+| SQLite | ✅ | ✅ |
+| MySQL / MariaDB | ✅ | 🔜 planned |
 
-def pytest_configure(config):
-    config._mrt_config = MRTConfig(
-        alembic_ini="alembic.ini",       # path to alembic.ini
-        db_url="postgresql://...",        # test database URL
-        seed_rows=5,                      # rows to seed per table (default: 3)
-    )
+---
+
+## CI
+
+```yaml
+- name: Check migrations
+  run: |
+    mrt check migrations/versions/
+    pytest tests/test_migrations.py -v -s
 ```
 
-Use environment variables for CI:
-
-```python
-import os
-from pytest_mrt import MRTConfig
-
-def pytest_configure(config):
-    config._mrt_config = MRTConfig(
-        alembic_ini="alembic.ini",
-        db_url=os.environ["TEST_DATABASE_URL"],
-    )
-```
+For publishing via GitHub Actions with OIDC (no tokens needed), see [the publish workflow](.github/workflows/publish.yml).
 
 ---
 
 ## Examples
 
-See [`examples/blog/`](examples/blog/) for a complete working example with:
-- Safe migrations (add nullable column, create table)
-- Dangerous migrations (drop column with data, no-op downgrade)
-- How pytest-mrt catches each failure
+[`examples/blog/`](examples/blog/) has a complete Alembic project with intentionally safe and unsafe migrations. Run it to see what pytest-mrt catches:
 
 ```bash
 cd examples/blog
-pip install pytest-mrt
 pytest test_migrations.py -v -s
 ```
 
 ---
 
-## FAQ
-
-**Does it modify my production database?**
-No. pytest-mrt only runs against the database URL you provide in `MRTConfig`. Always use a test database.
-
-**Does it work with Django migrations?**
-Django support is on the roadmap. Currently only Alembic is supported.
-
-**How is this different from pytest-alembic?**
-`pytest-alembic` checks that migrations run without errors and that your schema matches your models. It does **not** verify that data survives a rollback. pytest-mrt focuses specifically on that gap.
-
-**My migration intentionally drops a column. Will this always fail?**
-Yes — dropping a column destroys data. That's exactly what pytest-mrt warns you about. If you want to proceed, you can exclude specific revisions or mark the test as expected-to-fail.
-
----
-
-## Roadmap
-
-- [x] Alembic support
-- [x] Static risk analysis CLI (`mrt check`)
-- [x] Dynamic data integrity verification
-- [x] GitHub Actions CI
-- [ ] Django Migrations support
-- [ ] MySQL / MariaDB support
-- [ ] HTML report output
-- [ ] Per-revision exclusions (`@mrt.skip("004", reason="...")`)
-- [ ] PyPI release
-
----
-
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+New risk patterns are the most valuable contribution. If you've been burned by a migration pattern that pytest-mrt doesn't catch, open an issue or PR. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
 ## License
 
-Apache 2.0
+MIT
