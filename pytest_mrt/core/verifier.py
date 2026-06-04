@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 from .runner import MigrationRunner
 from .schema import SchemaSnapshot, SchemaDiff
@@ -45,10 +46,12 @@ class RollbackVerifier:
         runner: MigrationRunner,
         skip: dict[str, str] | None = None,
         custom_seeds: dict[str, Callable[[], list[dict]]] | None = None,
+        timeout: int | None = None,
     ):
         self.runner = runner
         self.skip = skip or {}
         self.custom_seeds = custom_seeds or {}
+        self.timeout = timeout
 
     def _build_seeder(self, schema: SchemaSnapshot) -> SmartSeeder:
         seeder = SmartSeeder(self.runner.engine)
@@ -80,6 +83,22 @@ class RollbackVerifier:
                 seeder.seed_table(table_info)
         return seeder
 
+    def _run_migration_check(
+        self,
+        revision: str,
+        schema_before: SchemaSnapshot,
+        seeder: SmartSeeder,
+    ) -> list[str]:
+        """upgrade → downgrade → verify. Extracted for timeout wrapping."""
+        self.runner.upgrade(revision)
+        self.runner.downgrade()
+        schema_restored = SchemaSnapshot.capture(self.runner.engine)
+        failures: list[str] = []
+        for issue in SchemaDiff().verify_restored(schema_before, schema_restored):
+            failures.append(issue.message)
+        failures.extend(seeder.verify())
+        return failures
+
     def check_revision(self, revision: str) -> RevisionResult:
         """
         Test that a single migration is safely reversible.
@@ -100,14 +119,22 @@ class RollbackVerifier:
             schema_before = SchemaSnapshot.capture(self.runner.engine)
             seeder = self._build_seeder(schema_before)
 
-            self.runner.upgrade(revision)
-            self.runner.downgrade()
-
-            schema_restored = SchemaSnapshot.capture(self.runner.engine)
-
-            for issue in SchemaDiff().verify_restored(schema_before, schema_restored):
-                failures.append(issue.message)
-            failures.extend(seeder.verify())
+            if self.timeout is not None:
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        self._run_migration_check, revision, schema_before, seeder
+                    )
+                    try:
+                        failures = future.result(timeout=self.timeout)
+                    except FuturesTimeout:
+                        failures.append(
+                            f"Migration timed out after {self.timeout}s — "
+                            "upgrade() or downgrade() did not complete within the limit. "
+                            "The migration may be deadlocked or running a long data operation. "
+                            "Increase MRTConfig.migration_timeout or split the migration."
+                        )
+            else:
+                failures = self._run_migration_check(revision, schema_before, seeder)
 
         except Exception as exc:
             failures.append(f"Unexpected error during check: {type(exc).__name__}: {exc}")

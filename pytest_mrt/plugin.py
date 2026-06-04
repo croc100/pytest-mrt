@@ -18,6 +18,7 @@ class MRTFixture:
             self._runner,
             skip=config.skip,
             custom_seeds=config.custom_seeds,
+            timeout=config.migration_timeout,
         )
 
     # ── migration control ──────────────────────────────────────────────

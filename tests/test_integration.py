@@ -489,6 +489,70 @@ def test_verifier_check_all_chain_advance_failure(alembic_env):
     assert len(failed) >= 1
 
 
+def test_migration_timeout_fires(alembic_env):
+    """migration_timeout causes a failure when upgrade/downgrade hangs."""
+    import time
+
+    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.create_table('things',
+                sa.Column('id', sa.Integer, primary_key=True),
+            )
+
+        def downgrade():
+            op.drop_table('things')
+    """))
+
+    runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
+    verifier = RollbackVerifier(runner, timeout=1)
+
+    original_upgrade = runner.upgrade
+
+    def slow_upgrade(rev="head"):
+        time.sleep(5)
+        return original_upgrade(rev)
+
+    with patch.object(runner, "upgrade", side_effect=slow_upgrade):
+        result = verifier.check_revision("001")
+
+    assert not result.passed
+    assert any("timed out" in f.lower() for f in result.failures)
+
+
+def test_migration_timeout_none_does_not_affect_fast_migrations(alembic_env):
+    """timeout=None (default) runs normally with no timeout applied."""
+    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.create_table('widgets',
+                sa.Column('id', sa.Integer, primary_key=True),
+            )
+
+        def downgrade():
+            op.drop_table('widgets')
+    """))
+
+    runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
+    verifier = RollbackVerifier(runner, timeout=None)
+    result = verifier.check_revision("001")
+    assert result.passed
+
+
 def test_runner_get_versions_dir(alembic_env):
     """get_versions_dir returns a valid directory path."""
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
