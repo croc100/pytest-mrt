@@ -1,0 +1,74 @@
+name: False Positive
+description: mrt check flagged something safe, or mrt fixture failed on a migration that is actually reversible
+labels: ["false-positive", "bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        False positives are high-priority bugs. Please include the migration and the warning message.
+
+  - type: textarea
+    id: migration
+    attributes:
+      label: Migration file (or relevant snippet)
+      description: The migration that triggered the false positive
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: warning
+    attributes:
+      label: Warning / error produced
+      description: Paste the exact output from `mrt check` or the pytest failure message
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: why_safe
+    attributes:
+      label: Why this is safe
+      description: Explain why this pattern does NOT cause data loss or a broken rollback
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: pytest-mrt version
+      placeholder: "0.7.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: check_type
+    attributes:
+      label: Check type
+      options:
+        - Static analysis (mrt check)
+        - Dynamic verification (mrt fixture)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Migration framework
+      options:
+        - Alembic
+        - Django
+    validations:
+      required: true
+
+  - type: dropdown
+    id: db
+    attributes:
+      label: Database
+      options:
+        - PostgreSQL
+        - SQLite
+        - MySQL / MariaDB
+        - Other
+    validations:
+      required: true

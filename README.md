@@ -155,6 +155,10 @@ docker compose run test-mysql
 
 See [`docker-compose.yml`](docker-compose.yml) for the full configuration.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full release history.
+
 ## Documentation
 
 Full docs at **[croc100.github.io/pytest-mrt](https://croc100.github.io/pytest-mrt)**

@@ -1,11 +1,12 @@
 name: Bug Report
-description: Something isn't being caught, or a false positive is reported
+description: Something isn't being caught, or mrt is crashing / behaving incorrectly
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for reporting a bug. The more detail you provide, the faster it gets fixed.
+        If mrt caught something that is actually safe, use the **False Positive** template instead.
 
   - type: textarea
     id: migration
@@ -20,7 +21,7 @@ body:
     id: expected
     attributes:
       label: Expected behavior
-      description: What should pytest-mrt have caught (or not caught)?
+      description: What should pytest-mrt have done?
     validations:
       required: true
 
@@ -28,7 +29,8 @@ body:
     id: actual
     attributes:
       label: Actual behavior
-      description: What did pytest-mrt actually do?
+      description: What did pytest-mrt actually do? Include the full error message or output.
+      render: text
     validations:
       required: true
 
@@ -36,7 +38,18 @@ body:
     id: version
     attributes:
       label: pytest-mrt version
-      placeholder: "0.1.0"
+      placeholder: "0.7.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Migration framework
+      options:
+        - Alembic
+        - Django
+        - Both
     validations:
       required: true
 
@@ -51,3 +64,27 @@ body:
         - Other
     validations:
       required: true
+
+  - type: dropdown
+    id: check_type
+    attributes:
+      label: Check type
+      options:
+        - Static analysis (mrt check)
+        - Dynamic verification (mrt fixture)
+        - Both
+        - CLI (mrt fix / mrt report / mrt explain)
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version, OS, SQLAlchemy version
+      placeholder: |
+        Python: 3.12
+        OS: Ubuntu 22.04
+        SQLAlchemy: 2.0.30
+    validations:
+      required: false

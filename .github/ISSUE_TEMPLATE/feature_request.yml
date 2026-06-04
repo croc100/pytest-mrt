@@ -1,17 +1,33 @@
 name: Feature Request
-description: Suggest a new risk pattern or feature
+description: Suggest a new risk pattern, detection improvement, or feature
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
         The most valuable contributions are new risk patterns that pytest-mrt doesn't catch yet.
+        Check the [ROADMAP](https://github.com/croc100/pytest-mrt/blob/main/ROADMAP.md) before submitting — it may already be planned.
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type of request
+      options:
+        - New static analysis pattern (Alembic)
+        - New static analysis pattern (Django)
+        - Dynamic verification improvement
+        - New database support
+        - CLI / UX improvement
+        - Integration (CI/CD, notifications, observability)
+        - Other
+    validations:
+      required: true
 
   - type: textarea
     id: pattern
     attributes:
-      label: What migration pattern should be detected?
-      description: Describe the dangerous pattern. Include a code example if possible.
+      label: What should be detected or added?
+      description: Describe the pattern or feature. Include a code example if possible.
       render: python
     validations:
       required: true
@@ -19,15 +35,28 @@ body:
   - type: textarea
     id: why
     attributes:
-      label: Why is this dangerous?
-      description: What goes wrong in production when this pattern is used?
+      label: Why is this valuable?
+      description: |
+        For patterns: what goes wrong in production when this is used?
+        For features: what workflow does this enable?
     validations:
       required: true
 
   - type: textarea
     id: detection
     attributes:
-      label: How should it be detected?
-      description: Static analysis (regex on migration file) or dynamic (needs a real DB)?
+      label: Detection approach (for patterns)
+      description: Static analysis (AST) or dynamic verification (needs a real DB)?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: How often does this affect you?
+      options:
+        - Every project
+        - Common in my codebase
+        - Edge case I hit once
     validations:
       required: false
