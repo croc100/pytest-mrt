@@ -371,6 +371,162 @@ def test_mrt_fixture_custom_check(alembic_env):
     fixture.reset()
 
 
+def test_mrt_fixture_seed_valid_table(alembic_env):
+    """seed() inserts into an existing table without error."""
+    _simple_reversible_migration(alembic_env["versions"])
+
+    cfg = MRTConfig(
+        alembic_ini=alembic_env["ini"],
+        db_url=alembic_env["db_url"],
+    )
+    fixture = MRTFixture(cfg)
+    fixture.upgrade("001")
+    fixture.seed("users", [{"id": 99, "name": "Alice"}])
+    fixture.downgrade()
+    fixture.reset()
+
+
+def test_mrt_fixture_seed_invalid_table_raises(alembic_env):
+    """seed() raises ValueError when the table doesn't exist."""
+    _simple_reversible_migration(alembic_env["versions"])
+
+    cfg = MRTConfig(
+        alembic_ini=alembic_env["ini"],
+        db_url=alembic_env["db_url"],
+    )
+    fixture = MRTFixture(cfg)
+    fixture.upgrade("001")
+    with pytest.raises(ValueError, match="not found"):
+        fixture.seed("nonexistent_table", [{"id": 1}])
+    fixture.downgrade()
+    fixture.reset()
+
+
+def test_mrt_fixture_check_static_no_versions_dir(alembic_env):
+    """check_static() without versions_dir uses runner.get_versions_dir()."""
+    _simple_reversible_migration(alembic_env["versions"])
+
+    cfg = MRTConfig(
+        alembic_ini=alembic_env["ini"],
+        db_url=alembic_env["db_url"],
+    )
+    fixture = MRTFixture(cfg)
+    # Should not raise — derives versions_dir from alembic config
+    warnings = fixture.check_static()
+    assert isinstance(warnings, list)
+    fixture.reset()
+
+
+def test_mrt_fixture_assert_data_intact_failure(alembic_env):
+    """assert_data_intact() calls pytest.fail when seeded rows are missing."""
+    from pytest_mrt.core.seeder import SeededRow
+
+    _simple_reversible_migration(alembic_env["versions"])
+
+    cfg = MRTConfig(
+        alembic_ini=alembic_env["ini"],
+        db_url=alembic_env["db_url"],
+    )
+    fixture = MRTFixture(cfg)
+    fixture.upgrade("001")
+
+    # Inject a ghost row that doesn't actually exist in the DB
+    fixture._seeder._rows.append(
+        SeededRow("users", "id", 9999, {"id": 9999, "name": "ghost"})
+    )
+
+    with pytest.raises(BaseException):
+        fixture.assert_data_intact()
+
+    fixture.downgrade()
+    fixture.reset()
+
+
+def test_mrt_fixture_assert_reversible_failure_calls_fail(alembic_env):
+    """assert_reversible() calls pytest.fail on non-reversible migration."""
+    _add_migration(alembic_env["versions"], "001_noop_d.py", textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.create_table('things',
+                sa.Column('id', sa.Integer, primary_key=True),
+            )
+
+        def downgrade():
+            pass
+    """))
+
+    cfg = MRTConfig(
+        alembic_ini=alembic_env["ini"],
+        db_url=alembic_env["db_url"],
+    )
+    fixture = MRTFixture(cfg)
+
+    with pytest.raises(BaseException):
+        fixture.assert_reversible("001")
+
+    fixture.reset()
+
+
+def test_mrt_fixture_assert_all_reversible_failure_calls_fail(alembic_env):
+    """assert_all_reversible() calls pytest.fail when any migration fails."""
+    _add_migration(alembic_env["versions"], "001_noop_d2.py", textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.create_table('gadgets',
+                sa.Column('id', sa.Integer, primary_key=True),
+            )
+
+        def downgrade():
+            pass
+    """))
+
+    cfg = MRTConfig(
+        alembic_ini=alembic_env["ini"],
+        db_url=alembic_env["db_url"],
+    )
+    fixture = MRTFixture(cfg)
+
+    with pytest.raises(BaseException):
+        fixture.assert_all_reversible()
+
+    fixture.reset()
+
+
+def test_mrt_pytest_fixture_via_pytester(pytester, alembic_env):
+    """The mrt pytest fixture yields an MRTFixture and is properly cleaned up."""
+    pytester.makeconftest(f"""
+        from pytest_mrt import MRTConfig
+        def pytest_configure(config):
+            config._mrt_config = MRTConfig(
+                alembic_ini="{alembic_env['ini']}",
+                db_url="{alembic_env['db_url']}",
+            )
+    """)
+    pytester.makepyfile("""
+        from pytest_mrt.plugin import MRTFixture
+        def test_fixture_type(mrt):
+            assert isinstance(mrt, MRTFixture)
+        def test_fixture_has_config(mrt):
+            assert mrt._config is not None
+    """)
+    result = pytester.runpytest("-v")
+    result.assert_outcomes(passed=2)
+
+
 def test_mrt_fixture_risk_score(alembic_env):
     _add_migration(alembic_env["versions"], "001_noop.py", textwrap.dedent("""
         revision = '001'

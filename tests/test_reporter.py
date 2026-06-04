@@ -87,3 +87,9 @@ def test_failure_summary_format():
     summary = r.failure_summary()
     assert "Table lost" in summary
     assert "Column missing" in summary
+
+
+def test_print_static_check_header():
+    from pytest_mrt.reporter import print_static_check_header
+    out = _capture(print_static_check_header, "alembic/versions")
+    assert "MRT" in out or "alembic" in out or "versions" in out

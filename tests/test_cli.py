@@ -227,3 +227,170 @@ def test_report_default_output(tmp_path, versions_dir, monkeypatch):
     result = runner.invoke(app, ["report", str(versions_dir)])
     assert result.exit_code == 0
     assert (tmp_path / "migration_report.html").exists()
+
+
+# ── mrt init ─────────────────────────────────────
+
+def test_init_creates_conftest_and_test_file(tmp_path, monkeypatch):
+    """init with no alembic.ini prompts for path, creates both files."""
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app, ["init"],
+        input="alembic.ini\nsqlite:///test.db\n",
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "Next steps" in result.output
+
+
+def test_init_finds_alembic_ini(tmp_path, monkeypatch):
+    """init detects alembic.ini in current dir, skips path prompt."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "alembic.ini").write_text("[alembic]\n")
+    result = runner.invoke(
+        app, ["init"],
+        input="sqlite:///test.db\n",
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "Found" in result.output
+
+
+def test_init_creates_conftest_file(tmp_path, monkeypatch):
+    """init writes conftest.py when it doesn't exist."""
+    monkeypatch.chdir(tmp_path)
+    runner.invoke(
+        app, ["init"],
+        input="alembic.ini\nsqlite:///test.db\n",
+        catch_exceptions=False,
+    )
+    conftest = tmp_path / "conftest.py"
+    assert conftest.exists()
+    content = conftest.read_text()
+    assert "MRTConfig" in content
+    assert "alembic.ini" in content
+
+
+def test_init_creates_test_migrations_file(tmp_path, monkeypatch):
+    """init writes test_migrations.py when it doesn't exist."""
+    monkeypatch.chdir(tmp_path)
+    runner.invoke(
+        app, ["init"],
+        input="alembic.ini\nsqlite:///test.db\n",
+        catch_exceptions=False,
+    )
+    test_file = tmp_path / "test_migrations.py"
+    assert test_file.exists()
+    assert "assert_all_reversible" in test_file.read_text()
+
+
+def test_init_skips_existing_conftest_when_declined(tmp_path, monkeypatch):
+    """init skips conftest.py when user declines to overwrite."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "conftest.py").write_text("# existing\n")
+    result = runner.invoke(
+        app, ["init"],
+        input="alembic.ini\nsqlite:///test.db\nn\n",
+        catch_exceptions=False,
+    )
+    assert (tmp_path / "conftest.py").read_text() == "# existing\n"
+    assert "Skipping" in result.output
+
+
+def test_init_appends_to_existing_conftest_when_accepted(tmp_path, monkeypatch):
+    """init appends MRTConfig to existing conftest.py when user accepts."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "conftest.py").write_text("# existing\n")
+    runner.invoke(
+        app, ["init"],
+        input="alembic.ini\nsqlite:///test.db\ny\n",
+        catch_exceptions=False,
+    )
+    content = (tmp_path / "conftest.py").read_text()
+    assert "# existing" in content
+    assert "MRTConfig" in content
+
+
+def test_init_skips_existing_test_migrations(tmp_path, monkeypatch):
+    """init skips test_migrations.py if it already exists."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "test_migrations.py").write_text("# already here\n")
+    runner.invoke(
+        app, ["init"],
+        input="alembic.ini\nsqlite:///test.db\n",
+        catch_exceptions=False,
+    )
+    assert (tmp_path / "test_migrations.py").read_text() == "# already here\n"
+
+
+def test_init_uses_tests_dir_if_exists(tmp_path, monkeypatch):
+    """init uses tests/ as test_dir when the directory exists."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "tests").mkdir()
+    runner.invoke(
+        app, ["init"],
+        input="alembic.ini\nsqlite:///test.db\n",
+        catch_exceptions=False,
+    )
+    assert (tmp_path / "tests" / "conftest.py").exists() or \
+           (tmp_path / "tests" / "test_migrations.py").exists()
+
+
+# ── mrt explain ──────────────────────────────────
+
+def test_explain_missing_anthropic(tmp_path):
+    """explain exits 1 with helpful message when anthropic is not installed."""
+    import sys
+    import unittest.mock as mock
+
+    f = tmp_path / "mig.py"
+    f.write_text("# migration\n")
+
+    with mock.patch.dict(sys.modules, {"anthropic": None}):
+        result = runner.invoke(app, ["explain", str(f)])
+
+    assert result.exit_code == 1
+    assert "not installed" in result.output or "Missing" in result.output
+
+
+def test_explain_missing_file(tmp_path):
+    """explain exits 1 — either file not found or anthropic not installed."""
+    result = runner.invoke(app, ["explain", str(tmp_path / "nonexistent.py")])
+    assert result.exit_code == 1
+    # anthropic may or may not be installed; either way, exit 1
+    assert "not found" in result.output.lower() or "not installed" in result.output.lower()
+
+
+# ── mrt fix edge cases ───────────────────────────
+
+def test_fix_shows_confidence(tmp_path):
+    """fix output contains confidence level."""
+    f = tmp_path / "mig.py"
+    f.write_text(textwrap.dedent("""
+        revision = '001'
+        from alembic import op
+        import sqlalchemy as sa
+        def upgrade():
+            op.create_table('widgets', sa.Column('id', sa.Integer, primary_key=True))
+        def downgrade():
+            pass
+    """))
+    result = runner.invoke(app, ["fix", str(f)])
+    assert result.exit_code == 0
+    assert any(level in result.output.lower() for level in ["high", "medium", "low"])
+
+
+def test_fix_shows_run_with_apply_hint(tmp_path):
+    """fix without --apply tells user to run with --apply."""
+    f = tmp_path / "mig.py"
+    f.write_text(textwrap.dedent("""
+        revision = '001'
+        from alembic import op
+        import sqlalchemy as sa
+        def upgrade():
+            op.create_table('items', sa.Column('id', sa.Integer, primary_key=True))
+        def downgrade():
+            pass
+    """))
+    result = runner.invoke(app, ["fix", str(f)])
+    assert "--apply" in result.output
