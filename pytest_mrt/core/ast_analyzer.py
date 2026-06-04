@@ -86,14 +86,42 @@ class MigrationAST:
         return list(self._walk_calls(fn, in_batch=False))
 
     def _walk_calls(self, node: ast.AST, in_batch: bool) -> Iterator[CallInfo]:
-        """Walk node yielding CallInfo for every method call found."""
-        for child in ast.walk(node):
+        """
+        Walk node yielding CallInfo for every method call found.
+
+        Stops at nested FunctionDef/AsyncFunctionDef boundaries so that
+        inner helper functions defined inside upgrade() are not attributed
+        to the outer function's call list.
+
+        Tracks batch context by detecting `with op.batch_alter_table(...)` blocks
+        and propagating in_batch=True to all calls inside them.
+        """
+        for child in ast.iter_child_nodes(node):
+            # Do not recurse into nested function definitions.
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+
+            # Propagate batch context: if this child is a with-block that opens
+            # a batch_alter_table context, all calls inside it are in_batch=True.
+            next_in_batch = in_batch
+            if isinstance(child, ast.With):
+                for item in child.items:
+                    ctx = item.context_expr
+                    if (isinstance(ctx, ast.Call) and
+                            isinstance(ctx.func, ast.Attribute) and
+                            ctx.func.attr == "batch_alter_table"):
+                        next_in_batch = True
+                        break
+
             if isinstance(child, ast.Call):
                 method = self._call_method(child)
                 if method:
-                    # Check if this call is inside a batch_alter_table with-block
-                    batch = in_batch or self._is_batch_context(child, node)
-                    yield CallInfo(method=method, node=child, in_batch=batch)
+                    yield CallInfo(method=method, node=child, in_batch=in_batch)
+                # Recurse into call arguments — use current in_batch, not next_in_batch
+                # (a Call's children are args/keywords, not statement blocks)
+                yield from self._walk_calls(child, in_batch)
+            else:
+                yield from self._walk_calls(child, next_in_batch)
 
     def _is_batch_context(self, call_node: ast.Call, fn_node: ast.AST) -> bool:
         """Check if call_node is inside a batch_alter_table with-block."""
@@ -104,7 +132,6 @@ class MigrationAST:
                     if (isinstance(ctx, ast.Call) and
                             isinstance(ctx.func, ast.Attribute) and
                             ctx.func.attr == "batch_alter_table"):
-                        # Is call_node inside this with block?
                         for child in ast.walk(node):
                             if child is call_node:
                                 return True

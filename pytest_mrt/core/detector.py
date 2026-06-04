@@ -280,11 +280,23 @@ def _check_add_column_with_default(m: MigrationAST) -> list[RiskWarning]:
         if c.method == "add_column":
             table = m.str_arg(c.node, 0) or "?"
             for col_call in m.find_column_calls(c.node):
-                if m.has_kwarg(col_call, "server_default") or m.has_kwarg(col_call, "default"):
+                has_volatile_default = m.has_kwarg(col_call, "default")
+                has_server_default = m.has_kwarg(col_call, "server_default")
+                if has_volatile_default and not has_server_default:
+                    # Python-side default (not server_default) always rewrites the table
                     return [_warn(
-                        m, "ADD COLUMN with DEFAULT",
-                        f"Adding column to '{table}' with a default value may rewrite "
-                        "the entire table on PostgreSQL < 11 — causes long exclusive lock",
+                        m, "ADD COLUMN with volatile DEFAULT",
+                        f"Adding column to '{table}' with a Python-side default rewrites "
+                        "the entire table on all PostgreSQL versions — use server_default "
+                        "with a literal value instead for a zero-lock migration",
+                        "warning", line=c.node.lineno,
+                    )]
+                if has_server_default:
+                    return [_warn(
+                        m, "ADD COLUMN with server_default",
+                        f"Adding column to '{table}' with server_default rewrites the table "
+                        "on PostgreSQL < 11 — safe on PostgreSQL 11+ (instant metadata change). "
+                        "Verify your PostgreSQL version before deploying.",
                         "warning", line=c.node.lineno,
                     )]
     return []
@@ -528,7 +540,14 @@ def _check_multiple_heads(migrations: list[MigrationAST]) -> list[RiskWarning]:
 # ─────────────────────────────────────────────────────────────
 
 def analyze_migrations(versions_dir: str) -> list[RiskWarning]:
-    """Analyze all Alembic migration files in a directory."""
+    """
+    Analyze all Alembic migration files in a directory.
+
+    Runs two passes:
+    1. Per-file checks — patterns detectable within a single migration file.
+    2. Graph checks — cross-migration chain analysis (data holes, orphans, etc.).
+    """
+    from .graph import analyze_migration_graph
     warnings: list[RiskWarning] = []
     migrations: list[MigrationAST] = []
 
@@ -550,4 +569,5 @@ def analyze_migrations(versions_dir: str) -> list[RiskWarning]:
             warnings.extend(check(m))
 
     warnings.extend(_check_multiple_heads(migrations))
+    warnings.extend(analyze_migration_graph(versions_dir))
     return warnings

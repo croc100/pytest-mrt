@@ -4,7 +4,7 @@ from typing import Callable
 
 from .runner import MigrationRunner
 from .schema import SchemaSnapshot, SchemaDiff
-from .seeder import SmartSeeder, SeededRow
+from .seeder import SmartSeeder, SeededRow, _q
 
 
 @dataclass
@@ -28,9 +28,16 @@ class RollbackVerifier:
     """
     For each revision:
       1. Seed real data into tables that exist BEFORE the migration
-         (auto-generated or from custom_seeds)
       2. Upgrade → Downgrade
       3. Verify schema restored + data intact
+
+    State contract:
+      check_revision(rev) expects the DB to be at the revision BEFORE rev.
+      After the call the DB is returned to that same pre-revision state,
+      whether the check passes, fails, or throws.
+
+      check_all() handles advancing through the chain efficiently in O(n)
+      upgrade operations rather than the naive O(n²) downgrade-base approach.
     """
 
     def __init__(
@@ -43,11 +50,6 @@ class RollbackVerifier:
         self.skip = skip or {}
         self.custom_seeds = custom_seeds or {}
 
-    def _reset_to(self, revision: str | None) -> None:
-        self.runner.downgrade_base()
-        if revision is not None:
-            self.runner.upgrade(revision)
-
     def _build_seeder(self, schema: SchemaSnapshot) -> SmartSeeder:
         seeder = SmartSeeder(self.runner.engine)
         for tname, table_info in schema.tables.items():
@@ -56,18 +58,20 @@ class RollbackVerifier:
                 pk_col = table_info.pk_cols[0] if table_info.pk_cols else "id"
                 for row in rows:
                     seeder._rows.append(
-                        SeededRow(table=tname, pk_col=pk_col, pk_val=row.get(pk_col), data=row)
+                        SeededRow(table=tname, pk_col=pk_col,
+                                  pk_val=row.get(pk_col), data=row)
                     )
-                # Insert custom rows into DB
-                from sqlalchemy import text
                 for row in rows:
-                    cols = ", ".join(f'"{c}"' for c in row)
+                    # Use dialect-aware quoting — fixes MySQL double-quote bug
+                    q = lambda name: _q(self.runner.engine, name)
+                    cols = ", ".join(q(c) for c in row)
                     placeholders = ", ".join(f":p_{c}" for c in row)
                     params = {f"p_{c}": v for c, v in row.items()}
+                    from sqlalchemy import text
                     try:
                         with self.runner.engine.begin() as conn:
                             conn.execute(
-                                text(f'INSERT INTO "{tname}" ({cols}) VALUES ({placeholders})'),
+                                text(f'INSERT INTO {q(tname)} ({cols}) VALUES ({placeholders})'),
                                 params,
                             )
                     except Exception:
@@ -77,40 +81,88 @@ class RollbackVerifier:
         return seeder
 
     def check_revision(self, revision: str) -> RevisionResult:
+        """
+        Test that a single migration is safely reversible.
+
+        Pre:  DB is at the state just BEFORE this revision (down_revision).
+        Post: DB is restored to that same pre-revision state, guaranteed.
+        """
         if revision in self.skip:
             return RevisionResult(
                 revision=revision, passed=True,
                 skipped=True, skip_reason=self.skip[revision],
             )
 
+        start_revision = self.runner.current_revision()
         failures: list[str] = []
-        schema_before = SchemaSnapshot.capture(self.runner.engine)
-        seeder = self._build_seeder(schema_before)
 
-        self.runner.upgrade(revision)
-        self.runner.downgrade()
+        try:
+            schema_before = SchemaSnapshot.capture(self.runner.engine)
+            seeder = self._build_seeder(schema_before)
 
-        schema_restored = SchemaSnapshot.capture(self.runner.engine)
+            self.runner.upgrade(revision)
+            self.runner.downgrade()
 
-        for issue in SchemaDiff().verify_restored(schema_before, schema_restored):
-            failures.append(issue.message)
-        failures.extend(seeder.verify())
+            schema_restored = SchemaSnapshot.capture(self.runner.engine)
 
-        return RevisionResult(revision=revision, passed=len(failures) == 0, failures=failures)
+            for issue in SchemaDiff().verify_restored(schema_before, schema_restored):
+                failures.append(issue.message)
+            failures.extend(seeder.verify())
+
+        except Exception as exc:
+            failures.append(f"Unexpected error during check: {type(exc).__name__}: {exc}")
+            # Best-effort state recovery: return DB to start_revision
+            try:
+                current = self.runner.current_revision()
+                if current != start_revision:
+                    self.runner.downgrade_base()
+                    if start_revision is not None:
+                        self.runner.upgrade(start_revision)
+            except Exception as recovery_exc:
+                failures.append(
+                    f"State recovery failed after error — DB may be in unknown state: "
+                    f"{recovery_exc}"
+                )
+
+        return RevisionResult(
+            revision=revision,
+            passed=len(failures) == 0,
+            failures=failures,
+        )
 
     def check_all(self) -> list[RevisionResult]:
+        """
+        Test every migration in the chain.
+
+        Runs in O(n) upgrade operations:
+          - Start from base
+          - For each revision: check (up+down), then advance (up again)
+          Rather than the naive pattern of downgrade_base before every check.
+        """
         results: list[RevisionResult] = []
-        prev_revision: str | None = None
         self.runner.downgrade_base()
 
         for rev in self.runner.get_revisions():
-            if self.runner.current_revision() != prev_revision:
-                self._reset_to(prev_revision)
-
+            # DB is at the revision just before rev.revision
             result = self.check_revision(rev.revision)
             results.append(result)
 
-            self._reset_to(rev.revision)
-            prev_revision = rev.revision
+            # Advance to rev.revision for the next iteration.
+            # check_revision guarantees the DB is back at pre-rev state,
+            # so a single upgrade() here is sufficient.
+            try:
+                self.runner.upgrade(rev.revision)
+            except Exception as exc:
+                # If we can't advance, stop the chain — subsequent checks
+                # would be running against the wrong DB state.
+                results.append(RevisionResult(
+                    revision=f"chain-advance-{rev.revision}",
+                    passed=False,
+                    failures=[
+                        f"Could not advance to revision {rev.revision} after check: {exc}. "
+                        "Remaining migrations were not tested."
+                    ],
+                ))
+                break
 
         return results

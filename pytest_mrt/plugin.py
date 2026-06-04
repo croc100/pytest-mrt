@@ -5,10 +5,13 @@ from .config import MRTConfig
 from .core.runner import MigrationRunner
 from .core.seeder import SmartSeeder
 from .core.verifier import RevisionResult, RollbackVerifier
+from .core.detector import analyze_migrations, RiskWarning
+from .core.schema import SchemaSnapshot
 
 
 class MRTFixture:
     def __init__(self, config: MRTConfig):
+        self._config = config
         self._runner = MigrationRunner(config.alembic_ini, config.db_url)
         self._seeder = SmartSeeder(self._runner.engine)
         self._verifier = RollbackVerifier(
@@ -28,12 +31,54 @@ class MRTFixture:
     # ── manual seeding ────────────────────────────────────────────────
 
     def seed(self, table: str, rows: list[dict], pk_col: str = "id") -> None:
-        from .core.schema import SchemaSnapshot
         snap = SchemaSnapshot.capture(self._runner.engine)
         if table in snap.tables:
             self._seeder.seed_table(snap.tables[table])
         else:
             raise ValueError(f"Table '{table}' not found in current schema")
+
+    # ── static analysis ───────────────────────────────────────────────
+
+    def check_static(self, versions_dir: str | None = None) -> list[RiskWarning]:
+        """
+        Run static analysis on the migration files.
+        Includes built-in checks + any custom_checks registered in MRTConfig.
+        severity_overrides from config are applied to the results.
+        """
+        if versions_dir is None:
+            versions_dir = self._runner.get_versions_dir()
+
+        warnings = analyze_migrations(versions_dir)
+
+        # Apply custom checks
+        if self._config.custom_checks:
+            from pathlib import Path
+            import re as _re
+            from .core.ast_analyzer import MigrationAST
+            for path in sorted(Path(versions_dir).glob("*.py")):
+                source = path.read_text()
+                m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
+                revision = m_rev.group(1) if m_rev else path.stem
+                m = MigrationAST(source, revision, path.name)
+                if not m._parse_error:
+                    for check_fn in self._config.custom_checks:
+                        warnings.extend(check_fn(m))
+
+        # Apply severity overrides
+        if self._config.severity_overrides:
+            for w in warnings:
+                if w.pattern in self._config.severity_overrides:
+                    w.severity = self._config.severity_overrides[w.pattern]
+
+        return warnings
+
+    def assert_no_static_errors(self, versions_dir: str | None = None) -> None:
+        """Fail the test if static analysis finds any errors."""
+        warnings = self.check_static(versions_dir)
+        errors = [w for w in warnings if w.severity == "error"]
+        if errors:
+            lines = [f"  [{w.revision}] {w.pattern}: {w.message}" for w in errors]
+            pytest.fail("Static analysis found unsafe migration patterns:\n" + "\n".join(lines))
 
     # ── assertions ────────────────────────────────────────────────────
 
@@ -51,7 +96,10 @@ class MRTFixture:
     def assert_reversible(self, revision: str = "head") -> None:
         result = self._verifier.check_revision(revision)
         if not result.passed:
-            pytest.fail(f"Migration {revision} is not safely reversible:\n{result.failure_summary()}")
+            pytest.fail(
+                f"Migration {revision} is not safely reversible:\n"
+                f"{result.failure_summary()}"
+            )
 
     def assert_all_reversible(self) -> None:
         from .reporter import print_check_all_summary

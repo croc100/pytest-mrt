@@ -1,5 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from typing import Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .core.ast_analyzer import MigrationAST
+    from .core.detector import RiskWarning
 
 
 @dataclass
@@ -20,7 +25,26 @@ class MRTConfig:
     severity_overrides: dict[str, str] = field(default_factory=dict)
 
     # Custom seed functions per table: {"table_name": callable() -> list[dict]}
-    # If provided, replaces auto-generated seed data for that table.
+    # Replaces auto-generated seed data for that table.
     # Example:
     #   custom_seeds={"users": lambda: [{"id": 1, "name": "Alice"}]}
-    custom_seeds: dict[str, object] = field(default_factory=dict)
+    custom_seeds: dict[str, Callable[[], list[dict]]] = field(default_factory=dict)
+
+    # Plugin API: register additional static analysis checks.
+    # Each function receives a MigrationAST and returns list[RiskWarning].
+    # These run in addition to the built-in checks, not instead of them.
+    #
+    # Example:
+    #   def my_check(m: MigrationAST) -> list[RiskWarning]:
+    #       if some_condition(m):
+    #           return [RiskWarning(m.revision, m.filename,
+    #                               "My pattern", "explanation", "warning")]
+    #       return []
+    #
+    #   config = MRTConfig(custom_checks=[my_check])
+    custom_checks: list[Callable] = field(default_factory=list)
+
+    # Per-migration timeout in seconds. Migrations that exceed this limit are
+    # marked as failed rather than blocking the test suite indefinitely.
+    # None = no timeout (default).
+    migration_timeout: int | None = None
