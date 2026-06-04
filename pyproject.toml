@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-mrt"
-version = "0.3.1"
+version = "0.4.0"
 description = "Catch database migration rollback failures before they reach production"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -49,6 +49,7 @@ dev = [
 ]
 postgres = ["psycopg2-binary"]
 asyncpg = ["asyncpg"]
+ai = ["anthropic>=0.25"]
 
 [project.entry-points."pytest11"]
 mrt = "pytest_mrt.plugin"
