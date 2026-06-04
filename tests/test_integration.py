@@ -85,7 +85,15 @@ def alembic_env(tmp_path):
     db_path = str(tmp_path / "test.db")
     ini, versions = _setup_alembic(tmp_path, db_path)
     db_url = f"sqlite:///{db_path}"
-    return {"ini": ini, "versions": versions, "db_url": db_url, "tmp": tmp_path}
+    env = {"ini": ini, "versions": versions, "db_url": db_url, "tmp": tmp_path}
+    yield env
+    # Dispose any engines created during the test to avoid ResourceWarning
+    from pytest_mrt.core.runner import MigrationRunner
+    try:
+        r = MigrationRunner(ini, db_url)
+        r.dispose()
+    except Exception:
+        pass
 
 
 # ── tests ─────────────────────────────────────────────────────────────

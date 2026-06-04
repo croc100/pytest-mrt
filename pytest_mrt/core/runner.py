@@ -5,6 +5,7 @@ from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 
 
 class MigrationRunner:
@@ -12,7 +13,16 @@ class MigrationRunner:
         self.db_url = db_url
         self.alembic_cfg = AlembicConfig(alembic_ini)
         self.alembic_cfg.set_main_option("sqlalchemy.url", db_url)
-        self.engine: Engine = create_engine(db_url)
+        # NullPool for SQLite: each connection is closed immediately after use,
+        # preventing ResourceWarning from unclosed file handles in tests.
+        pool_cls = NullPool if db_url.startswith("sqlite:///") else None
+        self.engine: Engine = create_engine(
+            db_url, **({"poolclass": pool_cls} if pool_cls else {})
+        )
+
+    def dispose(self) -> None:
+        """Release all pooled connections."""
+        self.engine.dispose()
 
     def upgrade(self, revision: str = "head") -> None:
         command.upgrade(self.alembic_cfg, revision)

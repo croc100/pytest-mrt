@@ -55,13 +55,13 @@ def check(
         warnings = analyze_migrations(versions_dir)
 
     if fmt == "json":
-        import json
+        import json, sys
         output = [
             {"revision": w.revision, "file": w.file, "pattern": w.pattern,
-             "severity": w.severity, "message": w.message}
+             "severity": w.severity, "message": w.message, "line": w.line}
             for w in warnings
         ]
-        console.print(json.dumps(output, indent=2))
+        sys.stdout.write(json.dumps(output, indent=2) + "\n")
         has_errors = any(w.severity == "error" for w in warnings)
         raise typer.Exit(1 if has_errors or (strict and warnings) else 0)
 
