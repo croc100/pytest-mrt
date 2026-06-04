@@ -1,8 +1,8 @@
 """
 Django migration static analyzer.
 
-Django migrations use class-based operations (migrations.RemoveField, etc.)
-instead of Alembic's op.* calls. This analyzer understands that format.
+Detects dangerous patterns in Django migrations using AST parsing.
+Covers all major risk categories: data loss, irreversibility, locking, schema drift.
 """
 from __future__ import annotations
 import ast
@@ -22,6 +22,7 @@ class DjangoMigrationAST:
     tree: ast.Module
     operations: list[ast.expr]
     dependencies: list[tuple[str, str]]
+    is_atomic: bool | None  # None = not set (defaults to True)
     _parse_error: Exception | None = None
 
     @classmethod
@@ -34,74 +35,115 @@ class DjangoMigrationAST:
             tree = ast.parse("")
             parse_error = e
 
-        name = path.stem
-        ops = cls._extract_ops(tree)
-        deps = cls._extract_deps(tree)
         return cls(
             source=source,
             app_label=app_label,
-            migration_name=name,
+            migration_name=path.stem,
             filename=path.name,
             tree=tree,
-            operations=ops,
-            dependencies=deps,
+            operations=cls._extract_ops(tree),
+            dependencies=cls._extract_deps(tree),
+            is_atomic=cls._extract_atomic(tree),
             _parse_error=parse_error,
         )
 
     @staticmethod
-    def _extract_ops(tree: ast.Module) -> list[ast.expr]:
+    def _find_migration_class(tree: ast.Module) -> ast.ClassDef | None:
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef) and node.name == "Migration":
-                for item in node.body:
-                    if isinstance(item, ast.Assign):
-                        for target in item.targets:
-                            if isinstance(target, ast.Name) and target.id == "operations":
-                                if isinstance(item.value, ast.List):
-                                    return item.value.elts
+                return node
+        return None
+
+    @classmethod
+    def _extract_ops(cls, tree: ast.Module) -> list[ast.expr]:
+        klass = cls._find_migration_class(tree)
+        if not klass:
+            return []
+        for item in klass.body:
+            if isinstance(item, ast.Assign):
+                for target in item.targets:
+                    if isinstance(target, ast.Name) and target.id == "operations":
+                        if isinstance(item.value, ast.List):
+                            return item.value.elts
         return []
 
-    @staticmethod
-    def _extract_deps(tree: ast.Module) -> list[tuple[str, str]]:
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == "Migration":
-                for item in node.body:
-                    if isinstance(item, ast.Assign):
-                        for target in item.targets:
-                            if isinstance(target, ast.Name) and target.id == "dependencies":
-                                if isinstance(item.value, ast.List):
-                                    deps = []
-                                    for elt in item.value.elts:
-                                        if isinstance(elt, ast.Tuple) and len(elt.elts) == 2:
-                                            a = elt.elts[0]
-                                            b = elt.elts[1]
-                                            if isinstance(a, ast.Constant) and isinstance(b, ast.Constant):
-                                                deps.append((str(a.value), str(b.value)))
-                                    return deps
+    @classmethod
+    def _extract_deps(cls, tree: ast.Module) -> list[tuple[str, str]]:
+        klass = cls._find_migration_class(tree)
+        if not klass:
+            return []
+        for item in klass.body:
+            if isinstance(item, ast.Assign):
+                for target in item.targets:
+                    if isinstance(target, ast.Name) and target.id == "dependencies":
+                        if isinstance(item.value, ast.List):
+                            deps = []
+                            for elt in item.value.elts:
+                                if isinstance(elt, ast.Tuple) and len(elt.elts) == 2:
+                                    a, b = elt.elts
+                                    if isinstance(a, ast.Constant) and isinstance(b, ast.Constant):
+                                        deps.append((str(a.value), str(b.value)))
+                            return deps
         return []
 
-    def op_names(self) -> list[str]:
-        names = []
-        for op in self.operations:
-            if isinstance(op, ast.Call):
-                func = op.func
-                if isinstance(func, ast.Attribute):
-                    names.append(func.attr)
-                elif isinstance(func, ast.Name):
-                    names.append(func.id)
-        return names
+    @classmethod
+    def _extract_atomic(cls, tree: ast.Module) -> bool | None:
+        klass = cls._find_migration_class(tree)
+        if not klass:
+            return None
+        for item in klass.body:
+            if isinstance(item, ast.Assign):
+                for target in item.targets:
+                    if isinstance(target, ast.Name) and target.id == "atomic":
+                        if isinstance(item.value, ast.Constant):
+                            return bool(item.value.value)
+        return None  # not set → Django default is True
 
-    def get_op_kwarg_str(self, op: ast.Call, kwarg: str) -> str | None:
+    def op_name(self, op: ast.expr) -> str:
+        if isinstance(op, ast.Call):
+            func = op.func
+            if isinstance(func, ast.Attribute):
+                return func.attr
+            if isinstance(func, ast.Name):
+                return func.id
+        return ""
+
+    def kwarg_str(self, op: ast.Call, name: str) -> str | None:
         for kw in op.keywords:
-            if kw.arg == kwarg and isinstance(kw.value, ast.Constant):
+            if kw.arg == name and isinstance(kw.value, ast.Constant):
                 return str(kw.value.value)
         return None
 
-    def get_op_kwarg_bool(self, op: ast.Call, kwarg: str) -> bool | None:
+    def kwarg_bool(self, op: ast.Call, name: str) -> bool | None:
         for kw in op.keywords:
-            if kw.arg == kwarg and isinstance(kw.value, ast.Constant):
+            if kw.arg == name and isinstance(kw.value, ast.Constant):
                 if isinstance(kw.value.value, bool):
                     return kw.value.value
         return None
+
+    def kwarg_exists(self, op: ast.Call, name: str) -> bool:
+        return any(kw.arg == name for kw in op.keywords)
+
+    def field_kwarg(self, op: ast.Call, name: str) -> ast.expr | None:
+        """Get kwarg named 'field' then look inside it for another kwarg."""
+        for kw in op.keywords:
+            if kw.arg == name:
+                return kw.value
+        return None
+
+    def sql_text(self, op: ast.Call) -> str:
+        """Extract SQL from RunSQL's first arg (handles text() wrapper too)."""
+        if not op.args:
+            return ""
+        arg = op.args[0]
+        # Direct string
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            return arg.value.upper()
+        # text("...") wrapper
+        if isinstance(arg, ast.Call):
+            if arg.args and isinstance(arg.args[0], ast.Constant):
+                return str(arg.args[0].value).upper()
+        return ""
 
 
 def _warn(m: DjangoMigrationAST, pattern: str, message: str,
@@ -110,15 +152,18 @@ def _warn(m: DjangoMigrationAST, pattern: str, message: str,
     return RiskWarning(rev, m.filename, pattern, message, severity, line)
 
 
+# ─────────────────────────────────────────────────────────────
+# Data loss checks
+# ─────────────────────────────────────────────────────────────
+
 def _check_remove_field(m: DjangoMigrationAST) -> list[RiskWarning]:
     warnings = []
     for op in m.operations:
         if not isinstance(op, ast.Call):
             continue
-        name = op.func.attr if isinstance(op.func, ast.Attribute) else ""
-        if name == "RemoveField":
-            model = m.get_op_kwarg_str(op, "model_name") or "?"
-            field = m.get_op_kwarg_str(op, "name") or "?"
+        if m.op_name(op) == "RemoveField":
+            model = m.kwarg_str(op, "model_name") or "?"
+            field = m.kwarg_str(op, "name") or "?"
             warnings.append(_warn(
                 m, "RemoveField",
                 f"migrations.RemoveField('{model}', '{field}') — "
@@ -133,9 +178,8 @@ def _check_delete_model(m: DjangoMigrationAST) -> list[RiskWarning]:
     for op in m.operations:
         if not isinstance(op, ast.Call):
             continue
-        name = op.func.attr if isinstance(op.func, ast.Attribute) else ""
-        if name == "DeleteModel":
-            model = m.get_op_kwarg_str(op, "name") or "?"
+        if m.op_name(op) == "DeleteModel":
+            model = m.kwarg_str(op, "name") or "?"
             warnings.append(_warn(
                 m, "DeleteModel",
                 f"migrations.DeleteModel('{model}') — all rows permanently lost on rollback",
@@ -144,92 +188,236 @@ def _check_delete_model(m: DjangoMigrationAST) -> list[RiskWarning]:
     return warnings
 
 
+def _check_add_field_not_null(m: DjangoMigrationAST) -> list[RiskWarning]:
+    """AddField(null=False) without a default → will fail on existing data."""
+    warnings = []
+    for op in m.operations:
+        if not isinstance(op, ast.Call) or m.op_name(op) != "AddField":
+            continue
+        model = m.kwarg_str(op, "model_name") or "?"
+        name = m.kwarg_str(op, "name") or "?"
+        field_node = m.field_kwarg(op, "field")
+        if field_node is None:
+            continue
+
+        # Inspect the field constructor
+        if not isinstance(field_node, ast.Call):
+            continue
+
+        # Check null= kwarg on the field
+        null_val: bool | None = None
+        has_default = False
+        for kw in field_node.keywords:
+            if kw.arg == "null" and isinstance(kw.value, ast.Constant):
+                null_val = bool(kw.value.value)
+            if kw.arg in ("default", "server_default"):
+                has_default = True
+
+        # Default for most fields: null=False
+        if null_val is False and not has_default:
+            warnings.append(_warn(
+                m, "AddField NOT NULL without default",
+                f"AddField('{model}', '{name}') is NOT NULL with no default — "
+                "will fail on non-empty tables. Use null=True or provide a default.",
+                "error", line=op.lineno,
+            ))
+        elif null_val is None and not has_default:
+            # null not specified → defaults to False for most field types
+            # Be conservative: only warn for fields that are likely NOT NULL
+            field_type = ""
+            if isinstance(field_node.func, ast.Attribute):
+                field_type = field_node.func.attr
+            elif isinstance(field_node.func, ast.Name):
+                field_type = field_node.func.id
+
+            nullable_by_default = {"TextField", "CharField", "EmailField",
+                                   "URLField", "SlugField", "FileField",
+                                   "ImageField", "GenericIPAddressField"}
+            if field_type and field_type not in nullable_by_default:
+                warnings.append(_warn(
+                    m, "AddField NOT NULL without default",
+                    f"AddField('{model}', '{name}', {field_type}) may be NOT NULL without a default — "
+                    "will fail on non-empty tables if null is not set to True",
+                    "warning", line=op.lineno,
+                ))
+    return warnings
+
+
+def _check_alter_field_not_null(m: DjangoMigrationAST) -> list[RiskWarning]:
+    """AlterField making a field non-nullable without a default."""
+    warnings = []
+    for op in m.operations:
+        if not isinstance(op, ast.Call) or m.op_name(op) != "AlterField":
+            continue
+        model = m.kwarg_str(op, "model_name") or "?"
+        name = m.kwarg_str(op, "name") or "?"
+        field_node = m.field_kwarg(op, "field")
+        if not isinstance(field_node, ast.Call):
+            continue
+
+        null_val = None
+        has_default = False
+        for kw in field_node.keywords:
+            if kw.arg == "null" and isinstance(kw.value, ast.Constant):
+                null_val = bool(kw.value.value)
+            if kw.arg in ("default", "server_default"):
+                has_default = True
+
+        if null_val is False and not has_default:
+            warnings.append(_warn(
+                m, "AlterField to NOT NULL without default",
+                f"AlterField('{model}', '{name}') sets null=False without a default — "
+                "will fail if any existing rows have NULL in this field",
+                "error", line=op.lineno,
+            ))
+    return warnings
+
+
+# ─────────────────────────────────────────────────────────────
+# Irreversibility checks
+# ─────────────────────────────────────────────────────────────
+
 def _check_run_sql_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
     warnings = []
     for op in m.operations:
-        if not isinstance(op, ast.Call):
+        if not isinstance(op, ast.Call) or m.op_name(op) != "RunSQL":
             continue
-        name = op.func.attr if isinstance(op.func, ast.Attribute) else ""
-        if name == "RunSQL":
-            has_reverse = any(kw.arg == "reverse_sql" for kw in op.keywords)
-            if not has_reverse:
-                warnings.append(_warn(
-                    m, "RunSQL without reverse_sql",
-                    "migrations.RunSQL() has no reverse_sql — "
-                    "migration cannot be reversed automatically",
-                    "error", line=op.lineno,
-                ))
+        has_reverse = m.kwarg_exists(op, "reverse_sql") or len(op.args) >= 2
+        if not has_reverse:
+            warnings.append(_warn(
+                m, "RunSQL without reverse_sql",
+                "migrations.RunSQL() has no reverse_sql — "
+                "migration cannot be reversed automatically",
+                "error", line=op.lineno,
+            ))
+    return warnings
+
+
+def _check_run_sql_dangerous(m: DjangoMigrationAST) -> list[RiskWarning]:
+    """RunSQL containing TRUNCATE or DROP TABLE."""
+    warnings = []
+    for op in m.operations:
+        if not isinstance(op, ast.Call) or m.op_name(op) != "RunSQL":
+            continue
+        sql = m.sql_text(op)
+        if re.search(r"\bTRUNCATE\b", sql):
+            warnings.append(_warn(
+                m, "RunSQL TRUNCATE",
+                "RunSQL contains TRUNCATE — destroys all data with no undo",
+                "error", line=op.lineno,
+            ))
+        elif re.search(r"\bDROP\s+TABLE\b", sql):
+            warnings.append(_warn(
+                m, "RunSQL DROP TABLE",
+                "RunSQL contains DROP TABLE — all rows permanently lost",
+                "error", line=op.lineno,
+            ))
     return warnings
 
 
 def _check_run_python_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
     warnings = []
     for op in m.operations:
-        if not isinstance(op, ast.Call):
+        if not isinstance(op, ast.Call) or m.op_name(op) != "RunPython":
             continue
-        name = op.func.attr if isinstance(op.func, ast.Attribute) else ""
-        if name == "RunPython":
-            has_reverse = any(kw.arg == "reverse_code" for kw in op.keywords)
-            # Check if second positional arg is provided (reverse_code can be positional)
-            has_pos_reverse = len(op.args) >= 2
-            if not has_reverse and not has_pos_reverse:
-                warnings.append(_warn(
-                    m, "RunPython without reverse_code",
-                    "migrations.RunPython() has no reverse_code — "
-                    "data transformation cannot be undone on rollback",
-                    "error", line=op.lineno,
-                ))
+        has_reverse = m.kwarg_exists(op, "reverse_code") or len(op.args) >= 2
+        if not has_reverse:
+            warnings.append(_warn(
+                m, "RunPython without reverse_code",
+                "migrations.RunPython() has no reverse_code — "
+                "data transformation cannot be undone on rollback",
+                "error", line=op.lineno,
+            ))
     return warnings
 
 
-def _check_alter_field_type(m: DjangoMigrationAST) -> list[RiskWarning]:
+def _check_rename_model_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
+    """RenameModel is reversible by Django, but old_name must be correct."""
     warnings = []
-    for op in m.operations:
-        if not isinstance(op, ast.Call):
-            continue
-        name = op.func.attr if isinstance(op.func, ast.Attribute) else ""
-        if name == "AlterField":
-            model = m.get_op_kwarg_str(op, "model_name") or "?"
-            field = m.get_op_kwarg_str(op, "name") or "?"
+    rename_ops = [op for op in m.operations
+                  if isinstance(op, ast.Call) and m.op_name(op) == "RenameModel"]
+    if not rename_ops:
+        return []
+    for op in rename_ops:
+        old = m.kwarg_str(op, "old_name") or "?"
+        new = m.kwarg_str(op, "new_name") or "?"
+        # RenameModel is inherently reversible, but warn if mixed with data-loss ops
+        dangerous = [o for o in m.operations
+                     if isinstance(o, ast.Call) and
+                     m.op_name(o) in ("RemoveField", "DeleteModel", "RunSQL")]
+        if dangerous:
             warnings.append(_warn(
-                m, "AlterField type change",
-                f"migrations.AlterField('{model}', '{field}') — "
-                "verify the type change is safe and reversible for existing data",
+                m, "RenameModel with data-loss operations",
+                f"RenameModel('{old}' → '{new}') combined with data-loss operations — "
+                "verify rollback order is safe",
                 "warning", line=op.lineno,
             ))
     return warnings
 
 
-def _check_rename_field_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
-    """RenameField is reversible by design, but warn if mixed with data ops."""
-    renames = [op for op in m.operations
-               if isinstance(op, ast.Call) and
-               (op.func.attr if isinstance(op.func, ast.Attribute) else "") == "RenameField"]
-    if renames and len(m.operations) > len(renames):
-        for op in renames:
-            model = m.get_op_kwarg_str(op, "model_name") or "?"
-            warnings = [_warn(
-                m, "RenameField with other operations",
-                f"RenameField on '{model}' mixed with other operations — "
-                "verify the rollback order is correct",
+# ─────────────────────────────────────────────────────────────
+# PostgreSQL / performance checks
+# ─────────────────────────────────────────────────────────────
+
+def _check_add_index_no_concurrently(m: DjangoMigrationAST) -> list[RiskWarning]:
+    """AddIndex without concurrently causes table lock on PostgreSQL."""
+    warnings = []
+    for op in m.operations:
+        if not isinstance(op, ast.Call) or m.op_name(op) != "AddIndex":
+            continue
+        # Check if atomic=False is set on the migration (required for CONCURRENTLY)
+        if m.is_atomic is None or m.is_atomic:
+            model = m.kwarg_str(op, "model_name") or "?"
+            warnings.append(_warn(
+                m, "AddIndex without atomic=False",
+                f"AddIndex on '{model}' runs inside a transaction — "
+                "for large tables, set atomic = False on the Migration class "
+                "and use Meta.indexes or a CONCURRENTLY migration",
                 "warning", line=op.lineno,
-            )]
-        return warnings
+            ))
+    return warnings
+
+
+def _check_missing_atomic_false(m: DjangoMigrationAST) -> list[RiskWarning]:
+    """Certain operations cannot run inside a transaction and require atomic=False."""
+    needs_atomic_false = {"AddIndex", "RemoveIndex"}
+    has_requiring_ops = any(
+        isinstance(op, ast.Call) and m.op_name(op) in needs_atomic_false
+        for op in m.operations
+    )
+    if has_requiring_ops and (m.is_atomic is None or m.is_atomic is True):
+        return [_warn(
+            m, "Missing atomic=False",
+            "This migration contains operations that should run with atomic=False "
+            "to allow CONCURRENTLY index operations without locking the table",
+            "warning",
+        )]
     return []
 
+
+# ─────────────────────────────────────────────────────────────
+# Registry
+# ─────────────────────────────────────────────────────────────
 
 _DJANGO_CHECKS = [
     _check_remove_field,
     _check_delete_model,
+    _check_add_field_not_null,
+    _check_alter_field_not_null,
     _check_run_sql_no_reverse,
+    _check_run_sql_dangerous,
     _check_run_python_no_reverse,
-    _check_alter_field_type,
-    _check_rename_field_no_reverse,
+    _check_rename_model_no_reverse,
+    _check_add_index_no_concurrently,
+    _check_missing_atomic_false,
 ]
 
 
+# ─────────────────────────────────────────────────────────────
+# public API
+# ─────────────────────────────────────────────────────────────
+
 def is_django_migration(path: Path) -> bool:
-    """Detect if a file is a Django migration (not Alembic)."""
     try:
         source = path.read_text()
         return "class Migration" in source and "django.db" in source
@@ -238,26 +426,13 @@ def is_django_migration(path: Path) -> bool:
 
 
 def analyze_django_migrations(migrations_dir: str) -> list[RiskWarning]:
-    """
-    Analyze Django migrations in a directory.
-    Supports both single-app directories (app/migrations/)
-    and multi-app project structures.
-    """
     warnings: list[RiskWarning] = []
     root = Path(migrations_dir)
 
-    # Find migration files
-    migration_files = []
     for path in sorted(root.rglob("*.py")):
-        if path.name.startswith("_") and path.name != "__init__.py":
+        if not is_django_migration(path):
             continue
-        if is_django_migration(path):
-            # Infer app label from directory structure
-            app_label = path.parent.parent.name  # app/migrations/0001_...
-            migration_files.append((path, app_label))
-
-    migs: list[DjangoMigrationAST] = []
-    for path, app_label in migration_files:
+        app_label = path.parent.parent.name
         m = DjangoMigrationAST.from_file(path, app_label)
         if m._parse_error:
             warnings.append(RiskWarning(
@@ -265,7 +440,6 @@ def analyze_django_migrations(migrations_dir: str) -> list[RiskWarning]:
                 f"Could not parse: {m._parse_error}", "error",
             ))
             continue
-        migs.append(m)
         for check in _DJANGO_CHECKS:
             warnings.extend(check(m))
 

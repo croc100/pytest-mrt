@@ -164,11 +164,17 @@ class MigrationAST:
 
     @staticmethod
     def sql_content(call: ast.Call) -> str:
-        """Extract SQL string from op.execute('...')"""
-        if call.args:
-            arg = call.args[0]
-            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                return arg.value
+        """Extract SQL string from op.execute('...') or op.execute(sa.text('...'))."""
+        if not call.args:
+            return ""
+        arg = call.args[0]
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            return arg.value
+        # sa.text("...") or text("...")
+        if isinstance(arg, ast.Call) and arg.args:
+            inner = arg.args[0]
+            if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                return inner.value
         return ""
 
     # ── Column() inspection ──────────────────────────────────────────

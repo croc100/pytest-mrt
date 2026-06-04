@@ -25,7 +25,7 @@ Most tools verify that migrations *run* without errors.
 pytest-mrt verifies that your data *survives* a rollback.
 
 It seeds real rows before each migration, rolls back, and checks nothing was lost.
-It also statically scans migration files for 24 known dangerous patterns.
+It also statically scans migration files for 27 known dangerous patterns — across both Alembic and Django migrations.
 
 ## Install
 
@@ -75,13 +75,13 @@ mrt check migrations/versions/
 ```
 
 ```
-╭──────────┬──────────────────────────┬─────────┬────────────────────────────────────╮
-│ Revision │ Pattern                  │ Sev     │ Message                            │
-├──────────┼──────────────────────────┼─────────┼────────────────────────────────────┤
-│ 004      │ DROP COLUMN in upgrade   │ error   │ Data permanently lost on rollback  │
-│ 005      │ No-op downgrade          │ error   │ downgrade() does nothing           │
-│ 006      │ INDEX without CONCURR.   │ warning │ Locks table during index build     │
-╰──────────┴──────────────────────────┴─────────┴────────────────────────────────────╯
+╭──────────┬──────────────────────────┬─────────┬──────┬────────────────────────────────────╮
+│ Revision │ Pattern                  │ Sev     │ Line │ Message                            │
+├──────────┼──────────────────────────┼─────────┼──────┼────────────────────────────────────┤
+│ 004      │ DROP COLUMN in upgrade   │ error   │   12 │ Data permanently lost on rollback  │
+│ 005      │ No-op downgrade          │ error   │    8 │ downgrade() does nothing           │
+│ 006      │ INDEX without CONCURR.   │ warning │   19 │ Locks table during index build     │
+╰──────────┴──────────────────────────┴─────────┴──────┴────────────────────────────────────╯
 2 error(s), 1 warning(s)
 ```
 
@@ -103,7 +103,9 @@ mrt check migrations/versions/
 
 - `NOT NULL` without `server_default`
 - Column type change
-- Raw `op.execute()`
+- Raw `op.execute()` / `context.execute()` without reverse
+- `op.execute(sa.text(...))` — SQL inside `sa.text()` wrapper now fully analyzed
+- `op.bulk_insert()` without corresponding `DELETE` in downgrade
 - Bulk `UPDATE` without a reverse `UPDATE` in downgrade
 - `ON DELETE CASCADE` added
 - `CREATE INDEX` without `CONCURRENTLY` (PostgreSQL)

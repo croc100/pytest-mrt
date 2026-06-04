@@ -413,6 +413,63 @@ def _check_not_null_raw_sql(m: MigrationAST) -> list[RiskWarning]:
     return []
 
 
+def _check_bulk_insert_no_reverse(m: MigrationAST) -> list[RiskWarning]:
+    """op.bulk_insert() adds rows that should be removed in downgrade."""
+    up_bulk = [c for c in m.upgrade_calls() if c.method == "bulk_insert"]
+    if not up_bulk:
+        return []
+    down_delete = [c for c in m.downgrade_calls()
+                   if c.method == "delete" or
+                   (c.method == "execute" and re.search(r"\bDELETE\b", _sql(c.node)))]
+    if not down_delete:
+        return [_warn(
+            m, "bulk_insert without reverse",
+            "op.bulk_insert() adds rows that are not removed in downgrade — "
+            "rollback leaves the inserted data in the database",
+            "warning", line=up_bulk[0].node.lineno,
+        )]
+    return []
+
+
+def _check_context_execute(m: MigrationAST) -> list[RiskWarning]:
+    """context.execute() is an alternative to op.execute() with same risks."""
+    import ast as ast_mod
+    if m.upgrade_fn is None:
+        return []
+
+    ctx_calls = []
+    for node in ast_mod.walk(m.upgrade_fn):
+        if isinstance(node, ast_mod.Call):
+            func = node.func
+            # context.execute(...) or ctx.execute(...)
+            if (isinstance(func, ast_mod.Attribute) and
+                    func.attr == "execute" and
+                    isinstance(func.value, ast_mod.Name) and
+                    func.value.id in ("context", "ctx", "conn", "connection")):
+                ctx_calls.append(node)
+
+    if not ctx_calls:
+        return []
+
+    # Check if downgrade has corresponding execute
+    if m.downgrade_fn:
+        down_has_execute = any(
+            isinstance(node, ast_mod.Call) and
+            isinstance(node.func, ast_mod.Attribute) and
+            node.func.attr == "execute"
+            for node in ast_mod.walk(m.downgrade_fn)
+        )
+        if down_has_execute:
+            return []
+
+    return [_warn(
+        m, "context.execute without reverse",
+        "context.execute() in upgrade without corresponding execute in downgrade — "
+        "verify the downgrade correctly reverses this SQL",
+        "warning", line=ctx_calls[0].lineno,
+    )]
+
+
 _PER_FILE_CHECKS = [
     _check_batch_alter_drop,           # first: batch context needs special handling
     _check_downgrade_exists,
@@ -438,6 +495,8 @@ _PER_FILE_CHECKS = [
     _check_multi_step_destructive,
     _check_not_null_nullable_restore,
     _check_not_null_raw_sql,
+    _check_bulk_insert_no_reverse,
+    _check_context_execute,
 ]
 
 
