@@ -32,7 +32,10 @@ nav:
   - Getting Started: quickstart.md
   - Risk Patterns: patterns.md
   - CLI & Fixture Reference: cli.md
+  - API Reference: api.md
   - How It Works: how-it-works.md
+  - Best Practices: best-practices.md
+  - FAQ: faq.md
   - Troubleshooting: troubleshooting.md
   - Benchmarks: benchmarks.md
   - Contributing: contributing.md
