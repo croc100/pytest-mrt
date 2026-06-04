@@ -2,6 +2,21 @@
 
 pytest-mrt has two interfaces:
 
+- **`mrt` CLI** — analysis, fixing, and reporting without a database
+- **`mrt` pytest fixture** — dynamic verification against a real database
+
+## Command overview
+
+| Command | What it does | Needs DB? |
+|---|---|---|
+| `mrt check <dir>` | Static analysis — 26 risk patterns | No |
+| `mrt fix <file>` | Auto-generate missing or broken downgrade() | No |
+| `mrt report <dir>` | HTML safety report of entire migration history | No |
+| `mrt explain <file>` | AI explanation in plain English | No (needs API key) |
+| `mrt version` | Show installed version | No |
+
+---
+
 - **`mrt` CLI** — static analysis, runs without a database
 - **`mrt` pytest fixture** — dynamic verification, runs migrations against a real database
 
