@@ -47,10 +47,11 @@ def _revision_card(revision: str, warnings: list[RiskWarning]) -> str:
     rows = ""
     for w in warnings:
         color = _SEVERITY_COLOR[w.severity]
+        line_info = f" <span style='color:#9ca3af'>line {w.line}</span>" if w.line else ""
         rows += f"""
         <tr>
           <td style="padding:6px 12px;color:{color};font-weight:600">{w.severity.upper()}</td>
-          <td style="padding:6px 12px;font-family:monospace;font-size:0.85em">{w.pattern}</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.85em">{w.pattern}{line_info}</td>
           <td style="padding:6px 12px;color:#374151">{w.message}</td>
         </tr>"""
 
