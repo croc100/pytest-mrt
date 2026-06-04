@@ -139,9 +139,14 @@ def _check_column_size_shrink(source: str, rev: str, fname: str) -> list[RiskWar
 def _check_raw_execute(source: str, rev: str, fname: str) -> list[RiskWarning]:
     body = _upgrade_body(source)
     if re.search(r"op\.execute\s*\(", body):
+        # If downgrade also has op.execute(), developer likely handled it manually
+        down = _downgrade_body(source)
+        if re.search(r"op\.execute\s*\(", down):
+            return []
         return [RiskWarning(
             rev, fname, "Raw SQL (op.execute)",
-            "op.execute() with raw SQL — manually verify downgrade correctly reverses this",
+            "op.execute() in upgrade has no corresponding op.execute() in downgrade — "
+            "manually verify the downgrade correctly reverses this",
             "warning",
         )]
     return []
@@ -222,6 +227,33 @@ def _check_drop_not_null(source: str, rev: str, fname: str) -> list[RiskWarning]
                 "warning",
             )]
     return []
+
+
+def _check_batch_alter_drop(source: str, rev: str, fname: str) -> list[RiskWarning]:
+    """op.batch_alter_table is SQLite's way of doing ALTER — check for drops inside it."""
+    warnings = []
+    body = _upgrade_body(source)
+    # Find all batch_alter_table context blocks
+    for m in re.finditer(
+        r"with\s+op\.batch_alter_table\s*\([^)]+\)\s*as\s+\w+\s*:(.*?)(?=\nwith\s|\ndef\s|\Z)",
+        body, re.DOTALL
+    ):
+        block = m.group(1)
+        if re.search(r"\.drop_column\s*\(", block):
+            warnings.append(RiskWarning(
+                rev, fname, "DROP COLUMN in batch_alter_table",
+                "Column dropped inside op.batch_alter_table — "
+                "data is permanently lost on rollback even if downgrade re-adds the column",
+                "error",
+            ))
+        if re.search(r"\.drop_constraint\s*\(", block):
+            warnings.append(RiskWarning(
+                rev, fname, "DROP CONSTRAINT in batch_alter_table",
+                "Constraint dropped inside op.batch_alter_table — "
+                "downgrade must recreate it or data integrity is lost",
+                "warning",
+            ))
+    return warnings
 
 
 def _check_rename_without_reverse(source: str, rev: str, fname: str) -> list[RiskWarning]:
@@ -360,6 +392,7 @@ def _check_deferred_not_null(source: str, rev: str, fname: str) -> list[RiskWarn
 # ──────────────────────────────────────────────
 
 _CHECKS = [
+    _check_batch_alter_drop,
     _check_downgrade_exists,
     _check_noop_downgrade,
     _check_drop_column_in_upgrade,
@@ -387,12 +420,45 @@ _CHECKS = [
 ]
 
 
+def _check_multiple_heads(versions_dir: str) -> list[RiskWarning]:
+    """Detect branching migrations — multiple revisions sharing the same parent."""
+    parent_to_children: dict[str, list[tuple[str, str]]] = {}
+
+    for path in sorted(Path(versions_dir).glob("*.py")):
+        source = path.read_text()
+        rev_m = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
+        down_m = re.search(r'down_revision\s*=\s*["\']([^"\']+)["\']', source)
+        if rev_m and down_m:
+            rev = rev_m.group(1)
+            parent = down_m.group(1)
+            parent_to_children.setdefault(parent, []).append((rev, path.name))
+
+    warnings = []
+    for parent, children in parent_to_children.items():
+        if len(children) > 1:
+            revs = ", ".join(r for r, _ in children)
+            warnings.append(RiskWarning(
+                revs, children[0][1], "Multiple heads",
+                f"Revisions {revs} all branch from '{parent}' — "
+                "migration graph has multiple heads, which can cause ordering conflicts and "
+                "failed deployments. Run `alembic merge heads` to resolve.",
+                "error",
+            ))
+    return warnings
+
+
 def analyze_migrations(versions_dir: str) -> list[RiskWarning]:
     warnings: list[RiskWarning] = []
+
+    # Directory-level checks (run once across all files)
+    warnings.extend(_check_multiple_heads(versions_dir))
+
+    # Per-file checks
     for path in sorted(Path(versions_dir).glob("*.py")):
         source = path.read_text()
         m = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
         revision = m.group(1) if m else path.stem
         for check in _CHECKS:
             warnings.extend(check(source, revision, path.name))
+
     return warnings

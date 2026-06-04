@@ -18,38 +18,38 @@ class RevisionResult:
 
 class RollbackVerifier:
     """
-    For each revision under test:
-      1. Seed data into tables that exist BEFORE this migration (pre-upgrade state)
+    For each revision:
+      1. Seed real data into tables that exist BEFORE this migration
       2. Upgrade to the revision
       3. Downgrade one step
-      4. Verify schema is exactly restored + seeded data survived
+      4. Verify schema exactly restored + seeded data survived with correct values
     """
 
     def __init__(self, runner: MigrationRunner):
         self.runner = runner
 
+    def _reset_to(self, revision: str | None) -> None:
+        """Reliably move DB to a specific revision, handling noop downgrades."""
+        self.runner.downgrade_base()
+        if revision is not None:
+            self.runner.upgrade(revision)
+
     def check_revision(self, revision: str) -> RevisionResult:
         seeder = SmartSeeder(self.runner.engine)
         failures: list[str] = []
 
-        # Capture state before this migration
         schema_before = SchemaSnapshot.capture(self.runner.engine)
-
-        # Seed into pre-existing tables — these rows must survive rollback
         seeder.seed_all(schema_before.tables)
 
-        # Apply and then revert the migration
         self.runner.upgrade(revision)
         self.runner.downgrade()
 
         schema_restored = SchemaSnapshot.capture(self.runner.engine)
 
-        # Schema must be exactly as before (no missing tables, no leftover tables)
         diff = SchemaDiff()
         for issue in diff.verify_restored(schema_before, schema_restored):
             failures.append(issue.message)
 
-        # Data seeded before upgrade must survive the round-trip
         failures.extend(seeder.verify())
 
         return RevisionResult(
@@ -59,14 +59,29 @@ class RollbackVerifier:
         )
 
     def check_all(self) -> list[RevisionResult]:
-        """Test every revision independently in sequence."""
+        """
+        Test every revision independently in sequence.
+        After each check, hard-reset the DB state to handle noop downgrades
+        and other edge cases that leave the DB in an inconsistent state.
+        """
         results: list[RevisionResult] = []
+        prev_revision: str | None = None
+
         self.runner.downgrade_base()
 
         for rev in self.runner.get_revisions():
+            # Ensure we start each revision check from the correct state
+            # This handles noop downgrades leaving the schema out of sync
+            current = self.runner.current_revision()
+            if current != prev_revision:
+                self._reset_to(prev_revision)
+
             result = self.check_revision(rev.revision)
             results.append(result)
-            # Advance to this revision so the next check starts from correct state
-            self.runner.upgrade(rev.revision)
+
+            # Hard reset to this revision for the next iteration
+            # Necessary because a failed downgrade may leave the schema out of sync
+            self._reset_to(rev.revision)
+            prev_revision = rev.revision
 
         return results
