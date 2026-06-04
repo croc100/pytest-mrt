@@ -21,10 +21,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install
-        run: pip install -e ".[dev]" pytest-cov
+        run: pip install -e ".[dev]" coverage
 
       - name: Run tests
-        run: pytest tests/ -v --cov=pytest_mrt --cov-report=xml
+        run: coverage run -m pytest tests/ -v
+
+      - name: Generate coverage report
+        run: coverage xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4

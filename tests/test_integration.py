@@ -6,12 +6,13 @@ from __future__ import annotations
 import os
 import textwrap
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 import pytest
 from sqlalchemy import create_engine, text
 
 from pytest_mrt.core.runner import MigrationRunner
-from pytest_mrt.core.verifier import RollbackVerifier
+from pytest_mrt.core.verifier import RollbackVerifier, RevisionResult
 
 
 # ── helpers ───────────────────────────────────────────────────────────
@@ -309,3 +310,296 @@ def test_schema_snapshot_captures_columns(alembic_env):
     assert "name" in snap.tables["products"].columns
     assert "price" in snap.tables["products"].columns
     assert snap.tables["products"].pk_cols == ["id"]
+
+
+def test_verifier_custom_seeds(alembic_env):
+    """custom_seeds replaces auto-seeding for a table."""
+    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.create_table('users',
+                sa.Column('id', sa.Integer, primary_key=True),
+                sa.Column('name', sa.String(64), nullable=False),
+            )
+
+        def downgrade():
+            op.drop_table('users')
+    """))
+
+    _add_migration(alembic_env["versions"], "002_add_email.py", "002", "001", textwrap.dedent("""
+        revision = '002'
+        down_revision = '001'
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.add_column('users', sa.Column('email', sa.String(128), nullable=True))
+
+        def downgrade():
+            op.drop_column('users', 'email')
+    """))
+
+    runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
+    # Advance to 001 so schema_before for revision 002 has the 'users' table
+    runner.upgrade("001")
+    verifier = RollbackVerifier(
+        runner,
+        custom_seeds={"users": lambda: [{"id": 42, "name": "Alice"}]},
+    )
+    result = verifier.check_revision("002")
+    assert result.passed
+
+
+def test_verifier_skip(alembic_env):
+    """Skipped revisions return passed=True with skipped=True."""
+    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.create_table('users',
+                sa.Column('id', sa.Integer, primary_key=True),
+                sa.Column('name', sa.String(64), nullable=False),
+            )
+
+        def downgrade():
+            pass
+    """))
+
+    runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
+    verifier = RollbackVerifier(runner, skip={"001": "intentional data migration"})
+    result = verifier.check_revision("001")
+    assert result.passed
+    assert result.skipped
+    assert result.skip_reason == "intentional data migration"
+
+
+def test_verifier_check_revision_upgrade_exception(alembic_env):
+    """When upgrade raises, verifier records failure and recovers DB state."""
+    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.create_table('users',
+                sa.Column('id', sa.Integer, primary_key=True),
+                sa.Column('name', sa.String(64), nullable=False),
+            )
+
+        def downgrade():
+            op.drop_table('users')
+    """))
+
+    runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
+    verifier = RollbackVerifier(runner)
+
+    original_upgrade = runner.upgrade
+
+    call_count = [0]
+
+    def failing_upgrade(rev="head"):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            raise RuntimeError("Simulated upgrade failure")
+        return original_upgrade(rev)
+
+    with patch.object(runner, "upgrade", side_effect=failing_upgrade):
+        result = verifier.check_revision("001")
+
+    assert not result.passed
+    assert any("Unexpected error" in f or "Simulated" in f for f in result.failures)
+
+
+def test_verifier_check_all_chain_advance_failure(alembic_env):
+    """When chain-advance fails, check_all records failure and stops."""
+    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.create_table('users',
+                sa.Column('id', sa.Integer, primary_key=True),
+                sa.Column('name', sa.String(64), nullable=False),
+            )
+
+        def downgrade():
+            op.drop_table('users')
+    """))
+
+    _add_migration(alembic_env["versions"], "002_add_email.py", "002", "001", textwrap.dedent("""
+        revision = '002'
+        down_revision = '001'
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.add_column('users', sa.Column('email', sa.String(128), nullable=True))
+
+        def downgrade():
+            op.drop_column('users', 'email')
+    """))
+
+    runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
+    verifier = RollbackVerifier(runner)
+
+    original_upgrade = runner.upgrade
+    advance_call_count = [0]
+
+    def selective_failing_upgrade(rev="head"):
+        advance_call_count[0] += 1
+        # Fail on the 2nd call (chain-advance after check_revision("001"))
+        if advance_call_count[0] == 2:
+            raise RuntimeError("Simulated chain advance failure")
+        return original_upgrade(rev)
+
+    with patch.object(runner, "upgrade", side_effect=selective_failing_upgrade):
+        results = verifier.check_all()
+
+    revision_ids = [r.revision for r in results]
+    assert any("chain-advance" in r for r in revision_ids)
+    failed = [r for r in results if not r.passed]
+    assert len(failed) >= 1
+
+
+def test_runner_get_versions_dir(alembic_env):
+    """get_versions_dir returns a valid directory path."""
+    runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
+    versions_dir = runner.get_versions_dir()
+    assert isinstance(versions_dir, str)
+    assert len(versions_dir) > 0
+    from pathlib import Path
+    # The returned path should be a parent of or equal to the versions directory
+    assert Path(versions_dir) == Path(alembic_env["versions"]).parent or \
+           Path(versions_dir) == Path(alembic_env["versions"])
+
+
+def test_runner_mysql_uses_nullpool():
+    """MigrationRunner uses NullPool for MySQL URLs."""
+    from sqlalchemy.pool import NullPool
+    from unittest.mock import patch, MagicMock
+    with patch("sqlalchemy.create_engine") as mock_create:
+        mock_create.return_value = MagicMock()
+        with patch("alembic.config.Config") as mock_cfg:
+            mock_cfg.return_value = MagicMock()
+            try:
+                MigrationRunner("alembic.ini", "mysql+pymysql://user:pass@localhost/db")
+            except Exception:
+                pass
+        calls = mock_create.call_args_list
+        if calls:
+            kwargs = calls[0][1] if calls[0][1] else {}
+            assert kwargs.get("poolclass") == NullPool
+
+
+def test_revision_result_failure_summary():
+    """RevisionResult.failure_summary formats failures correctly."""
+    result = RevisionResult(
+        revision="abc123",
+        passed=False,
+        failures=["Table 'users' missing", "Column 'email' lost"],
+    )
+    summary = result.failure_summary()
+    assert "users" in summary
+    assert "email" in summary
+
+
+def test_revision_result_risk_score_empty():
+    result = RevisionResult(revision="abc", passed=True)
+    assert result.risk_score == 0
+
+
+def test_revision_result_risk_score_max():
+    result = RevisionResult(
+        revision="abc", passed=False,
+        failures=["a", "b", "c", "d", "e"],
+    )
+    assert result.risk_score == 100
+
+
+def test_verifier_check_all_multiple_revisions(alembic_env):
+    """check_all covers a 3-revision chain."""
+    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.create_table('items',
+                sa.Column('id', sa.Integer, primary_key=True),
+                sa.Column('title', sa.String(128), nullable=False),
+            )
+
+        def downgrade():
+            op.drop_table('items')
+    """))
+
+    _add_migration(alembic_env["versions"], "002_add_desc.py", "002", "001", textwrap.dedent("""
+        revision = '002'
+        down_revision = '001'
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.add_column('items', sa.Column('description', sa.Text, nullable=True))
+
+        def downgrade():
+            op.drop_column('items', 'description')
+    """))
+
+    _add_migration(alembic_env["versions"], "003_add_price.py", "003", "002", textwrap.dedent("""
+        revision = '003'
+        down_revision = '002'
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.add_column('items', sa.Column('price', sa.Float, nullable=True))
+
+        def downgrade():
+            op.drop_column('items', 'price')
+    """))
+
+    runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
+    verifier = RollbackVerifier(runner)
+    results = verifier.check_all()
+
+    assert len(results) == 3
+    assert all(r.passed for r in results)

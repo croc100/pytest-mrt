@@ -63,3 +63,20 @@ packages = ["pytest_mrt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source_pkgs = ["pytest_mrt"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    '\.\.\.',
+]
+
+[tool.coverage.paths]
+source = [
+    "pytest_mrt/",
+    "*/site-packages/pytest_mrt/",
+]

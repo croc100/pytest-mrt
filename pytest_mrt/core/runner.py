@@ -15,7 +15,9 @@ class MigrationRunner:
         self.alembic_cfg.set_main_option("sqlalchemy.url", db_url)
         # NullPool for SQLite: each connection is closed immediately after use,
         # preventing ResourceWarning from unclosed file handles in tests.
-        pool_cls = NullPool if db_url.startswith("sqlite:///") else None
+        from sqlalchemy.engine.url import make_url
+        _dialect = make_url(db_url).drivername.split("+")[0]
+        pool_cls = NullPool if _dialect in ("sqlite", "mysql") else None
         self.engine: Engine = create_engine(
             db_url, **({"poolclass": pool_cls} if pool_cls else {})
         )
