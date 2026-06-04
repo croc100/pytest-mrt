@@ -1,0 +1,104 @@
+# .github/workflows/migration-safety.yml
+#
+# Run pytest-mrt on every PR that touches migration files.
+# Blocks merge if any rollback-unsafe migration is detected.
+
+name: Migration Safety
+
+on:
+  pull_request:
+    paths:
+      - "migrations/**"
+      - "alembic/**"
+      - "**/migrations/*.py"   # Django
+
+jobs:
+  static-check:
+    name: Static analysis (no DB needed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pytest-mrt
+
+      # Alembic
+      - name: Check Alembic migrations
+        run: mrt check alembic/versions/ --strict
+        if: ${{ hashFiles('alembic/versions/*.py') != '' }}
+
+      # Django (auto-detected)
+      - name: Check Django migrations
+        run: mrt check myapp/migrations/ --strict
+        if: ${{ hashFiles('**/migrations/*.py') != '' }}
+
+  dynamic-check:
+    name: Dynamic verification (with DB)
+    runs-on: ubuntu-latest
+    needs: static-check
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mrt_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pytest-mrt[postgres]
+
+      - name: Run rollback verification
+        env:
+          TEST_DATABASE_URL: postgresql://test:test@localhost/mrt_test
+        run: pytest tests/test_migrations.py -v
+
+  # Optional: run with MySQL too
+  dynamic-check-mysql:
+    name: Dynamic verification (MySQL)
+    runs-on: ubuntu-latest
+    needs: static-check
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: mrt_test
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 3306:3306
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pytest-mrt[mysql]
+
+      - name: Run rollback verification (MySQL)
+        env:
+          TEST_DATABASE_URL: mysql+pymysql://root:test@127.0.0.1/mrt_test
+        run: pytest tests/test_migrations.py -v

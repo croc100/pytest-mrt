@@ -3,6 +3,7 @@
 <p align="center">
   <a href="https://pypi.org/project/pytest-mrt"><img src="https://img.shields.io/pypi/v/pytest-mrt?color=blue" alt="PyPI"></a>
   <a href="https://github.com/croc100/pytest-mrt/actions"><img src="https://img.shields.io/github/actions/workflow/status/croc100/pytest-mrt/ci.yml?branch=main&label=tests" alt="CI"></a>
+  <a href="https://codecov.io/gh/croc100/pytest-mrt"><img src="https://codecov.io/gh/croc100/pytest-mrt/graph/badge.svg" alt="Coverage"></a>
   <a href="https://pypi.org/project/pytest-mrt"><img src="https://img.shields.io/pypi/pyversions/pytest-mrt" alt="Python"></a>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
 </p>
@@ -130,6 +131,29 @@ pip install pytest-mrt[mysql]   # includes PyMySQL
 ```
 
 Use `mysql+pymysql://user:pass@host/dbname` as your `db_url`.
+
+## CI/CD integration
+
+Drop `mrt check` into any pipeline as a pre-deploy gate:
+
+```yaml
+# GitHub Actions — blocks merge if unsafe migrations are detected
+- name: Migration safety check
+  run: mrt check alembic/versions/ --strict
+```
+
+Full examples for GitHub Actions, GitLab CI, Jenkins, and pre-commit hooks are in [`examples/ci-integration/`](examples/ci-integration/).
+
+## Docker
+
+Run tests locally against PostgreSQL or MySQL without installing anything:
+
+```bash
+docker compose run test-postgres
+docker compose run test-mysql
+```
+
+See [`docker-compose.yml`](docker-compose.yml) for the full configuration.
 
 ## Documentation
 

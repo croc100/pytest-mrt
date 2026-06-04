@@ -1,0 +1,68 @@
+# .gitlab-ci.yml
+#
+# Integrate pytest-mrt into GitLab CI.
+# Add these stages to your existing pipeline.
+
+stages:
+  - migration-check
+  - test
+
+variables:
+  POSTGRES_DB: mrt_test
+  POSTGRES_USER: test
+  POSTGRES_PASSWORD: test
+
+# ──────────────────────────────────────────────
+# Stage 1: static analysis — no DB, runs fast
+# ──────────────────────────────────────────────
+
+migration:static:
+  stage: migration-check
+  image: python:3.12-slim
+  rules:
+    - changes:
+        - "alembic/versions/*.py"
+        - "**/migrations/*.py"
+  script:
+    - pip install pytest-mrt --quiet
+    - mrt check alembic/versions/ --strict
+
+# ──────────────────────────────────────────────
+# Stage 2: dynamic rollback verification
+# ──────────────────────────────────────────────
+
+migration:rollback:
+  stage: test
+  image: python:3.12-slim
+  services:
+    - postgres:16
+  variables:
+    TEST_DATABASE_URL: postgresql://test:test@postgres/mrt_test
+  rules:
+    - changes:
+        - "alembic/versions/*.py"
+        - "tests/test_migrations.py"
+  script:
+    - pip install pytest-mrt[postgres] --quiet
+    - pytest tests/test_migrations.py -v
+  artifacts:
+    when: always
+    reports:
+      junit: test-results.xml
+    paths:
+      - migration_report.html
+
+migration:report:
+  stage: test
+  image: python:3.12-slim
+  services:
+    - postgres:16
+  variables:
+    TEST_DATABASE_URL: postgresql://test:test@postgres/mrt_test
+  script:
+    - pip install pytest-mrt[postgres] --quiet
+    - mrt report alembic/versions/ --output migration_report.html
+  artifacts:
+    paths:
+      - migration_report.html
+    expose_as: "Migration Safety Report"

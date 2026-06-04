@@ -1,0 +1,65 @@
+services:
+  # Run migration safety tests against PostgreSQL
+  test-postgres:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      TEST_DATABASE_URL: postgresql://test:test@postgres/mrt_test
+    command: >
+      sh -c "pip install -e '.[postgres]' -q &&
+             pytest tests/ -v --tb=short"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Run migration safety tests against MySQL
+  test-mysql:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      TEST_DATABASE_URL: mysql+pymysql://test:test@mysql/mrt_test
+    command: >
+      sh -c "pip install -e '.[mysql]' -q &&
+             pytest tests/ -v --tb=short"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # Static analysis only (no DB needed)
+  check:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: >
+      sh -c "pip install pytest-mrt -q &&
+             mrt check alembic/versions/"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: mrt_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_USER: test
+      MYSQL_PASSWORD: test
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mrt_test
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-utest", "-ptest"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
