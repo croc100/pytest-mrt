@@ -1,0 +1,120 @@
+name: Create Release
+
+# Trigger: push a version tag (v0.8.0, v1.0.0-rc1, etc.)
+# This workflow creates the GitHub Release and generates release notes.
+# The "published" event on the release then triggers publish.yml → PyPI.
+#
+# Usage:
+#   git tag v0.8.0 -m "v0.8.0"
+#   git push origin v0.8.0
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"   # pre-releases: v1.0.0-rc1, v1.0.0-beta1
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # required to create releases
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for changelog generation
+
+      - name: Validate tag matches pyproject.toml version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          TOML_VERSION=$(python3 -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              print(tomllib.load(f)['project']['version'])
+          ")
+          if [ "$TAG" != "$TOML_VERSION" ]; then
+            echo "❌ Tag version ($TAG) does not match pyproject.toml ($TOML_VERSION)"
+            echo "Fix: update pyproject.toml version to $TAG before tagging"
+            exit 1
+          fi
+          echo "✅ Tag $GITHUB_REF_NAME matches pyproject.toml v$TOML_VERSION"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          TAG=$GITHUB_REF_NAME
+
+          # Find the previous tag to diff against
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^$TAG$" | head -1)
+          echo "Generating changelog from $PREV_TAG → $TAG"
+
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          # Generate structured notes from commit messages
+          {
+            echo "## What's changed"
+            echo ""
+
+            # Features
+            FEATS=$(git log $RANGE --pretty=format:"- %s" --no-merges | grep -E "^- feat(\(.+\))?:" | sed 's/^- feat[^:]*: /- /')
+            if [ -n "$FEATS" ]; then
+              echo "### Features"
+              echo "$FEATS"
+              echo ""
+            fi
+
+            # Bug fixes
+            FIXES=$(git log $RANGE --pretty=format:"- %s" --no-merges | grep -E "^- fix(\(.+\))?:" | sed 's/^- fix[^:]*: /- /')
+            if [ -n "$FIXES" ]; then
+              echo "### Bug fixes"
+              echo "$FIXES"
+              echo ""
+            fi
+
+            # Documentation
+            DOCS=$(git log $RANGE --pretty=format:"- %s" --no-merges | grep -E "^- docs(\(.+\))?:" | sed 's/^- docs[^:]*: /- /')
+            if [ -n "$DOCS" ]; then
+              echo "### Documentation"
+              echo "$DOCS"
+              echo ""
+            fi
+
+            # Other
+            OTHER=$(git log $RANGE --pretty=format:"- %s" --no-merges | grep -vE "^- (feat|fix|docs|test|chore|ci|refactor|style|perf)(\(.+\))?:")
+            if [ -n "$OTHER" ]; then
+              echo "### Other changes"
+              echo "$OTHER"
+              echo ""
+            fi
+
+            echo "---"
+            echo ""
+            echo "**Full changelog:** https://github.com/$GITHUB_REPOSITORY/compare/${PREV_TAG}...${TAG}"
+          } > release_notes.md
+
+          cat release_notes.md
+          echo "notes_file=release_notes.md" >> $GITHUB_OUTPUT
+
+      - name: Determine pre-release
+        id: prerelease
+        run: |
+          if echo "$GITHUB_REF_NAME" | grep -qE "-(alpha|beta|rc|dev)"; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          generate_release_notes: false  # we generate our own above
