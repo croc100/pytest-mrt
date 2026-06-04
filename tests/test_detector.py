@@ -108,12 +108,13 @@ def test_not_null_with_server_default_is_fine(tmp_path):
 
 
 def test_raw_execute_warning(tmp_path):
+    """Fires when upgrade has op.execute but downgrade does not."""
     migration(tmp_path, "001.py", """
         revision = '001'
         def upgrade():
             op.execute("UPDATE users SET status = 'active'")
         def downgrade():
-            op.execute("UPDATE users SET status = NULL")
+            op.add_column('users', sa.Column('status', sa.String))
     """)
     patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
     assert "Raw SQL (op.execute)" in patterns
@@ -190,6 +191,106 @@ def test_column_type_change_warning(tmp_path):
     """)
     patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
     assert "Column type change" in patterns
+
+
+# ── bug fixes ─────────────────────────────────────────────────────────
+
+def test_raw_execute_no_false_positive_when_downgrade_also_has_execute(tmp_path):
+    """If both upgrade and downgrade have op.execute, it's likely intentional."""
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            op.execute("UPDATE users SET status = 'active'")
+        def downgrade():
+            op.execute("UPDATE users SET status = NULL")
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "Raw SQL (op.execute)" not in patterns
+
+
+def test_raw_execute_fires_when_downgrade_has_no_execute(tmp_path):
+    """op.execute in upgrade with no corresponding execute in downgrade should warn."""
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            op.execute("UPDATE users SET status = 'active'")
+        def downgrade():
+            op.drop_column('users', 'status')
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "Raw SQL (op.execute)" in patterns
+
+
+# ── batch_alter_table ──────────────────────────────────────────────────
+
+def test_batch_alter_drop_column(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            with op.batch_alter_table('users') as batch_op:
+                batch_op.drop_column('phone')
+        def downgrade():
+            with op.batch_alter_table('users') as batch_op:
+                batch_op.add_column(sa.Column('phone', sa.String(20)))
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "DROP COLUMN in batch_alter_table" in patterns
+
+
+def test_batch_alter_safe_operation_is_fine(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        def upgrade():
+            with op.batch_alter_table('users') as batch_op:
+                batch_op.add_column(sa.Column('bio', sa.Text, nullable=True))
+        def downgrade():
+            with op.batch_alter_table('users') as batch_op:
+                batch_op.drop_column('bio')
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "DROP COLUMN in batch_alter_table" not in patterns
+
+
+# ── multiple heads ─────────────────────────────────────────────────────
+
+def test_multiple_heads_detected(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        down_revision = None
+        def upgrade(): pass
+        def downgrade(): pass
+    """)
+    migration(tmp_path, "002a.py", """
+        revision = '002a'
+        down_revision = '001'
+        def upgrade(): pass
+        def downgrade(): pass
+    """)
+    migration(tmp_path, "002b.py", """
+        revision = '002b'
+        down_revision = '001'
+        def upgrade(): pass
+        def downgrade(): pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "Multiple heads" in patterns
+
+
+def test_linear_history_no_multiple_heads(tmp_path):
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        down_revision = None
+        def upgrade(): pass
+        def downgrade(): pass
+    """)
+    migration(tmp_path, "002.py", """
+        revision = '002'
+        down_revision = '001'
+        def upgrade(): pass
+        def downgrade(): pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "Multiple heads" not in patterns
 
 
 # ── new patterns ──────────────────────────────────────────────────────
