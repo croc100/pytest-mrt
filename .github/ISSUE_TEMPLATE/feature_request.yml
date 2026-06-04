@@ -1,0 +1,33 @@
+name: Feature Request
+description: Suggest a new risk pattern or feature
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The most valuable contributions are new risk patterns that pytest-mrt doesn't catch yet.
+
+  - type: textarea
+    id: pattern
+    attributes:
+      label: What migration pattern should be detected?
+      description: Describe the dangerous pattern. Include a code example if possible.
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this dangerous?
+      description: What goes wrong in production when this pattern is used?
+    validations:
+      required: true
+
+  - type: textarea
+    id: detection
+    attributes:
+      label: How should it be detected?
+      description: Static analysis (regex on migration file) or dynamic (needs a real DB)?
+    validations:
+      required: false
