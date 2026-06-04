@@ -49,6 +49,7 @@ dev = [
 ]
 postgres = ["psycopg2-binary"]
 asyncpg = ["asyncpg"]
+mysql = ["PyMySQL>=1.1"]
 ai = ["anthropic>=0.25"]
 
 [project.entry-points."pytest11"]

@@ -11,6 +11,11 @@ from sqlalchemy.engine import Engine
 from .schema import ColumnInfo, TableInfo
 
 
+def _q(engine: Engine, name: str) -> str:
+    """Quote an identifier using the engine's dialect (handles MySQL backticks)."""
+    return engine.dialect.identifier_preparer.quote(name)
+
+
 # ──────────────────────────────────────────────
 # value generation
 # ──────────────────────────────────────────────
@@ -26,7 +31,7 @@ def _generate_value(col: ColumnInfo, row_index: int) -> Any:
 
     if any(x in t for x in ("BIGINT", "BIGSERIAL")):
         return seed
-    if any(x in t for x in ("INT", "SERIAL", "SMALLINT")):
+    if any(x in t for x in ("TINYINT", "SMALLINT", "MEDIUMINT", "INT", "SERIAL")):
         return seed % (2 ** 30)  # stay within 32-bit range
     if any(x in t for x in ("FLOAT", "DOUBLE", "REAL", "NUMERIC", "DECIMAL")):
         return float(seed) / 1000.0
@@ -36,7 +41,7 @@ def _generate_value(col: ColumnInfo, row_index: int) -> Any:
         return str(uuid.UUID(int=seed))
     if "JSONB" in t or "JSON" in t:
         return f'{{"mrt": {row_index}}}'
-    if any(x in t for x in ("BYTEA", "BLOB", "BINARY")):
+    if any(x in t for x in ("BYTEA", "VARBINARY", "BLOB", "BINARY")):
         return f"mrt_{row_index}".encode()
     if "TIMESTAMP" in t or "DATETIME" in t:
         return datetime(2024, 1, row_index % 28 + 1, row_index % 24, 0, 0)
@@ -47,7 +52,6 @@ def _generate_value(col: ColumnInfo, row_index: int) -> Any:
     if any(x in t for x in ("VARCHAR", "TEXT", "CHAR", "STRING", "CLOB")):
         m = re.search(r"\((\d+)\)", t)
         limit = int(m.group(1)) if m else 255
-        # Include column name for cross-column uniqueness
         val = f"mrt_{col.name[:8]}_{row_index:04d}"
         return val[:limit]
 
@@ -101,6 +105,9 @@ class SmartSeeder:
         self.engine = engine
         self._rows: list[SeededRow] = []
 
+    def _q(self, name: str) -> str:
+        return _q(self.engine, name)
+
     def seed_all(self, tables: dict[str, TableInfo], count: int = 3) -> None:
         for tname in _topological_order(tables):
             self.seed_table(tables[tname], count)
@@ -127,10 +134,11 @@ class SmartSeeder:
             if not row:
                 continue
 
-            cols = ", ".join(f'"{c}"' for c in row)
+            cols = ", ".join(self._q(c) for c in row)
             placeholders = ", ".join(f":p_{c}" for c in row)
             params = {f"p_{c}": v for c, v in row.items()}
-            stmt = text(f'INSERT INTO "{table.name}" ({cols}) VALUES ({placeholders})')
+            tq = self._q(table.name)
+            stmt = text(f'INSERT INTO {tq} ({cols}) VALUES ({placeholders})')
 
             try:
                 with self.engine.begin() as conn:
@@ -138,18 +146,19 @@ class SmartSeeder:
 
                 # Fetch actual inserted row (to capture auto-generated PK)
                 with self.engine.connect() as conn:
+                    pkq = self._q(pk_col)
                     if pk_col in row:
                         pk_val = row[pk_col]
                     else:
                         result = conn.execute(
-                            text(f'SELECT "{pk_col}" FROM "{table.name}" ORDER BY "{pk_col}" DESC LIMIT 1')
+                            text(f'SELECT {pkq} FROM {tq} ORDER BY {pkq} DESC LIMIT 1')
                         )
                         pk_val = result.scalar()
 
                     if pk_val is not None:
                         # Fetch full row for later comparison
                         result = conn.execute(
-                            text(f'SELECT * FROM "{table.name}" WHERE "{pk_col}" = :pk'),
+                            text(f'SELECT * FROM {tq} WHERE {pkq} = :pk'),
                             {"pk": pk_val},
                         )
                         full_row = dict(result.mappings().first() or {})
@@ -182,7 +191,7 @@ class SmartSeeder:
 
             with self.engine.connect() as conn:
                 result = conn.execute(
-                    text(f'SELECT * FROM "{tname}" WHERE "{seeded.pk_col}" = :pk'),
+                    text(f'SELECT * FROM {_q(self.engine, tname)} WHERE {_q(self.engine, seeded.pk_col)} = :pk'),
                     {"pk": seeded.pk_val},
                 )
                 row = result.mappings().first()
