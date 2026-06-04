@@ -11,7 +11,11 @@ class MRTFixture:
     def __init__(self, config: MRTConfig):
         self._runner = MigrationRunner(config.alembic_ini, config.db_url)
         self._seeder = SmartSeeder(self._runner.engine)
-        self._verifier = RollbackVerifier(self._runner)
+        self._verifier = RollbackVerifier(
+            self._runner,
+            skip=config.skip,
+            custom_seeds=config.custom_seeds,
+        )
 
     # ── migration control ──────────────────────────────────────────────
 

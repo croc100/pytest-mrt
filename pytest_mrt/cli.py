@@ -39,9 +39,21 @@ def version_cmd() -> None:
 def check(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
     strict: bool = typer.Option(False, "--strict", help="Exit 1 on warnings too"),
+    fmt: str = typer.Option("table", "--format", "-f", help="Output format: table | json"),
 ) -> None:
     """Statically analyze migrations for rollback risk patterns."""
     warnings = analyze_migrations(versions_dir)
+
+    if fmt == "json":
+        import json
+        output = [
+            {"revision": w.revision, "file": w.file, "pattern": w.pattern,
+             "severity": w.severity, "message": w.message}
+            for w in warnings
+        ]
+        console.print(json.dumps(output, indent=2))
+        has_errors = any(w.severity == "error" for w in warnings)
+        raise typer.Exit(1 if has_errors or (strict and warnings) else 0)
 
     if not warnings:
         console.print("[green]✓ No rollback risks detected.[/green]")
@@ -72,6 +84,93 @@ def check(
     else:
         console.print(f"[yellow]{len(warns)} warning(s)[/yellow] — review before deploying")
         raise typer.Exit(0)
+
+
+# ──────────────────────────────────────────────
+# mrt init
+# ──────────────────────────────────────────────
+
+@app.command("init")
+def init() -> None:
+    """
+    Scaffold conftest.py and a test file for your project.
+
+    Auto-detects alembic.ini location.
+    """
+    import os
+
+    # Find alembic.ini
+    ini_candidates = ["alembic.ini", "alembic/alembic.ini", "migrations/alembic.ini"]
+    found_ini = next((p for p in ini_candidates if Path(p).exists()), None)
+
+    if found_ini:
+        console.print(f"[green]✓[/green] Found [bold]{found_ini}[/bold]")
+    else:
+        found_ini = typer.prompt("Path to alembic.ini", default="alembic.ini")
+
+    # Ask for DB URL
+    db_url = typer.prompt(
+        "Test database URL",
+        default='os.environ.get("TEST_DATABASE_URL", "sqlite:///test.db")',
+    )
+
+    # Detect test directory
+    test_dir = "tests" if Path("tests").exists() else "."
+
+    # Write conftest.py
+    conftest_path = Path(test_dir) / "conftest.py"
+    if conftest_path.exists():
+        overwrite = typer.confirm(f"{conftest_path} already exists. Add MRTConfig?", default=False)
+        if not overwrite:
+            console.print("[dim]Skipping conftest.py[/dim]")
+        else:
+            _append_conftest(conftest_path, found_ini, db_url)
+    else:
+        _write_conftest(conftest_path, found_ini, db_url)
+        console.print(f"[green]✓[/green] Created [bold]{conftest_path}[/bold]")
+
+    # Write test file
+    test_path = Path(test_dir) / "test_migrations.py"
+    if not test_path.exists():
+        test_path.write_text(
+            '"""Migration rollback tests — powered by pytest-mrt"""\n\n\n'
+            "def test_all_migrations_are_reversible(mrt):\n"
+            '    """Check every migration can be safely rolled back."""\n'
+            "    mrt.assert_all_reversible()\n"
+        )
+        console.print(f"[green]✓[/green] Created [bold]{test_path}[/bold]")
+
+    console.print()
+    console.print("[bold]Next steps:[/bold]")
+    console.print(f"  [cyan]pytest {test_dir}/test_migrations.py -s[/cyan]")
+
+
+def _write_conftest(path: Path, alembic_ini: str, db_url: str) -> None:
+    path.write_text(
+        f'import os\n'
+        f'from pytest_mrt import MRTConfig\n\n\n'
+        f'def pytest_configure(config):\n'
+        f'    config._mrt_config = MRTConfig(\n'
+        f'        alembic_ini="{alembic_ini}",\n'
+        f'        db_url={db_url},\n'
+        f'        # skip={{"revision_id": "Reason this is a known issue"}},\n'
+        f'    )\n'
+    )
+
+
+def _append_conftest(path: Path, alembic_ini: str, db_url: str) -> None:
+    existing = path.read_text()
+    addition = (
+        f'\n\n# Added by mrt init\n'
+        f'from pytest_mrt import MRTConfig\n\n\n'
+        f'def pytest_configure(config):\n'
+        f'    config._mrt_config = MRTConfig(\n'
+        f'        alembic_ini="{alembic_ini}",\n'
+        f'        db_url={db_url},\n'
+        f'    )\n'
+    )
+    path.write_text(existing + addition)
+    console.print(f"[green]✓[/green] Updated [bold]{path}[/bold]")
 
 
 # ──────────────────────────────────────────────
