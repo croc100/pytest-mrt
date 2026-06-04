@@ -9,6 +9,21 @@ _SEVERITY_COLOR = {"error": "#ef4444", "warning": "#f59e0b"}
 _SEVERITY_BG = {"error": "#fef2f2", "warning": "#fffbeb"}
 
 
+def _risk_score(warnings: list[RiskWarning]) -> int:
+    errors = sum(1 for w in warnings if w.severity == "error")
+    warns = sum(1 for w in warnings if w.severity == "warning")
+    score = max(0, 100 - errors * 20 - warns * 5)
+    return score
+
+
+def _score_color(score: int) -> str:
+    if score >= 80:
+        return "#22c55e"
+    if score >= 50:
+        return "#f59e0b"
+    return "#ef4444"
+
+
 def _revision_card(revision: str, warnings: list[RiskWarning]) -> str:
     errors = [w for w in warnings if w.severity == "error"]
     warns = [w for w in warnings if w.severity == "warning"]
@@ -54,6 +69,8 @@ def _revision_card(revision: str, warnings: list[RiskWarning]) -> str:
       </table>"""
 
     fname = warnings[0].file if warnings else ""
+    score = _risk_score(warnings)
+    sc = _score_color(score)
 
     return f"""
   <div style="border:1px solid {card_border};border-radius:8px;padding:16px;margin-bottom:12px;background:#fff">
@@ -63,8 +80,11 @@ def _revision_card(revision: str, warnings: list[RiskWarning]) -> str:
         <span style="font-family:monospace;font-weight:600;color:#111">{revision}</span>
         <span style="color:#9ca3af;font-size:0.85em;margin-left:8px">{fname}</span>
       </div>
-      <span style="margin-left:auto;padding:2px 10px;border-radius:20px;font-size:0.8em;
-                   background:{status_color};color:#fff;font-weight:600">{status_label}</span>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span style="font-size:0.8em;color:{sc};font-weight:700">Score {score}/100</span>
+        <span style="padding:2px 10px;border-radius:20px;font-size:0.8em;
+                     background:{status_color};color:#fff;font-weight:600">{status_label}</span>
+      </span>
     </div>
     {table}
   </div>"""

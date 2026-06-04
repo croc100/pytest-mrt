@@ -11,7 +11,9 @@ console = Console()
 
 
 def print_revision_result(result: RevisionResult) -> None:
-    if result.passed:
+    if result.skipped:
+        console.print(f"  [dim]–[/dim]  [bold]{result.revision}[/bold]  [dim]skipped — {result.skip_reason}[/dim]")
+    elif result.passed:
         console.print(f"  [green]✓[/green]  [bold]{result.revision}[/bold]  [dim]reversible[/dim]")
     else:
         console.print(f"  [red]✗[/red]  [bold]{result.revision}[/bold]  [red]data loss detected[/red]")
