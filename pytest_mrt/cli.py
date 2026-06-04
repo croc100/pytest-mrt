@@ -8,6 +8,7 @@ from rich import box
 
 from . import __version__
 from .core.detector import analyze_migrations
+from .adapters.django_detector import analyze_django_migrations, is_django_migration
 
 app = typer.Typer(
     name="mrt",
@@ -41,8 +42,17 @@ def check(
     strict: bool = typer.Option(False, "--strict", help="Exit 1 on warnings too"),
     fmt: str = typer.Option("table", "--format", "-f", help="Output format: table | json"),
 ) -> None:
-    """Statically analyze migrations for rollback risk patterns."""
-    warnings = analyze_migrations(versions_dir)
+    """Statically analyze migrations for rollback risk patterns (Alembic and Django)."""
+    # Auto-detect Django vs Alembic
+    from pathlib import Path as _Path
+    sample_files = list(_Path(versions_dir).rglob("*.py"))[:5]
+    is_django = any(is_django_migration(p) for p in sample_files)
+
+    if is_django:
+        console.print("[dim]Detected: Django migrations[/dim]")
+        warnings = analyze_django_migrations(versions_dir)
+    else:
+        warnings = analyze_migrations(versions_dir)
 
     if fmt == "json":
         import json
