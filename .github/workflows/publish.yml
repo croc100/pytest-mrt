@@ -18,12 +18,32 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Check if version already exists on PyPI
+        id: check
+        run: |
+          VERSION=$(python -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              print(tomllib.load(f)['project']['version'])
+          ")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # pip index returns non-zero when the package doesn't exist at all
+          if pip index versions pytest-mrt 2>/dev/null | grep -qE "(^| )${VERSION}(,|$)"; then
+            echo "already_published=true" >> $GITHUB_OUTPUT
+            echo "v${VERSION} is already on PyPI — skipping upload"
+          else
+            echo "already_published=false" >> $GITHUB_OUTPUT
+            echo "v${VERSION} not found on PyPI — will publish"
+          fi
+
       - name: Build
+        if: steps.check.outputs.already_published == 'false'
         run: |
           pip install hatch
           hatch build
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        if: steps.check.outputs.already_published == 'false'
+        uses: pypa/gh-action-pypi-publish@v1.12.4
         with:
           skip-existing: true
