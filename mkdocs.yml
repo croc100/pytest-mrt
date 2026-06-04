@@ -1,0 +1,55 @@
+site_name: pytest-mrt
+site_description: Catch database migration rollback failures before they reach production
+site_url: https://croc100.github.io/pytest-mrt
+repo_url: https://github.com/croc100/pytest-mrt
+repo_name: croc100/pytest-mrt
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+
+nav:
+  - Home: index.md
+  - Getting Started: quickstart.md
+  - Risk Patterns: patterns.md
+  - CLI Reference: cli.md
+  - Contributing: contributing.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/croc100/pytest-mrt
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/pytest-mrt

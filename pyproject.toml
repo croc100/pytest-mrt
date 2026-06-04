@@ -37,7 +37,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/croc100/pytest-mrt"
-Documentation = "https://github.com/croc100/pytest-mrt#readme"
+Documentation = "https://croc100.github.io/pytest-mrt"
 Repository = "https://github.com/croc100/pytest-mrt"
 Issues = "https://github.com/croc100/pytest-mrt/issues"
 Changelog = "https://github.com/croc100/pytest-mrt/releases"
