@@ -99,13 +99,22 @@ class SchemaDiff:
         restored_t = set(after_rollback.tables)
 
         for t in before_t - restored_t:
-            issues.append(SchemaIssue(t, f"Table '{t}' missing after rollback", "error"))
+            issues.append(
+                SchemaIssue(
+                    t,
+                    f"Table '{t}' missing after rollback. "
+                    f"Fix: add op.create_table('{t}', ...) to downgrade(). "
+                    "If this table is intentionally dropped, use MRTConfig(skip={{...}}) with a reason.",
+                    "error",
+                )
+            )
 
         for t in restored_t - before_t:
             issues.append(
                 SchemaIssue(
                     t,
-                    f"Table '{t}' still exists after rollback — downgrade is incomplete",
+                    f"Table '{t}' still exists after rollback — downgrade() is incomplete. "
+                    f"Fix: add op.drop_table('{t}') to downgrade().",
                     "error",
                 )
             )
@@ -115,13 +124,19 @@ class SchemaDiff:
             restored_c = set(after_rollback.tables[t].columns)
             for col in before_c - restored_c:
                 issues.append(
-                    SchemaIssue(t, f"Column '{t}.{col}' missing after rollback", "error")
+                    SchemaIssue(
+                        t,
+                        f"Column '{t}.{col}' missing after rollback. "
+                        f"Fix: add op.add_column('{t}', sa.Column('{col}', ...)) to downgrade().",
+                        "error",
+                    )
                 )
             for col in restored_c - before_c:
                 issues.append(
                     SchemaIssue(
                         t,
-                        f"Column '{t}.{col}' still present after rollback — downgrade is incomplete",
+                        f"Column '{t}.{col}' still present after rollback — downgrade() is incomplete. "
+                        f"Fix: add op.drop_column('{t}', '{col}') to downgrade().",
                         "warning",
                     )
                 )

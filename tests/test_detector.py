@@ -420,3 +420,106 @@ def test_severity_errors_are_errors(tmp_path):
     warnings = analyze_migrations(str(tmp_path))
     errors = [w for w in warnings if w.severity == "error"]
     assert len(errors) >= 1
+
+
+# ── Pattern 28: DROP FOREIGN KEY without restore ──────────────────────
+
+def test_drop_fk_without_restore_detected(tmp_path):
+    """op.drop_constraint(type_='foreignkey') without create_foreign_key in downgrade."""
+    (tmp_path / "001.py").write_text(textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.drop_constraint('fk_posts_user', 'posts', type_='foreignkey')
+        def downgrade():
+            pass
+    """))
+    warnings = analyze_migrations(str(tmp_path))
+    assert any(w.pattern == "DROP FOREIGN KEY without restore" for w in warnings)
+
+
+def test_drop_fk_with_restore_is_safe(tmp_path):
+    (tmp_path / "001.py").write_text(textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.drop_constraint('fk_posts_user', 'posts', type_='foreignkey')
+        def downgrade():
+            op.create_foreign_key('fk_posts_user', 'posts', 'users', ['user_id'], ['id'])
+    """))
+    warnings = analyze_migrations(str(tmp_path))
+    assert not any(w.pattern == "DROP FOREIGN KEY without restore" for w in warnings)
+
+
+# ── Pattern 29: CREATE TRIGGER without DROP TRIGGER ───────────────────
+
+def test_create_trigger_without_drop_detected(tmp_path):
+    (tmp_path / "001.py").write_text(textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute('CREATE TRIGGER update_ts BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION fn()')
+        def downgrade():
+            pass
+    """))
+    warnings = analyze_migrations(str(tmp_path))
+    assert any(w.pattern == "CREATE TRIGGER without DROP TRIGGER" for w in warnings)
+
+
+def test_create_trigger_with_drop_is_safe(tmp_path):
+    (tmp_path / "001.py").write_text(textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute('CREATE TRIGGER update_ts BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION fn()')
+        def downgrade():
+            op.execute('DROP TRIGGER IF EXISTS update_ts ON users')
+    """))
+    warnings = analyze_migrations(str(tmp_path))
+    assert not any(w.pattern == "CREATE TRIGGER without DROP TRIGGER" for w in warnings)
+
+
+# ── Pattern 30: CREATE TYPE without DROP TYPE ─────────────────────────
+
+def test_create_type_without_drop_detected(tmp_path):
+    (tmp_path / "001.py").write_text(textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute("CREATE TYPE user_role AS ENUM ('admin', 'member')")
+        def downgrade():
+            pass
+    """))
+    warnings = analyze_migrations(str(tmp_path))
+    assert any(w.pattern == "CREATE TYPE without DROP TYPE" for w in warnings)
+
+
+def test_create_type_with_drop_is_safe(tmp_path):
+    (tmp_path / "001.py").write_text(textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute("CREATE TYPE user_role AS ENUM ('admin', 'member')")
+        def downgrade():
+            op.execute('DROP TYPE IF EXISTS user_role')
+    """))
+    warnings = analyze_migrations(str(tmp_path))
+    assert not any(w.pattern == "CREATE TYPE without DROP TYPE" for w in warnings)

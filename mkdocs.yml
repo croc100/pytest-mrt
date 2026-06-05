@@ -33,6 +33,7 @@ nav:
   - Risk Patterns: patterns.md
   - CLI & Fixture Reference: cli.md
   - API Reference: api.md
+  - Plugin API & Stability: plugin-api.md
   - How It Works: how-it-works.md
   - Best Practices: best-practices.md
   - FAQ: faq.md

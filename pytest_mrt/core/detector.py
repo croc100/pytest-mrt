@@ -611,6 +611,111 @@ def _check_context_execute(m: MigrationAST) -> list[RiskWarning]:
     ]
 
 
+def _check_drop_foreign_key(m: MigrationAST) -> list[RiskWarning]:
+    """
+    op.drop_constraint(type_='foreignkey') in upgrade without op.create_foreign_key in downgrade.
+
+    Dropping a FK constraint loses referential integrity. If the downgrade does not recreate the
+    constraint, rolling back leaves the database without FK protection on that column pair.
+    """
+    warnings = []
+    fk_drops = [
+        c
+        for c in m.upgrade_calls()
+        if c.method == "drop_constraint"
+        and (m.kwarg_str(c.node, "type_") or "").lower() == "foreignkey"
+    ]
+    if not fk_drops:
+        return []
+
+    down_creates_fk = any(c.method == "create_foreign_key" for c in m.downgrade_calls())
+    if down_creates_fk:
+        return []
+
+    for c in fk_drops:
+        table = m.str_arg(c.node, 1) or "?"
+        warnings.append(
+            _warn(
+                m,
+                "DROP FOREIGN KEY without restore",
+                f"op.drop_constraint(type_='foreignkey') on '{table}' — "
+                "referential integrity is lost unless op.create_foreign_key(...) is called in downgrade(). "
+                "Fix: add op.create_foreign_key(...) to downgrade() to restore the constraint.",
+                "error",
+                line=c.node.lineno,
+            )
+        )
+    return warnings
+
+
+def _check_create_trigger_without_drop(m: MigrationAST) -> list[RiskWarning]:
+    """
+    op.execute('CREATE TRIGGER ...') in upgrade without DROP TRIGGER in downgrade.
+
+    Triggers created via raw SQL are invisible to schema diffing. If downgrade does not drop
+    the trigger, rolling back leaves a dangling trigger that references potentially removed tables
+    or columns, causing unexpected errors on future DML.
+    """
+    import re as _re
+
+    # Extract string literals from upgrade execute calls
+    upgrade_sql = " ".join(
+        m.str_arg(c.node, 0) or "" for c in m.upgrade_calls() if c.method == "execute"
+    )
+    if not _re.search(r"CREATE\s+TRIGGER", upgrade_sql, _re.IGNORECASE):
+        return []
+
+    downgrade_sql = " ".join(
+        m.str_arg(c.node, 0) or "" for c in m.downgrade_calls() if c.method == "execute"
+    )
+    if _re.search(r"DROP\s+TRIGGER", downgrade_sql, _re.IGNORECASE):
+        return []
+
+    return [
+        _warn(
+            m,
+            "CREATE TRIGGER without DROP TRIGGER",
+            "upgrade() creates a trigger via SQL but downgrade() does not DROP it. "
+            "Fix: add op.execute('DROP TRIGGER IF EXISTS <name> ON <table>') to downgrade().",
+            "error",
+        )
+    ]
+
+
+def _check_create_type_without_drop(m: MigrationAST) -> list[RiskWarning]:
+    """
+    op.execute('CREATE TYPE ...') in upgrade without DROP TYPE in downgrade.
+
+    PostgreSQL custom types (including ENUMs created via op.execute) cannot be dropped
+    while any column references them. If downgrade does not drop the type, re-running
+    the upgrade later will fail with 'type already exists'.
+    """
+    import re as _re
+
+    upgrade_sql = " ".join(
+        m.str_arg(c.node, 0) or "" for c in m.upgrade_calls() if c.method == "execute"
+    )
+    if not _re.search(r"CREATE\s+TYPE", upgrade_sql, _re.IGNORECASE):
+        return []
+
+    downgrade_sql = " ".join(
+        m.str_arg(c.node, 0) or "" for c in m.downgrade_calls() if c.method == "execute"
+    )
+    if _re.search(r"DROP\s+TYPE", downgrade_sql, _re.IGNORECASE):
+        return []
+
+    return [
+        _warn(
+            m,
+            "CREATE TYPE without DROP TYPE",
+            "upgrade() creates a custom type via SQL but downgrade() does not DROP it. "
+            "Fix: add op.execute('DROP TYPE IF EXISTS <typename>') to downgrade(). "
+            "Ensure all columns using the type are dropped first.",
+            "error",
+        )
+    ]
+
+
 _PER_FILE_CHECKS = [
     _check_batch_alter_drop,  # first: batch context needs special handling
     _check_downgrade_exists,
@@ -638,6 +743,9 @@ _PER_FILE_CHECKS = [
     _check_not_null_raw_sql,
     _check_bulk_insert_no_reverse,
     _check_context_execute,
+    _check_drop_foreign_key,
+    _check_create_trigger_without_drop,
+    _check_create_type_without_drop,
 ]
 
 
