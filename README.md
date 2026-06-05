@@ -3,7 +3,8 @@
 <p align="center">
   <a href="https://pypi.org/project/pytest-mrt"><img src="https://img.shields.io/pypi/v/pytest-mrt?color=blue" alt="PyPI"></a>
   <a href="https://github.com/croc100/pytest-mrt/actions"><img src="https://img.shields.io/github/actions/workflow/status/croc100/pytest-mrt/ci.yml?branch=main&label=tests" alt="CI"></a>
-  <a href="https://codecov.io/gh/croc100/pytest-mrt"><img src="https://codecov.io/gh/croc100/pytest-mrt/graph/badge.svg" alt="Coverage"></a>
+  <a href="https://codecov.io/gh/croc100/pytest-mrt"><img src="https://codecov.io/gh/croc100/pytest-mrt/graph/badge.svg?token=CODECOV_TOKEN" alt="Coverage"></a>
+  <img src="https://img.shields.io/badge/coverage-88%25-brightgreen" alt="Coverage 88%">
   <a href="https://pypi.org/project/pytest-mrt"><img src="https://img.shields.io/pypi/pyversions/pytest-mrt" alt="Python"></a>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
 </p>
@@ -26,7 +27,10 @@ Most tools verify that migrations *run* without errors.
 pytest-mrt verifies that your data *survives* a rollback.
 
 It seeds real rows before each migration, rolls back, and checks nothing was lost.
-It also statically scans migration files for 27 known dangerous patterns — across both Alembic and Django migrations.
+It also statically scans migration files for 30 known dangerous patterns across both Alembic and Django migrations.
+
+> **Django note**: static pattern detection is fully supported. Dynamic rollback verification
+> (`manage.py migrate --backwards`) is on the [roadmap](ROADMAP.md) for v0.9 — not yet implemented.
 
 ## Install
 
@@ -162,7 +166,8 @@ See [`docker-compose.yml`](docker-compose.yml) for the full configuration.
 | `mrt check` (static, no DB) | 22 ms | 108 ms | 216 ms |
 | `mrt` fixture (SQLite) | 0.33 s | 4.3 s | 15.6 s |
 
-Safe to run `mrt check` on every commit. Full dynamic suite fits in CI for most projects.  
+Safe to run `mrt check` on every commit. Dynamic suite fits comfortably for projects up to ~200 migrations.
+For larger codebases, use `MRTConfig(skip={...})` to exclude already-reviewed revisions.
 See [benchmarks](docs/benchmarks.md) for methodology and PostgreSQL/MySQL numbers.
 
 ## Changelog
@@ -174,8 +179,11 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 Full docs at **[croc100.github.io/pytest-mrt](https://croc100.github.io/pytest-mrt)**
 
 - [Getting started (step-by-step)](https://croc100.github.io/pytest-mrt/quickstart/)
-- [All 24 patterns explained](https://croc100.github.io/pytest-mrt/patterns/)
+- [All 30 patterns explained](https://croc100.github.io/pytest-mrt/patterns/)
 - [CLI & fixture reference](https://croc100.github.io/pytest-mrt/cli/)
+- [Detection accuracy report](docs/accuracy.md) — what each pattern catches and doesn't catch
+- [API reference](docs/api.md) — stable public API
+- [FAQ](docs/faq.md) — timeouts, large codebases, Django, error handling
 
 ## License
 

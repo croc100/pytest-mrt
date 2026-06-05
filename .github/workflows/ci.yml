@@ -46,7 +46,7 @@ jobs:
         run: pip install -e ".[dev]" coverage
 
       - name: Run tests
-        run: coverage run -m pytest tests/ -v --ignore=tests/test_postgres.py
+        run: coverage run -m pytest tests/ -v --ignore=tests/test_postgres.py --ignore=tests/test_mysql.py
 
       - name: Generate coverage report
         run: coverage xml
@@ -92,3 +92,37 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://mrt:mrt@localhost:5432/mrt_test
         run: coverage run -m pytest tests/test_postgres.py -v
+
+  test-mysql:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_USER: mrt
+          MYSQL_PASSWORD: mrt
+          MYSQL_ROOT_PASSWORD: mrt_root
+          MYSQL_DATABASE: mrt_test
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -umrt -pmrt"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 3306:3306
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: pip install -e ".[dev,mysql]" coverage
+
+      - name: Run MySQL tests
+        env:
+          TEST_DATABASE_URL: mysql+pymysql://mrt:mrt@localhost:3306/mrt_test
+        run: coverage run -m pytest tests/test_mysql.py -v
