@@ -210,10 +210,23 @@ jobs:
 
       - name: Create mrt_test database
         run: |
-          /opt/mssql-tools18/bin/sqlcmd \
-            -S localhost -U SA -P 'MrtTest1234!' \
-            -Q 'CREATE DATABASE mrt_test' \
-            -No
+          pip install pymssql
+          python -c "
+          import pymssql, time, sys
+          for attempt in range(20):
+              try:
+                  conn = pymssql.connect(server='localhost', user='SA', password='MrtTest1234!', database='master', port=1433)
+                  conn.cursor().execute('CREATE DATABASE mrt_test')
+                  conn.commit()
+                  conn.close()
+                  print('Created mrt_test')
+                  break
+              except Exception as e:
+                  print(f'Attempt {attempt+1}: {e}')
+                  time.sleep(3)
+          else:
+              sys.exit(1)
+          "
 
       - name: Install
         run: pip install -e ".[dev,mssql]" coverage
