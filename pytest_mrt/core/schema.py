@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
+
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 

@@ -1,14 +1,15 @@
-import typer
 from pathlib import Path
+
+import typer
+from rich import box
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.syntax import Syntax
-from rich import box
+from rich.table import Table
 
 from . import __version__
-from .core.detector import analyze_migrations
 from .adapters.django_detector import analyze_django_migrations, is_django_migration
+from .core.detector import analyze_migrations
 
 app = typer.Typer(
     name="mrt",
@@ -221,7 +222,7 @@ def fix(
 
     Shows a diff of the suggested fix. Use --apply to write it to the file.
     """
-    from .core.fixer import generate_fix, apply_fix
+    from .core.fixer import apply_fix, generate_fix
 
     if not Path(migration_file).exists():
         console.print(f"[red]File not found: {migration_file}[/red]")

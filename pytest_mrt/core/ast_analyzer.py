@@ -6,6 +6,7 @@ Understands code structure: if/else, with blocks, nested calls, keyword args.
 """
 
 from __future__ import annotations
+
 import ast
 from dataclasses import dataclass
 from typing import Iterator

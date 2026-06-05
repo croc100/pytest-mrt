@@ -1,10 +1,11 @@
 from __future__ import annotations
+
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
-import re
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine

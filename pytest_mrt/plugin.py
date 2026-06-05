@@ -1,12 +1,13 @@
 from __future__ import annotations
+
 import pytest
 
 from .config import MRTConfig
+from .core.detector import RiskWarning, analyze_migrations
 from .core.runner import MigrationRunner
+from .core.schema import SchemaSnapshot
 from .core.seeder import SmartSeeder
 from .core.verifier import RevisionResult, RollbackVerifier
-from .core.detector import analyze_migrations, RiskWarning
-from .core.schema import SchemaSnapshot
 
 
 class MRTFixture:
@@ -53,8 +54,9 @@ class MRTFixture:
 
         # Apply custom checks
         if self._config.custom_checks:
-            from pathlib import Path
             import re as _re
+            from pathlib import Path
+
             from .core.ast_analyzer import MigrationAST
 
             for path in sorted(Path(versions_dir).glob("*.py")):

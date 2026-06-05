@@ -6,6 +6,7 @@ Covers all major risk categories: data loss, irreversibility, locking, schema dr
 """
 
 from __future__ import annotations
+
 import ast
 import re
 from dataclasses import dataclass

@@ -16,6 +16,7 @@ cross-migration patterns that per-file analysis cannot see:
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
