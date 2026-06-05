@@ -28,10 +28,12 @@ breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the sta
 - [ ] Per-pattern confidence score in JSON output
 - [ ] HTML report: link each finding to the source line
 
-## v0.9 — Django dynamic verification
+## v0.9 — Django dynamic verification ✅
 
-- [ ] **Django dynamic rollback**: run `manage.py migrate <app> <prev>` and verify schema/data
-      restoration (currently Django support is static analysis only — v1.0 hard requirement)
+- ✅ **Django dynamic rollback**: `DjangoMigrationRunner` + `DjangoRollbackVerifier` — full upgrade/downgrade/verify cycle
+- ✅ Oracle support (`pytest-mrt[oracle]`, CI against Oracle Free 23c)
+- ✅ SQL Server support (`pytest-mrt[mssql]`, CI against SQL Server 2022)
+- ✅ GitHub Discussions enabled
 - [ ] Django: `squashmigrations` detection
 - [ ] `mrt check --watch`: re-run on file change during development
 
@@ -39,14 +41,13 @@ breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the sta
 
 Target criteria:
 - ✅ PostgreSQL, SQLite, MySQL/MariaDB dynamic verification
-- ✅ Alembic + Django migration support (static; dynamic in v0.9)
+- ✅ Oracle, SQL Server dynamic verification
+- ✅ Alembic + Django migration support (static + dynamic)
 - ✅ 30+ static analysis patterns
 - ✅ Zero false-positive guarantee on the pattern test suite
 - ✅ Public detection accuracy report
 - ✅ Stable plugin API for custom patterns
-- [ ] Django dynamic rollback verification
-- [ ] Oracle support
-- [ ] SQL Server support
+- ✅ Django dynamic rollback verification
 
 ## Long-term / community-driven
 

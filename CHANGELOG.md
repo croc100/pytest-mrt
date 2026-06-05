@@ -7,6 +7,28 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [0.9.0] — 2026-06-06
+
+### Added
+- **Django dynamic rollback verification**: `DjangoMigrationRunner` and `DjangoRollbackVerifier` — runs `manage.py migrate <app> <prev>` programmatically and verifies schema/data restoration. Enable with `MRTConfig(django_settings="myproject.settings_test", db_url=...)`.
+- **`MRTConfig.django_settings`**: Django settings module to activate Django mode in the `mrt` fixture.
+- **`MRTConfig.django_apps`**: restrict dynamic testing to specific Django app labels.
+- **`MRTConfig.django_project_dir`**: optional path added to `sys.path` before Django import.
+- **`MRTFixture.check_migration(app, name)`**: check a single Django migration by app label + name.
+- **`MRTFixture.check_all(apps=[...])`**: test all Django migrations, optionally filtered by app.
+- **Oracle support**: `pip install pytest-mrt[oracle]` — uses `python-oracledb` driver; CI tests against Oracle Free 23c.
+- **SQL Server support**: `pip install pytest-mrt[mssql]` — uses `pymssql` driver; CI tests against SQL Server 2022.
+- **`tests/test_oracle.py`**: Oracle integration tests (reversible migration, noop downgrade, chain).
+- **`tests/test_mssql.py`**: SQL Server integration tests (same coverage).
+- **`tests/test_django_dynamic.py`**: Django dynamic rollback tests with an in-process SQLite setup.
+- **CI**: `test-django` job (Django 4.2/5.0/5.1 matrix), `test-oracle` job, `test-mssql` job added.
+- **GitHub Discussions** enabled on the repository.
+
+### Changed
+- `MigrationRunner` now uses `NullPool` for all database dialects (previously only SQLite and MySQL). Prevents connection leaks across migrations in all test environments.
+
+---
+
 ## [0.8.0] — 2026-06-06
 
 ### Added

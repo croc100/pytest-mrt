@@ -48,3 +48,24 @@ class MRTConfig:
     # marked as failed rather than blocking the test suite indefinitely.
     # Set to None to disable the timeout entirely.
     migration_timeout: int = 60
+
+    # ── Django dynamic rollback ────────────────────────────────────────
+    # Set django_settings to enable dynamic rollback testing for Django projects.
+    # When set, the `mrt` fixture uses DjangoMigrationRunner instead of
+    # MigrationRunner. alembic_ini is ignored in Django mode.
+    #
+    # Example:
+    #   MRTConfig(
+    #       db_url="sqlite:///test.db",
+    #       django_settings="myproject.settings_test",
+    #   )
+    django_settings: str | None = None
+
+    # Restrict dynamic testing to specific Django apps.
+    # None = test all installed apps that have migrations.
+    # Example: django_apps=["users", "orders"]
+    django_apps: list[str] | None = None
+
+    # Path to the Django project root. Added to sys.path before import.
+    # Required if the project is not on the Python path already.
+    django_project_dir: str | None = None
