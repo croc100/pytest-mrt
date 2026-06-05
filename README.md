@@ -185,6 +185,17 @@ Full docs at **[croc100.github.io/pytest-mrt](https://croc100.github.io/pytest-m
 - [API reference](docs/api.md) — stable public API
 - [FAQ](docs/faq.md) — timeouts, large codebases, Django, error handling
 
+## Sponsorship
+
+pytest-mrt is MIT-licensed and free to use. If it saves you from a production incident, consider sponsoring development:
+
+**[github.com/sponsors/croc100](https://github.com/sponsors/croc100)**
+
+Sponsorship directly funds:
+- New pattern development (Oracle, SQL Server, more Django patterns)
+- Django dynamic rollback verification (v0.9 target)
+- Maintained compatibility with new Alembic and SQLAlchemy releases
+
 ## License
 
 MIT
