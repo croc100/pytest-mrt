@@ -15,7 +15,7 @@ def test_defaults():
     assert cfg.severity_overrides == {}
     assert cfg.custom_seeds == {}
     assert cfg.custom_checks == []
-    assert cfg.migration_timeout is None
+    assert cfg.migration_timeout == 60
 
 
 def test_custom_values():
