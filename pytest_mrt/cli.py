@@ -42,7 +42,7 @@ def version_cmd() -> None:
 @app.command("check")
 def check(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
-    strict: bool = typer.Option(False, "--strict", help="Exit 1 on warnings too"),
+    strict: bool = typer.Option(False, "--strict", help="Treat warnings as errors (exit 2)"),
     fmt: str = typer.Option("table", "--format", "-f", help="Output format: table | json"),
 ) -> None:
     """Statically analyze migrations for rollback risk patterns (Alembic and Django)."""
@@ -75,7 +75,12 @@ def check(
         ]
         sys.stdout.write(json.dumps(output, indent=2) + "\n")
         has_errors = any(w.severity == "error" for w in warnings)
-        raise typer.Exit(1 if has_errors or (strict and warnings) else 0)
+        has_warns = any(w.severity == "warning" for w in warnings)
+        if has_errors or (strict and has_warns):
+            raise typer.Exit(2)
+        if has_warns:
+            raise typer.Exit(1)
+        raise typer.Exit(0)
 
     if not warnings:
         console.print("[green]✓ No rollback risks detected.[/green]")
@@ -103,13 +108,13 @@ def check(
         console.print(
             f"[red]{len(errors)} error(s)[/red], [yellow]{len(warns)} warning(s)[/yellow]"
         )
-        raise typer.Exit(1)
+        raise typer.Exit(2)
     elif warns and strict:
-        console.print(f"[yellow]{len(warns)} warning(s)[/yellow] (--strict mode)")
-        raise typer.Exit(1)
+        console.print(f"[yellow]{len(warns)} warning(s)[/yellow] (--strict: treated as errors)")
+        raise typer.Exit(2)
     else:
         console.print(f"[yellow]{len(warns)} warning(s)[/yellow] — review before deploying")
-        raise typer.Exit(0)
+        raise typer.Exit(1)
 
 
 # ──────────────────────────────────────────────

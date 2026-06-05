@@ -73,10 +73,10 @@ def test_check_safe_migrations_exits_0(tmp_path, versions_dir):
     assert "No rollback risks" in result.output
 
 
-def test_check_risky_migration_exits_1(tmp_path, versions_dir):
+def test_check_risky_migration_exits_2(tmp_path, versions_dir):
     _risky_migration(versions_dir)
     result = runner.invoke(app, ["check", str(versions_dir)])
-    assert result.exit_code == 1
+    assert result.exit_code == 2
 
 
 def test_check_shows_pattern_name(tmp_path, versions_dir):
@@ -102,6 +102,7 @@ def test_check_json_format(tmp_path, versions_dir):
     assert len(data) > 0
     assert "pattern" in data[0]
     assert "severity" in data[0]
+    assert result.exit_code == 2  # errors → exit 2
 
 
 def test_check_json_safe_exits_0(tmp_path, versions_dir):
@@ -126,8 +127,9 @@ def test_check_strict_exits_1_on_warnings(tmp_path, versions_dir):
     """))
     result_normal = runner.invoke(app, ["check", str(versions_dir)])
     result_strict = runner.invoke(app, ["check", str(versions_dir), "--strict"])
-    # strict mode should exit 1 when there are warnings
-    assert result_strict.exit_code >= result_normal.exit_code
+    # warnings only: exit 1 normally, exit 2 with --strict
+    assert result_normal.exit_code == 1
+    assert result_strict.exit_code == 2
 
 
 def test_check_detects_django_migrations(tmp_path):

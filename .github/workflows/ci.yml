@@ -46,7 +46,7 @@ jobs:
         run: pip install -e ".[dev]" coverage
 
       - name: Run tests
-        run: coverage run -m pytest tests/ -v
+        run: coverage run -m pytest tests/ -v --ignore=tests/test_postgres.py
 
       - name: Generate coverage report
         run: coverage xml
@@ -59,3 +59,36 @@ jobs:
           files: coverage.xml
           flags: unittests
           fail_ci_if_error: false
+
+  test-postgres:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mrt
+          POSTGRES_PASSWORD: mrt
+          POSTGRES_DB: mrt_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: pip install -e ".[dev,postgres]" coverage
+
+      - name: Run PostgreSQL tests
+        env:
+          TEST_DATABASE_URL: postgresql://mrt:mrt@localhost:5432/mrt_test
+        run: coverage run -m pytest tests/test_postgres.py -v
