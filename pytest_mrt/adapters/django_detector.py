@@ -4,6 +4,7 @@ Django migration static analyzer.
 Detects dangerous patterns in Django migrations using AST parsing.
 Covers all major risk categories: data loss, irreversibility, locking, schema drift.
 """
+
 from __future__ import annotations
 import ast
 import re
@@ -81,7 +82,9 @@ class DjangoMigrationAST:
                             for elt in item.value.elts:
                                 if isinstance(elt, ast.Tuple) and len(elt.elts) == 2:
                                     a, b = elt.elts
-                                    if isinstance(a, ast.Constant) and isinstance(b, ast.Constant):
+                                    if isinstance(a, ast.Constant) and isinstance(
+                                        b, ast.Constant
+                                    ):
                                         deps.append((str(a.value), str(b.value)))
                             return deps
         return []
@@ -146,8 +149,13 @@ class DjangoMigrationAST:
         return ""
 
 
-def _warn(m: DjangoMigrationAST, pattern: str, message: str,
-          severity: str, line: int | None = None) -> RiskWarning:
+def _warn(
+    m: DjangoMigrationAST,
+    pattern: str,
+    message: str,
+    severity: str,
+    line: int | None = None,
+) -> RiskWarning:
     rev = f"{m.app_label}.{m.migration_name}"
     return RiskWarning(rev, m.filename, pattern, message, severity, line)
 
@@ -155,6 +163,7 @@ def _warn(m: DjangoMigrationAST, pattern: str, message: str,
 # ─────────────────────────────────────────────────────────────
 # Data loss checks
 # ─────────────────────────────────────────────────────────────
+
 
 def _check_remove_field(m: DjangoMigrationAST) -> list[RiskWarning]:
     warnings = []
@@ -164,12 +173,16 @@ def _check_remove_field(m: DjangoMigrationAST) -> list[RiskWarning]:
         if m.op_name(op) == "RemoveField":
             model = m.kwarg_str(op, "model_name") or "?"
             field = m.kwarg_str(op, "name") or "?"
-            warnings.append(_warn(
-                m, "RemoveField",
-                f"migrations.RemoveField('{model}', '{field}') — "
-                "field data is permanently lost even if migration is reversed",
-                "error", line=op.lineno,
-            ))
+            warnings.append(
+                _warn(
+                    m,
+                    "RemoveField",
+                    f"migrations.RemoveField('{model}', '{field}') — "
+                    "field data is permanently lost even if migration is reversed",
+                    "error",
+                    line=op.lineno,
+                )
+            )
     return warnings
 
 
@@ -180,11 +193,15 @@ def _check_delete_model(m: DjangoMigrationAST) -> list[RiskWarning]:
             continue
         if m.op_name(op) == "DeleteModel":
             model = m.kwarg_str(op, "name") or "?"
-            warnings.append(_warn(
-                m, "DeleteModel",
-                f"migrations.DeleteModel('{model}') — all rows permanently lost on rollback",
-                "error", line=op.lineno,
-            ))
+            warnings.append(
+                _warn(
+                    m,
+                    "DeleteModel",
+                    f"migrations.DeleteModel('{model}') — all rows permanently lost on rollback",
+                    "error",
+                    line=op.lineno,
+                )
+            )
     return warnings
 
 
@@ -215,12 +232,16 @@ def _check_add_field_not_null(m: DjangoMigrationAST) -> list[RiskWarning]:
 
         # Default for most fields: null=False
         if null_val is False and not has_default:
-            warnings.append(_warn(
-                m, "AddField NOT NULL without default",
-                f"AddField('{model}', '{name}') is NOT NULL with no default — "
-                "will fail on non-empty tables. Use null=True or provide a default.",
-                "error", line=op.lineno,
-            ))
+            warnings.append(
+                _warn(
+                    m,
+                    "AddField NOT NULL without default",
+                    f"AddField('{model}', '{name}') is NOT NULL with no default — "
+                    "will fail on non-empty tables. Use null=True or provide a default.",
+                    "error",
+                    line=op.lineno,
+                )
+            )
         elif null_val is None and not has_default:
             # null not specified → defaults to False for most field types
             # Be conservative: only warn for fields that are likely NOT NULL
@@ -230,16 +251,27 @@ def _check_add_field_not_null(m: DjangoMigrationAST) -> list[RiskWarning]:
             elif isinstance(field_node.func, ast.Name):
                 field_type = field_node.func.id
 
-            nullable_by_default = {"TextField", "CharField", "EmailField",
-                                   "URLField", "SlugField", "FileField",
-                                   "ImageField", "GenericIPAddressField"}
+            nullable_by_default = {
+                "TextField",
+                "CharField",
+                "EmailField",
+                "URLField",
+                "SlugField",
+                "FileField",
+                "ImageField",
+                "GenericIPAddressField",
+            }
             if field_type and field_type not in nullable_by_default:
-                warnings.append(_warn(
-                    m, "AddField NOT NULL without default",
-                    f"AddField('{model}', '{name}', {field_type}) may be NOT NULL without a default — "
-                    "will fail on non-empty tables if null is not set to True",
-                    "warning", line=op.lineno,
-                ))
+                warnings.append(
+                    _warn(
+                        m,
+                        "AddField NOT NULL without default",
+                        f"AddField('{model}', '{name}', {field_type}) may be NOT NULL without a default — "
+                        "will fail on non-empty tables if null is not set to True",
+                        "warning",
+                        line=op.lineno,
+                    )
+                )
     return warnings
 
 
@@ -264,18 +296,23 @@ def _check_alter_field_not_null(m: DjangoMigrationAST) -> list[RiskWarning]:
                 has_default = True
 
         if null_val is False and not has_default:
-            warnings.append(_warn(
-                m, "AlterField to NOT NULL without default",
-                f"AlterField('{model}', '{name}') sets null=False without a default — "
-                "will fail if any existing rows have NULL in this field",
-                "error", line=op.lineno,
-            ))
+            warnings.append(
+                _warn(
+                    m,
+                    "AlterField to NOT NULL without default",
+                    f"AlterField('{model}', '{name}') sets null=False without a default — "
+                    "will fail if any existing rows have NULL in this field",
+                    "error",
+                    line=op.lineno,
+                )
+            )
     return warnings
 
 
 # ─────────────────────────────────────────────────────────────
 # Irreversibility checks
 # ─────────────────────────────────────────────────────────────
+
 
 def _check_run_sql_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
     warnings = []
@@ -284,12 +321,16 @@ def _check_run_sql_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
             continue
         has_reverse = m.kwarg_exists(op, "reverse_sql") or len(op.args) >= 2
         if not has_reverse:
-            warnings.append(_warn(
-                m, "RunSQL without reverse_sql",
-                "migrations.RunSQL() has no reverse_sql — "
-                "migration cannot be reversed automatically",
-                "error", line=op.lineno,
-            ))
+            warnings.append(
+                _warn(
+                    m,
+                    "RunSQL without reverse_sql",
+                    "migrations.RunSQL() has no reverse_sql — "
+                    "migration cannot be reversed automatically",
+                    "error",
+                    line=op.lineno,
+                )
+            )
     return warnings
 
 
@@ -301,17 +342,25 @@ def _check_run_sql_dangerous(m: DjangoMigrationAST) -> list[RiskWarning]:
             continue
         sql = m.sql_text(op)
         if re.search(r"\bTRUNCATE\b", sql):
-            warnings.append(_warn(
-                m, "RunSQL TRUNCATE",
-                "RunSQL contains TRUNCATE — destroys all data with no undo",
-                "error", line=op.lineno,
-            ))
+            warnings.append(
+                _warn(
+                    m,
+                    "RunSQL TRUNCATE",
+                    "RunSQL contains TRUNCATE — destroys all data with no undo",
+                    "error",
+                    line=op.lineno,
+                )
+            )
         elif re.search(r"\bDROP\s+TABLE\b", sql):
-            warnings.append(_warn(
-                m, "RunSQL DROP TABLE",
-                "RunSQL contains DROP TABLE — all rows permanently lost",
-                "error", line=op.lineno,
-            ))
+            warnings.append(
+                _warn(
+                    m,
+                    "RunSQL DROP TABLE",
+                    "RunSQL contains DROP TABLE — all rows permanently lost",
+                    "error",
+                    line=op.lineno,
+                )
+            )
     return warnings
 
 
@@ -322,42 +371,57 @@ def _check_run_python_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
             continue
         has_reverse = m.kwarg_exists(op, "reverse_code") or len(op.args) >= 2
         if not has_reverse:
-            warnings.append(_warn(
-                m, "RunPython without reverse_code",
-                "migrations.RunPython() has no reverse_code — "
-                "data transformation cannot be undone on rollback",
-                "error", line=op.lineno,
-            ))
+            warnings.append(
+                _warn(
+                    m,
+                    "RunPython without reverse_code",
+                    "migrations.RunPython() has no reverse_code — "
+                    "data transformation cannot be undone on rollback",
+                    "error",
+                    line=op.lineno,
+                )
+            )
     return warnings
 
 
 def _check_rename_model_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
     """RenameModel is reversible by Django, but old_name must be correct."""
     warnings = []
-    rename_ops = [op for op in m.operations
-                  if isinstance(op, ast.Call) and m.op_name(op) == "RenameModel"]
+    rename_ops = [
+        op
+        for op in m.operations
+        if isinstance(op, ast.Call) and m.op_name(op) == "RenameModel"
+    ]
     if not rename_ops:
         return []
     for op in rename_ops:
         old = m.kwarg_str(op, "old_name") or "?"
         new = m.kwarg_str(op, "new_name") or "?"
         # RenameModel is inherently reversible, but warn if mixed with data-loss ops
-        dangerous = [o for o in m.operations
-                     if isinstance(o, ast.Call) and
-                     m.op_name(o) in ("RemoveField", "DeleteModel", "RunSQL")]
+        dangerous = [
+            o
+            for o in m.operations
+            if isinstance(o, ast.Call)
+            and m.op_name(o) in ("RemoveField", "DeleteModel", "RunSQL")
+        ]
         if dangerous:
-            warnings.append(_warn(
-                m, "RenameModel with data-loss operations",
-                f"RenameModel('{old}' → '{new}') combined with data-loss operations — "
-                "verify rollback order is safe",
-                "warning", line=op.lineno,
-            ))
+            warnings.append(
+                _warn(
+                    m,
+                    "RenameModel with data-loss operations",
+                    f"RenameModel('{old}' → '{new}') combined with data-loss operations — "
+                    "verify rollback order is safe",
+                    "warning",
+                    line=op.lineno,
+                )
+            )
     return warnings
 
 
 # ─────────────────────────────────────────────────────────────
 # PostgreSQL / performance checks
 # ─────────────────────────────────────────────────────────────
+
 
 def _check_add_index_no_concurrently(m: DjangoMigrationAST) -> list[RiskWarning]:
     """AddIndex without concurrently causes table lock on PostgreSQL."""
@@ -368,13 +432,17 @@ def _check_add_index_no_concurrently(m: DjangoMigrationAST) -> list[RiskWarning]
         # Check if atomic=False is set on the migration (required for CONCURRENTLY)
         if m.is_atomic is None or m.is_atomic:
             model = m.kwarg_str(op, "model_name") or "?"
-            warnings.append(_warn(
-                m, "AddIndex without atomic=False",
-                f"AddIndex on '{model}' runs inside a transaction — "
-                "for large tables, set atomic = False on the Migration class "
-                "and use Meta.indexes or a CONCURRENTLY migration",
-                "warning", line=op.lineno,
-            ))
+            warnings.append(
+                _warn(
+                    m,
+                    "AddIndex without atomic=False",
+                    f"AddIndex on '{model}' runs inside a transaction — "
+                    "for large tables, set atomic = False on the Migration class "
+                    "and use Meta.indexes or a CONCURRENTLY migration",
+                    "warning",
+                    line=op.lineno,
+                )
+            )
     return warnings
 
 
@@ -386,12 +454,15 @@ def _check_missing_atomic_false(m: DjangoMigrationAST) -> list[RiskWarning]:
         for op in m.operations
     )
     if has_requiring_ops and (m.is_atomic is None or m.is_atomic is True):
-        return [_warn(
-            m, "Missing atomic=False",
-            "This migration contains operations that should run with atomic=False "
-            "to allow CONCURRENTLY index operations without locking the table",
-            "warning",
-        )]
+        return [
+            _warn(
+                m,
+                "Missing atomic=False",
+                "This migration contains operations that should run with atomic=False "
+                "to allow CONCURRENTLY index operations without locking the table",
+                "warning",
+            )
+        ]
     return []
 
 
@@ -417,6 +488,7 @@ _DJANGO_CHECKS = [
 # public API
 # ─────────────────────────────────────────────────────────────
 
+
 def is_django_migration(path: Path) -> bool:
     try:
         source = path.read_text()
@@ -435,10 +507,15 @@ def analyze_django_migrations(migrations_dir: str) -> list[RiskWarning]:
         app_label = path.parent.parent.name
         m = DjangoMigrationAST.from_file(path, app_label)
         if m._parse_error:
-            warnings.append(RiskWarning(
-                f"{app_label}.{path.stem}", path.name, "Syntax error",
-                f"Could not parse: {m._parse_error}", "error",
-            ))
+            warnings.append(
+                RiskWarning(
+                    f"{app_label}.{path.stem}",
+                    path.name,
+                    "Syntax error",
+                    f"Could not parse: {m._parse_error}",
+                    "error",
+                )
+            )
             continue
         for check in _DJANGO_CHECKS:
             warnings.extend(check(m))

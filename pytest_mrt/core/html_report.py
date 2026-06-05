@@ -1,4 +1,5 @@
 """HTML report generation for migration safety analysis."""
+
 from __future__ import annotations
 from pathlib import Path
 from datetime import datetime
@@ -47,7 +48,9 @@ def _revision_card(revision: str, warnings: list[RiskWarning]) -> str:
     rows = ""
     for w in warnings:
         color = _SEVERITY_COLOR[w.severity]
-        line_info = f" <span style='color:#9ca3af'>line {w.line}</span>" if w.line else ""
+        line_info = (
+            f" <span style='color:#9ca3af'>line {w.line}</span>" if w.line else ""
+        )
         rows += f"""
         <tr>
           <td style="padding:6px 12px;color:{color};font-weight:600">{w.severity.upper()}</td>
@@ -98,6 +101,7 @@ def generate_html_report(versions_dir: str, warnings: list[RiskWarning]) -> str:
 
     for path in all_files:
         import re
+
         source = path.read_text()
         m = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
         rev = m.group(1) if m else path.stem
@@ -108,7 +112,9 @@ def generate_html_report(versions_dir: str, warnings: list[RiskWarning]) -> str:
 
     total = len(by_revision)
     safe = sum(1 for ws in by_revision.values() if not ws)
-    risky = sum(1 for ws in by_revision.values() if any(w.severity == "error" for w in ws))
+    risky = sum(
+        1 for ws in by_revision.values() if any(w.severity == "error" for w in ws)
+    )
     review = total - safe - risky
 
     cards = ""

@@ -16,6 +16,7 @@ class MigrationRunner:
         # NullPool for SQLite: each connection is closed immediately after use,
         # preventing ResourceWarning from unclosed file handles in tests.
         from sqlalchemy.engine.url import make_url
+
         _dialect = make_url(db_url).drivername.split("+")[0]
         pool_cls = NullPool if _dialect in ("sqlite", "mysql") else None
         self.engine: Engine = create_engine(
@@ -37,6 +38,7 @@ class MigrationRunner:
 
     def current_revision(self) -> str | None:
         from alembic.runtime.migration import MigrationContext
+
         with self.engine.connect() as conn:
             ctx = MigrationContext.configure(conn)
             return ctx.get_current_revision()

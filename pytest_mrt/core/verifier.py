@@ -61,20 +61,26 @@ class RollbackVerifier:
                 pk_col = table_info.pk_cols[0] if table_info.pk_cols else "id"
                 for row in rows:
                     seeder._rows.append(
-                        SeededRow(table=tname, pk_col=pk_col,
-                                  pk_val=row.get(pk_col), data=row)
+                        SeededRow(
+                            table=tname, pk_col=pk_col, pk_val=row.get(pk_col), data=row
+                        )
                     )
                 for row in rows:
                     # Use dialect-aware quoting — fixes MySQL double-quote bug
-                    q = lambda name: _q(self.runner.engine, name)
+                    def q(name: str) -> str:
+                        return _q(self.runner.engine, name)
+
                     cols = ", ".join(q(c) for c in row)
                     placeholders = ", ".join(f":p_{c}" for c in row)
                     params = {f"p_{c}": v for c, v in row.items()}
                     from sqlalchemy import text
+
                     try:
                         with self.runner.engine.begin() as conn:
                             conn.execute(
-                                text(f'INSERT INTO {q(tname)} ({cols}) VALUES ({placeholders})'),
+                                text(
+                                    f"INSERT INTO {q(tname)} ({cols}) VALUES ({placeholders})"
+                                ),
                                 params,
                             )
                     except Exception:
@@ -108,8 +114,10 @@ class RollbackVerifier:
         """
         if revision in self.skip:
             return RevisionResult(
-                revision=revision, passed=True,
-                skipped=True, skip_reason=self.skip[revision],
+                revision=revision,
+                passed=True,
+                skipped=True,
+                skip_reason=self.skip[revision],
             )
 
         start_revision = self.runner.current_revision()
@@ -137,7 +145,9 @@ class RollbackVerifier:
                 failures = self._run_migration_check(revision, schema_before, seeder)
 
         except Exception as exc:
-            failures.append(f"Unexpected error during check: {type(exc).__name__}: {exc}")
+            failures.append(
+                f"Unexpected error during check: {type(exc).__name__}: {exc}"
+            )
             # Best-effort state recovery: return DB to start_revision
             try:
                 current = self.runner.current_revision()
@@ -182,14 +192,16 @@ class RollbackVerifier:
             except Exception as exc:
                 # If we can't advance, stop the chain — subsequent checks
                 # would be running against the wrong DB state.
-                results.append(RevisionResult(
-                    revision=f"chain-advance-{rev.revision}",
-                    passed=False,
-                    failures=[
-                        f"Could not advance to revision {rev.revision} after check: {exc}. "
-                        "Remaining migrations were not tested."
-                    ],
-                ))
+                results.append(
+                    RevisionResult(
+                        revision=f"chain-advance-{rev.revision}",
+                        passed=False,
+                        failures=[
+                            f"Could not advance to revision {rev.revision} after check: {exc}. "
+                            "Remaining migrations were not tested."
+                        ],
+                    )
+                )
                 break
 
         return results

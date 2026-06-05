@@ -56,6 +56,7 @@ class MRTFixture:
             from pathlib import Path
             import re as _re
             from .core.ast_analyzer import MigrationAST
+
             for path in sorted(Path(versions_dir).glob("*.py")):
                 source = path.read_text()
                 m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
@@ -79,14 +80,18 @@ class MRTFixture:
         errors = [w for w in warnings if w.severity == "error"]
         if errors:
             lines = [f"  [{w.revision}] {w.pattern}: {w.message}" for w in errors]
-            pytest.fail("Static analysis found unsafe migration patterns:\n" + "\n".join(lines))
+            pytest.fail(
+                "Static analysis found unsafe migration patterns:\n" + "\n".join(lines)
+            )
 
     # ── assertions ────────────────────────────────────────────────────
 
     def assert_data_intact(self) -> None:
         failures = self._seeder.verify()
         if failures:
-            pytest.fail("Rollback caused data loss:\n" + "\n".join(f"  - {f}" for f in failures))
+            pytest.fail(
+                "Rollback caused data loss:\n" + "\n".join(f"  - {f}" for f in failures)
+            )
 
     def check_revision(self, revision: str) -> RevisionResult:
         return self._verifier.check_revision(revision)
@@ -104,6 +109,7 @@ class MRTFixture:
 
     def assert_all_reversible(self) -> None:
         from .reporter import print_check_all_summary
+
         results = self._verifier.check_all()
         print_check_all_summary(results)
         failed = [r for r in results if not r.passed]
@@ -112,7 +118,9 @@ class MRTFixture:
             for r in failed:
                 lines.append(f"  revision {r.revision}:")
                 lines.append(r.failure_summary())
-            pytest.fail("Some migrations are not safely reversible:\n" + "\n".join(lines))
+            pytest.fail(
+                "Some migrations are not safely reversible:\n" + "\n".join(lines)
+            )
 
     def reset(self) -> None:
         self._seeder.reset()
