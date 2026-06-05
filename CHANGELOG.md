@@ -7,6 +7,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.0.0] — 2026-06-06
+
+First stable release. All v1.0 target criteria met.
+
+### Highlights
+
+- **Full database coverage**: PostgreSQL, SQLite, MySQL/MariaDB, Oracle, SQL Server
+- **Full migration framework coverage**: Alembic (static + dynamic) and Django (static + dynamic)
+- **30+ static analysis patterns** with false-positive test suite and public accuracy report
+- **Stable public API**: `MRTConfig`, `mrt` fixture, `mrt check` CLI — breaking changes will be versioned
+- **Production/Stable** PyPI classifier
+
+### Changed
+- `Development Status` classifier: `4 - Beta` → `5 - Production/Stable`
+- Version: `0.9.0` → `1.0.0`
+
+---
+
 ## [0.9.0] — 2026-06-06
 
 ### Added

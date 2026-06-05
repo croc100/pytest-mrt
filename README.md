@@ -5,6 +5,7 @@
   <a href="https://github.com/croc100/pytest-mrt/actions"><img src="https://img.shields.io/github/actions/workflow/status/croc100/pytest-mrt/ci.yml?branch=main&label=tests" alt="CI"></a>
   <a href="https://codecov.io/gh/croc100/pytest-mrt"><img src="https://codecov.io/gh/croc100/pytest-mrt/graph/badge.svg?token=CODECOV_TOKEN" alt="Coverage"></a>
   <img src="https://img.shields.io/badge/coverage-88%25-brightgreen" alt="Coverage 88%">
+  <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="Production/Stable">
   <a href="https://pypi.org/project/pytest-mrt"><img src="https://img.shields.io/pypi/pyversions/pytest-mrt" alt="Python"></a>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
 </p>
