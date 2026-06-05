@@ -15,14 +15,38 @@ from .core.verifier import RevisionResult, RollbackVerifier
 class MRTFixture:
     def __init__(self, config: MRTConfig):
         self._config = config
-        self._runner = MigrationRunner(config.alembic_ini, config.db_url)
-        self._seeder = SmartSeeder(self._runner.engine)
-        self._verifier = RollbackVerifier(
-            self._runner,
-            skip=config.skip,
-            custom_seeds=config.custom_seeds,
-            timeout=config.migration_timeout,
-        )
+        self._django_mode = config.django_settings is not None
+
+        if self._django_mode:
+            from .adapters.django_runner import DjangoMigrationRunner
+            from .adapters.django_verifier import DjangoRollbackVerifier
+
+            self._django_runner = DjangoMigrationRunner(
+                db_url=config.db_url,
+                settings_module=config.django_settings,
+                project_dir=config.django_project_dir,
+            )
+            self._django_verifier = DjangoRollbackVerifier(
+                self._django_runner,
+                skip=config.skip,
+                custom_seeds=config.custom_seeds,
+                timeout=config.migration_timeout,
+            )
+            # Expose engine for seeder compatibility
+            self._runner = None  # type: ignore[assignment]
+            self._seeder = SmartSeeder(self._django_runner.engine)
+            self._verifier = None  # type: ignore[assignment]
+        else:
+            self._runner = MigrationRunner(config.alembic_ini, config.db_url)
+            self._seeder = SmartSeeder(self._runner.engine)
+            self._verifier = RollbackVerifier(
+                self._runner,
+                skip=config.skip,
+                custom_seeds=config.custom_seeds,
+                timeout=config.migration_timeout,
+            )
+            self._django_runner = None  # type: ignore[assignment]
+            self._django_verifier = None  # type: ignore[assignment]
 
     # ── migration control ──────────────────────────────────────────────
 
@@ -94,22 +118,51 @@ class MRTFixture:
             pytest.fail("Rollback caused data loss:\n" + "\n".join(f"  - {f}" for f in failures))
 
     def check_revision(self, revision: str) -> RevisionResult:
+        if self._django_mode:
+            raise RuntimeError(
+                "check_revision() is not available in Django mode. "
+                "Use check_migration(app_label, migration_name) instead."
+            )
         return self._verifier.check_revision(revision)
 
-    def check_all(self) -> list[RevisionResult]:
+    def check_migration(self, app_label: str, migration_name: str) -> RevisionResult:
+        """Django mode: check a single migration by app + name."""
+        if not self._django_mode:
+            raise RuntimeError(
+                "check_migration() is only available in Django mode. "
+                "Use check_revision() for Alembic projects."
+            )
+        from .adapters.django_runner import DjangoMigration
+
+        return self._django_verifier.check_migration(
+            DjangoMigration(app_label=app_label, name=migration_name)
+        )
+
+    def check_all(self, apps: list[str] | None = None) -> list[RevisionResult]:
+        if self._django_mode:
+            return self._django_verifier.check_all(apps=apps or self._config.django_apps)
         return self._verifier.check_all()
 
     def assert_reversible(self, revision: str = "head") -> None:
+        if self._django_mode:
+            raise RuntimeError(
+                "assert_reversible() is not available in Django mode. "
+                "Use assert_all_reversible() to test all Django migrations."
+            )
         result = self._verifier.check_revision(revision)
         if not result.passed:
             pytest.fail(
                 f"Migration {revision} is not safely reversible:\n{result.failure_summary()}"
             )
 
-    def assert_all_reversible(self) -> None:
+    def assert_all_reversible(self, apps: list[str] | None = None) -> None:
         from .reporter import print_check_all_summary
 
-        results = self._verifier.check_all()
+        if self._django_mode:
+            results = self._django_verifier.check_all(apps=apps or self._config.django_apps)
+        else:
+            results = self._verifier.check_all()
+
         print_check_all_summary(results)
         failed = [r for r in results if not r.passed]
         if failed:

@@ -18,10 +18,10 @@ class MigrationRunner:
         from sqlalchemy.engine.url import make_url
 
         _dialect = make_url(db_url).drivername.split("+")[0]
-        pool_cls = NullPool if _dialect in ("sqlite", "mysql") else None
-        self.engine: Engine = create_engine(
-            db_url, **({"poolclass": pool_cls} if pool_cls else {})
-        )
+        # Use NullPool for all dialects in test environments to prevent
+        # connection leaks across migrations and ensure clean state.
+        pool_cls = NullPool
+        self.engine: Engine = create_engine(db_url, poolclass=pool_cls)
 
     def dispose(self) -> None:
         """Release all pooled connections."""

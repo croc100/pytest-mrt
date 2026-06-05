@@ -129,12 +129,14 @@ mrt check migrations/versions/
 | PostgreSQL | ✅ | ✅ |
 | SQLite | ✅ | ✅ |
 | MySQL / MariaDB | ✅ | ✅ |
+| Oracle | ✅ | ✅ |
+| SQL Server | ✅ | ✅ |
 
 ```bash
-pip install pytest-mrt[mysql]   # includes PyMySQL
+pip install pytest-mrt[mysql]    # PyMySQL
+pip install pytest-mrt[oracle]   # python-oracledb
+pip install pytest-mrt[mssql]    # pymssql
 ```
-
-Use `mysql+pymysql://user:pass@host/dbname` as your `db_url`.
 
 ## CI/CD integration
 
