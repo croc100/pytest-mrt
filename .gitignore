@@ -6,6 +6,11 @@ __pycache__/
 dist/
 .pytest_cache/
 
+# coverage
+.coverage
+coverage.xml
+htmlcov/
+
 # PyPI credentials — never commit
 .pypirc
 *.token

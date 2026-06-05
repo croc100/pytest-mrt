@@ -46,5 +46,5 @@ class MRTConfig:
 
     # Per-migration timeout in seconds. Migrations that exceed this limit are
     # marked as failed rather than blocking the test suite indefinitely.
-    # None = no timeout (default).
-    migration_timeout: int | None = None
+    # Set to None to disable the timeout entirely.
+    migration_timeout: int = 60

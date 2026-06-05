@@ -1,36 +1,52 @@
 # Roadmap
 
-## Current status: Beta (v0.6.x)
+## Current status: Production/Stable (v0.8.x)
 
-pytest-mrt is actively used in production. The core API (`MRTConfig`, `mrt` fixture, `mrt check`) is stable. Breaking changes will be versioned.
+pytest-mrt is production-ready. The core API (`MRTConfig`, `mrt` fixture, `mrt check`) is stable and
+breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the stability guarantee.
 
 ---
 
-## v0.7 — Notifications & integrations
+## v0.7 — Notifications & integrations ✅ (partially shipped in v0.8)
 
 - [ ] Slack notification on detection (`--notify-slack`)
 - [ ] JSON output improvements for DataDog / Grafana ingestion
-- [ ] `mrt check` exit code breakdown (separate codes for errors vs. warnings)
+- ✅ `mrt check` exit code breakdown (0 = clean / 1 = warnings / 2 = errors)
 - [ ] Django: `squashmigrations` detection (squashed migrations with unresolved refs)
 
-## v0.8 — Coverage & confidence
+## v0.8 — Coverage & confidence ✅
 
-- [ ] `--coverage` flag: show which patterns were tested vs. inferred
+- ✅ 30 static analysis patterns (3 new: DROP FK, CREATE TRIGGER, CREATE TYPE)
+- ✅ Actionable error messages with concrete fix suggestions
+- ✅ False-positive test suite (`tests/test_false_positives.py`)
+- ✅ Public detection accuracy report (`docs/accuracy.md`)
+- ✅ PostgreSQL CI
+- ✅ MySQL CI
+- ✅ Python 3.13 support + ruff/mypy CI enforcement
+- ✅ Test coverage 88%
+- [ ] `--coverage` flag: show which patterns were exercised vs. inferred
 - [ ] Per-pattern confidence score in JSON output
 - [ ] HTML report: link each finding to the source line
-- [ ] Benchmark: publish detection latency vs. migration count
+
+## v0.9 — Django dynamic verification
+
+- [ ] **Django dynamic rollback**: run `manage.py migrate <app> <prev>` and verify schema/data
+      restoration (currently Django support is static analysis only — v1.0 hard requirement)
+- [ ] Django: `squashmigrations` detection
+- [ ] `mrt check --watch`: re-run on file change during development
 
 ## v1.0 — Production ready
 
 Target criteria:
 - ✅ PostgreSQL, SQLite, MySQL/MariaDB dynamic verification
-- ✅ Alembic + Django migration support
+- ✅ Alembic + Django migration support (static; dynamic in v0.9)
 - ✅ 30+ static analysis patterns
+- ✅ Zero false-positive guarantee on the pattern test suite
+- ✅ Public detection accuracy report
+- ✅ Stable plugin API for custom patterns
+- [ ] Django dynamic rollback verification
 - [ ] Oracle support
 - [ ] SQL Server support
-- [ ] Zero false-positive guarantee on the pattern test suite
-- [ ] Public detection accuracy report
-- [ ] Stable plugin API for custom patterns
 
 ## Long-term / community-driven
 

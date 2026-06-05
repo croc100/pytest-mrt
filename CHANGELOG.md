@@ -7,6 +7,32 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [0.8.0] — 2026-06-06
+
+### Added
+- **MySQL CI**: new `test-mysql` job in CI runs integration tests against MySQL 8 on every push and pull request.
+- **`docs/accuracy.md`**: per-pattern accuracy report documenting what each of the 30 Alembic patterns and 8 Django patterns catches and doesn't catch, with false-positive risk ratings.
+- **3 new static patterns** (27 → 30):
+  - `DROP FOREIGN KEY without reverse` — `op.drop_constraint(..., type_='foreignkey')` in upgrade without matching `op.create_foreign_key()` in downgrade.
+  - `CREATE TRIGGER without DROP` — raw SQL `CREATE TRIGGER` in upgrade without a corresponding `DROP TRIGGER` in downgrade.
+  - `CREATE TYPE without DROP` — `CREATE TYPE` (PostgreSQL ENUM/composite) in upgrade without `DROP TYPE` in downgrade.
+- **Actionable error messages**: each warning now includes a concrete suggestion, e.g. "Add `op.drop_column('users', 'email')` to downgrade()" instead of a generic description.
+- **False-positive test suite** (`tests/test_false_positives.py`): 30+ cases that must not trigger any warning, guarding against regressions in pattern specificity.
+- **API stability declaration** (`docs/api.md`): `MRTConfig`, `mrt` fixture, and `mrt check` CLI are declared stable; internal modules are marked private.
+- **Exit code breakdown**: `mrt check` now returns `0` (no findings), `1` (warnings only), or `2` (one or more errors), enabling fine-grained CI gating.
+- **PostgreSQL CI** (`test-postgres` job): runs the full `tests/test_postgres.py` suite against PostgreSQL 16 on every push.
+
+### Changed
+- **`migration_timeout` default**: changed from `None` (unlimited) to `60` seconds. Migrations hanging longer than 60 seconds now fail with an actionable message instead of blocking the test suite indefinitely. Override with `MRTConfig(migration_timeout=None)` to restore unlimited behavior.
+
+### Improved
+- **Test coverage**: 45% → 88%, covering CLI, plugin, Django detector, HTML reporter, seeder, and verifier.
+- **MySQL `NullPool`**: `MigrationRunner` now passes `poolclass=NullPool` for MySQL connections, preventing connection pool exhaustion during parallel test runs.
+- **Python 3.13 support**: CI matrix extended to include Python 3.13; all tests pass.
+- **CI linting**: ruff and mypy checks enforced in CI on every push.
+
+---
+
 ## [0.7.0] — 2026-06-05
 
 ### Added
