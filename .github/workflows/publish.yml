@@ -3,6 +3,7 @@ name: Publish to PyPI
 on:
   release:
     types: [published]
+  workflow_dispatch:  # allow manual trigger when release event is blocked by GITHUB_TOKEN
 
 jobs:
   publish:
