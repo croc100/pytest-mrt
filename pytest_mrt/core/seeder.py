@@ -319,7 +319,11 @@ class SmartSeeder:
             tname = seeded.table
 
             if tname not in existing_tables:
-                failures.append(f"Table '{tname}' no longer exists after rollback — all data lost")
+                failures.append(
+                    f"Table '{tname}' no longer exists after rollback — all seeded rows lost. "
+                    f"Fix: add op.create_table('{tname}', ...) to downgrade(), or "
+                    "use MRTConfig(skip={...}) with a documented reason if the data loss is intentional."
+                )
                 continue
 
             with self.engine.connect() as conn:
@@ -334,7 +338,10 @@ class SmartSeeder:
 
             if row is None:
                 failures.append(
-                    f"Table '{tname}': row {seeded.pk_col}={seeded.pk_val!r} lost after rollback"
+                    f"Table '{tname}': row {seeded.pk_col}={seeded.pk_val!r} lost after rollback. "
+                    "This migration deletes or truncates data. "
+                    "Fix: ensure downgrade() restores the rows, or use "
+                    "MRTConfig(skip={...}) with a documented reason if the data loss is intentional."
                 )
                 continue
 
@@ -345,8 +352,9 @@ class SmartSeeder:
                 actual = current[col]
                 if _normalize_for_compare(actual) != _normalize_for_compare(expected):
                     failures.append(
-                        f"Table '{tname}': column '{col}' value changed after rollback "
-                        f"(expected {expected!r}, got {actual!r})"
+                        f"Table '{tname}': column '{col}' changed after rollback "
+                        f"(expected {expected!r}, got {actual!r}). "
+                        "Fix: ensure downgrade() restores the original value of this column."
                     )
 
         return failures
