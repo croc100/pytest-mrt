@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current status: Production/Stable (v0.8.x)
+## Current status: Production/Stable (v1.0)
 
 pytest-mrt is production-ready. The core API (`MRTConfig`, `mrt` fixture, `mrt check`) is stable and
 breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the stability guarantee.
@@ -37,9 +37,8 @@ breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the sta
 - [ ] Django: `squashmigrations` detection
 - [ ] `mrt check --watch`: re-run on file change during development
 
-## v1.0 — Production ready
+## v1.0 — Production ready ✅ SHIPPED
 
-Target criteria:
 - ✅ PostgreSQL, SQLite, MySQL/MariaDB dynamic verification
 - ✅ Oracle, SQL Server dynamic verification
 - ✅ Alembic + Django migration support (static + dynamic)

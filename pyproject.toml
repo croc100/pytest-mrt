@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-mrt"
-version = "0.9.0"
+version = "1.0.0"
 description = "Catch database migration rollback failures before they reach production"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -16,7 +16,7 @@ keywords = [
 ]
 classifiers = [
     "Framework :: Pytest",
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
