@@ -155,13 +155,9 @@ def _check_data_hole_chain(graph: MigrationGraph) -> list[RiskWarning]:
         # Find add revisions that come after a drop revision in the chain
         chain_revisions = [n.revision for n in chain]
         for drop_rev, col_key in drop_list:
-            drop_idx = (
-                chain_revisions.index(drop_rev) if drop_rev in chain_revisions else -1
-            )
+            drop_idx = chain_revisions.index(drop_rev) if drop_rev in chain_revisions else -1
             for add_rev in add_revs:
-                add_idx = (
-                    chain_revisions.index(add_rev) if add_rev in chain_revisions else -1
-                )
+                add_idx = chain_revisions.index(add_rev) if add_rev in chain_revisions else -1
                 if drop_idx >= 0 and add_idx > drop_idx:
                     col = col_key.split(".")[-1]
                     warnings.append(

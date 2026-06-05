@@ -40,17 +40,13 @@ class SchemaSnapshot:
                 ti = TableInfo(name=tname)
                 pk_info = insp.get_pk_constraint(tname)
                 ti.pk_cols = pk_info.get("constrained_columns", [])
-                ti.fk_tables = list(
-                    {fk["referred_table"] for fk in insp.get_foreign_keys(tname)}
-                )
+                ti.fk_tables = list({fk["referred_table"] for fk in insp.get_foreign_keys(tname)})
                 for col in insp.get_columns(tname):
                     ti.columns[col["name"]] = ColumnInfo(
                         name=col["name"],
                         type_str=str(col["type"]),
                         nullable=col.get("nullable", True),
-                        default=str(col["default"])
-                        if col.get("default") is not None
-                        else None,
+                        default=str(col["default"]) if col.get("default") is not None else None,
                         primary_key=col["name"] in ti.pk_cols,
                     )
                 snap.tables[tname] = ti
@@ -103,9 +99,7 @@ class SchemaDiff:
         restored_t = set(after_rollback.tables)
 
         for t in before_t - restored_t:
-            issues.append(
-                SchemaIssue(t, f"Table '{t}' missing after rollback", "error")
-            )
+            issues.append(SchemaIssue(t, f"Table '{t}' missing after rollback", "error"))
 
         for t in restored_t - before_t:
             issues.append(
@@ -121,9 +115,7 @@ class SchemaDiff:
             restored_c = set(after_rollback.tables[t].columns)
             for col in before_c - restored_c:
                 issues.append(
-                    SchemaIssue(
-                        t, f"Column '{t}.{col}' missing after rollback", "error"
-                    )
+                    SchemaIssue(t, f"Column '{t}.{col}' missing after rollback", "error")
                 )
             for col in restored_c - before_c:
                 issues.append(

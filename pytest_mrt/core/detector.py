@@ -166,10 +166,7 @@ def _check_raw_execute(m: MigrationAST) -> list[RiskWarning]:
 
 def _check_data_migration_no_reverse(m: MigrationAST) -> list[RiskWarning]:
     def has_update_sql(calls) -> bool:
-        return any(
-            c.method == "execute" and re.search(r"\bUPDATE\b", _sql(c.node))
-            for c in calls
-        )
+        return any(c.method == "execute" and re.search(r"\bUPDATE\b", _sql(c.node)) for c in calls)
 
     if has_update_sql(m.upgrade_calls()) and not has_update_sql(m.downgrade_calls()):
         return [
@@ -241,8 +238,7 @@ def _check_drop_view(m: MigrationAST) -> list[RiskWarning]:
     for c in m.upgrade_calls():
         if c.method == "execute" and re.search(r"\bDROP\s+VIEW\b", _sql(c.node)):
             down_creates = any(
-                c2.method == "execute"
-                and re.search(r"\bCREATE\b.*\bVIEW\b", _sql(c2.node))
+                c2.method == "execute" and re.search(r"\bCREATE\b.*\bVIEW\b", _sql(c2.node))
                 for c2 in m.downgrade_calls()
             )
             if not down_creates:
@@ -279,9 +275,7 @@ def _check_sequence_reset(m: MigrationAST) -> list[RiskWarning]:
 
 def _check_enum_type_change(m: MigrationAST) -> list[RiskWarning]:
     for c in m.upgrade_calls():
-        if c.method == "execute" and re.search(
-            r"\bALTER\s+TYPE\b.*\bADD\s+VALUE\b", _sql(c.node)
-        ):
+        if c.method == "execute" and re.search(r"\bALTER\s+TYPE\b.*\bADD\s+VALUE\b", _sql(c.node)):
             return [
                 _warn(
                     m,
@@ -299,9 +293,7 @@ def _check_multi_step_destructive(m: MigrationAST) -> list[RiskWarning]:
     up = m.upgrade_calls()
     has_add = any(c.method == "add_column" for c in up)
     has_drop = any(c.method == "drop_column" for c in up)
-    has_data = any(
-        c.method == "execute" and re.search(r"\bUPDATE\b", _sql(c.node)) for c in up
-    )
+    has_data = any(c.method == "execute" and re.search(r"\bUPDATE\b", _sql(c.node)) for c in up)
     if has_add and has_drop and has_data:
         return [
             _warn(

@@ -63,9 +63,7 @@ class RollbackVerifier:
                 pk_col = table_info.pk_cols[0] if table_info.pk_cols else "id"
                 for row in rows:
                     seeder._rows.append(
-                        SeededRow(
-                            table=tname, pk_col=pk_col, pk_val=row.get(pk_col), data=row
-                        )
+                        SeededRow(table=tname, pk_col=pk_col, pk_val=row.get(pk_col), data=row)
                     )
                 for row in rows:
                     # Use dialect-aware quoting — fixes MySQL double-quote bug
@@ -80,9 +78,7 @@ class RollbackVerifier:
                     try:
                         with self.runner.engine.begin() as conn:
                             conn.execute(
-                                text(
-                                    f"INSERT INTO {q(tname)} ({cols}) VALUES ({placeholders})"
-                                ),
+                                text(f"INSERT INTO {q(tname)} ({cols}) VALUES ({placeholders})"),
                                 params,
                             )
                     except Exception:
@@ -147,9 +143,7 @@ class RollbackVerifier:
                 failures = self._run_migration_check(revision, schema_before, seeder)
 
         except Exception as exc:
-            failures.append(
-                f"Unexpected error during check: {type(exc).__name__}: {exc}"
-            )
+            failures.append(f"Unexpected error during check: {type(exc).__name__}: {exc}")
             # Best-effort state recovery: return DB to start_revision
             try:
                 current = self.runner.current_revision()

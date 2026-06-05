@@ -43,9 +43,7 @@ def version_cmd() -> None:
 def check(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
     strict: bool = typer.Option(False, "--strict", help="Exit 1 on warnings too"),
-    fmt: str = typer.Option(
-        "table", "--format", "-f", help="Output format: table | json"
-    ),
+    fmt: str = typer.Option("table", "--format", "-f", help="Output format: table | json"),
 ) -> None:
     """Statically analyze migrations for rollback risk patterns (Alembic and Django)."""
     # Auto-detect Django vs Alembic
@@ -96,9 +94,7 @@ def check(
     for w in warnings:
         c = _severity_color(w.severity)
         line_str = str(w.line) if w.line is not None else ""
-        table.add_row(
-            w.revision, w.pattern, f"[{c}]{w.severity}[/{c}]", line_str, w.message
-        )
+        table.add_row(w.revision, w.pattern, f"[{c}]{w.severity}[/{c}]", line_str, w.message)
 
     console.print(table)
     console.print()
@@ -112,9 +108,7 @@ def check(
         console.print(f"[yellow]{len(warns)} warning(s)[/yellow] (--strict mode)")
         raise typer.Exit(1)
     else:
-        console.print(
-            f"[yellow]{len(warns)} warning(s)[/yellow] — review before deploying"
-        )
+        console.print(f"[yellow]{len(warns)} warning(s)[/yellow] — review before deploying")
         raise typer.Exit(0)
 
 
@@ -152,9 +146,7 @@ def init() -> None:
     # Write conftest.py
     conftest_path = Path(test_dir) / "conftest.py"
     if conftest_path.exists():
-        overwrite = typer.confirm(
-            f"{conftest_path} already exists. Add MRTConfig?", default=False
-        )
+        overwrite = typer.confirm(f"{conftest_path} already exists. Add MRTConfig?", default=False)
         if not overwrite:
             console.print("[dim]Skipping conftest.py[/dim]")
         else:
@@ -235,16 +227,12 @@ def fix(
         raise typer.Exit(0)
 
     console.print()
-    console.print(
-        f"[bold]{fix_suggestion.file}[/bold]  [dim]{fix_suggestion.revision}[/dim]"
-    )
+    console.print(f"[bold]{fix_suggestion.file}[/bold]  [dim]{fix_suggestion.revision}[/dim]")
     console.print(f"[yellow]Issue:[/yellow] {fix_suggestion.issue}")
     console.print()
 
     if fix_suggestion.warning:
-        console.print(
-            Panel(f"[yellow]{fix_suggestion.warning}[/yellow]", title="⚠  Note")
-        )
+        console.print(Panel(f"[yellow]{fix_suggestion.warning}[/yellow]", title="⚠  Note"))
         console.print()
 
     confidence_colors = {"high": "green", "medium": "yellow", "low": "red"}
@@ -258,9 +246,7 @@ def fix(
 
     if not apply:
         console.print()
-        console.print(
-            "[dim]Run with [bold]--apply[/bold] to write this fix to the file.[/dim]"
-        )
+        console.print("[dim]Run with [bold]--apply[/bold] to write this fix to the file.[/dim]")
         raise typer.Exit(0)
 
     apply_fix(migration_file, fix_suggestion)
@@ -276,9 +262,7 @@ def fix(
 @app.command("report")
 def report(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
-    output: str = typer.Option(
-        "migration_report.html", "--output", "-o", help="Output file path"
-    ),
+    output: str = typer.Option("migration_report.html", "--output", "-o", help="Output file path"),
 ) -> None:
     """Generate an HTML safety report of your entire migration history."""
     from .core.html_report import generate_html_report
@@ -357,9 +341,7 @@ Migration file ({path.name}):
 
         explanation = message.content[0].text
         console.print()
-        console.print(
-            Panel(explanation, title=f"[bold]{path.name}[/bold]", border_style="blue")
-        )
+        console.print(Panel(explanation, title=f"[bold]{path.name}[/bold]", border_style="blue"))
 
     except Exception as e:
         console.print(f"[red]AI request failed: {e}[/red]")

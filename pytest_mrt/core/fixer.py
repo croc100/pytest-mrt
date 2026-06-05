@@ -99,9 +99,7 @@ def _generate_reverse_ops(upgrade_body: str) -> list[str] | None:
         r'op\.create_foreign_key\s*\(\s*["\'](\w+)["\'],\s*["\'](\w+)["\']',
         upgrade_body,
     ):
-        ops.append(
-            f'op.drop_constraint("{m.group(1)}", "{m.group(2)}", type_="foreignkey")'
-        )
+        ops.append(f'op.drop_constraint("{m.group(1)}", "{m.group(2)}", type_="foreignkey")')
 
     return ops if ops else None
 

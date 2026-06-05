@@ -15,9 +15,7 @@ def print_revision_result(result: RevisionResult) -> None:
             f"  [dim]–[/dim]  [bold]{result.revision}[/bold]  [dim]skipped — {result.skip_reason}[/dim]"
         )
     elif result.passed:
-        console.print(
-            f"  [green]✓[/green]  [bold]{result.revision}[/bold]  [dim]reversible[/dim]"
-        )
+        console.print(f"  [green]✓[/green]  [bold]{result.revision}[/bold]  [dim]reversible[/dim]")
     else:
         console.print(
             f"  [red]✗[/red]  [bold]{result.revision}[/bold]  [red]data loss detected[/red]"
@@ -55,16 +53,12 @@ def print_check_all_summary(results: list[RevisionResult]) -> None:
             lines.append(f"  {r.revision}\n", style="red")
             for f in r.failures:
                 lines.append(f"    └─ {f}\n", style="dim")
-        console.print(
-            Panel(lines, border_style="red", title="[red]Rollback Unsafe[/red]")
-        )
+        console.print(Panel(lines, border_style="red", title="[red]Rollback Unsafe[/red]"))
 
     console.print()
 
 
 def print_static_check_header(versions_dir: str) -> None:
     console.print()
-    console.rule(
-        f"[bold]MRT static analysis[/bold]  [dim]{versions_dir}[/dim]", style="dim"
-    )
+    console.rule(f"[bold]MRT static analysis[/bold]  [dim]{versions_dir}[/dim]", style="dim")
     console.print()

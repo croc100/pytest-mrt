@@ -23,9 +23,7 @@ def _q(engine: Engine, name: str) -> str:
 # ──────────────────────────────────────────────
 
 
-def _get_enum_values(
-    engine: Engine, table_name: str, col_name: str
-) -> list[str] | None:
+def _get_enum_values(engine: Engine, table_name: str, col_name: str) -> list[str] | None:
     """
     Query the DB for valid ENUM values for a column.
     Returns None if the column is not an ENUM or values can't be determined.
@@ -297,9 +295,7 @@ class SmartSeeder:
                             {"pk": pk_val},
                         )
                         full_row = dict(result.mappings().first() or {})
-                        self._rows.append(
-                            SeededRow(table.name, pk_col, pk_val, full_row)
-                        )
+                        self._rows.append(SeededRow(table.name, pk_col, pk_val, full_row))
 
             except Exception:
                 pass
@@ -323,9 +319,7 @@ class SmartSeeder:
             tname = seeded.table
 
             if tname not in existing_tables:
-                failures.append(
-                    f"Table '{tname}' no longer exists after rollback — all data lost"
-                )
+                failures.append(f"Table '{tname}' no longer exists after rollback — all data lost")
                 continue
 
             with self.engine.connect() as conn:
@@ -340,8 +334,7 @@ class SmartSeeder:
 
             if row is None:
                 failures.append(
-                    f"Table '{tname}': row {seeded.pk_col}={seeded.pk_val!r} "
-                    "lost after rollback"
+                    f"Table '{tname}': row {seeded.pk_col}={seeded.pk_val!r} lost after rollback"
                 )
                 continue
 

@@ -83,9 +83,7 @@ class DjangoMigrationAST:
                             for elt in item.value.elts:
                                 if isinstance(elt, ast.Tuple) and len(elt.elts) == 2:
                                     a, b = elt.elts
-                                    if isinstance(a, ast.Constant) and isinstance(
-                                        b, ast.Constant
-                                    ):
+                                    if isinstance(a, ast.Constant) and isinstance(b, ast.Constant):
                                         deps.append((str(a.value), str(b.value)))
                             return deps
         return []
@@ -389,9 +387,7 @@ def _check_rename_model_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
     """RenameModel is reversible by Django, but old_name must be correct."""
     warnings = []
     rename_ops = [
-        op
-        for op in m.operations
-        if isinstance(op, ast.Call) and m.op_name(op) == "RenameModel"
+        op for op in m.operations if isinstance(op, ast.Call) and m.op_name(op) == "RenameModel"
     ]
     if not rename_ops:
         return []
@@ -402,8 +398,7 @@ def _check_rename_model_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
         dangerous = [
             o
             for o in m.operations
-            if isinstance(o, ast.Call)
-            and m.op_name(o) in ("RemoveField", "DeleteModel", "RunSQL")
+            if isinstance(o, ast.Call) and m.op_name(o) in ("RemoveField", "DeleteModel", "RunSQL")
         ]
         if dangerous:
             warnings.append(
@@ -451,8 +446,7 @@ def _check_missing_atomic_false(m: DjangoMigrationAST) -> list[RiskWarning]:
     """Certain operations cannot run inside a transaction and require atomic=False."""
     needs_atomic_false = {"AddIndex", "RemoveIndex"}
     has_requiring_ops = any(
-        isinstance(op, ast.Call) and m.op_name(op) in needs_atomic_false
-        for op in m.operations
+        isinstance(op, ast.Call) and m.op_name(op) in needs_atomic_false for op in m.operations
     )
     if has_requiring_ops and (m.is_atomic is None or m.is_atomic is True):
         return [
