@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Iterator
+
 import pytest
 
 from .config import MRTConfig
@@ -126,7 +128,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture
-def mrt(request: pytest.FixtureRequest) -> MRTFixture:
+def mrt(request: pytest.FixtureRequest) -> Iterator[MRTFixture]:
     cfg: MRTConfig = getattr(request.config, "_mrt_config", None) or MRTConfig()
     fixture = MRTFixture(cfg)
     yield fixture
