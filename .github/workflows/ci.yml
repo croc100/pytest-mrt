@@ -215,9 +215,8 @@ jobs:
           import pymssql, time, sys
           for attempt in range(20):
               try:
-                  conn = pymssql.connect(server='localhost', user='SA', password='MrtTest1234!', database='master', port=1433)
+                  conn = pymssql.connect(server='localhost', user='SA', password='MrtTest1234!', database='master', port=1433, autocommit=True)
                   conn.cursor().execute('CREATE DATABASE mrt_test')
-                  conn.commit()
                   conn.close()
                   print('Created mrt_test')
                   break
