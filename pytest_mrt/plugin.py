@@ -159,9 +159,7 @@ class MRTFixture:
         from .reporter import print_check_all_summary
 
         if self._django_mode:
-            results = self._django_verifier.check_all(
-                apps=apps or self._config.django_apps
-            )
+            results = self._django_verifier.check_all(apps=apps or self._config.django_apps)
         else:
             results = self._verifier.check_all()
 

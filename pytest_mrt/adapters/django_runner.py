@@ -100,6 +100,7 @@ def _configure_django(
         django.setup()
         # Override the database URL so SQLAlchemy and Django share the same target
         from django.conf import settings as s
+
         s.DATABASES["default"].update(_sqlalchemy_url_to_django_db(db_url))
         return
 
@@ -167,9 +168,7 @@ class DjangoMigrationRunner:
         if node is None:
             raise KeyError(f"Migration not found: {app_label}/{migration_name}")
 
-        same_app_parents = [
-            p.key for p in node.parents if p.key[0] == app_label
-        ]
+        same_app_parents = [p.key for p in node.parents if p.key[0] == app_label]
 
         if same_app_parents:
             target = [same_app_parents[0]]
@@ -210,4 +209,5 @@ class DjangoMigrationRunner:
     def dispose(self) -> None:
         self.engine.dispose()
         from django.db import connections
+
         connections["default"].close()

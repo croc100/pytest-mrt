@@ -65,9 +65,7 @@ class DjangoRollbackVerifier:
                     try:
                         with self.runner.engine.begin() as conn:
                             conn.execute(
-                                text(
-                                    f"INSERT INTO {q(tname)} ({cols}) VALUES ({placeholders})"
-                                ),
+                                text(f"INSERT INTO {q(tname)} ({cols}) VALUES ({placeholders})"),
                                 params,
                             )
                     except Exception:
