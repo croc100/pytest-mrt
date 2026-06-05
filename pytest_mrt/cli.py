@@ -1,14 +1,15 @@
-import typer
 from pathlib import Path
+
+import typer
+from rich import box
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.syntax import Syntax
-from rich import box
+from rich.table import Table
 
 from . import __version__
-from .core.detector import analyze_migrations
 from .adapters.django_detector import analyze_django_migrations, is_django_migration
+from .core.detector import analyze_migrations
 
 app = typer.Typer(
     name="mrt",
@@ -26,6 +27,7 @@ def _severity_color(s: str) -> str:
 # mrt version
 # ──────────────────────────────────────────────
 
+
 @app.command("version")
 def version_cmd() -> None:
     """Show version."""
@@ -36,6 +38,7 @@ def version_cmd() -> None:
 # mrt check
 # ──────────────────────────────────────────────
 
+
 @app.command("check")
 def check(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
@@ -45,6 +48,7 @@ def check(
     """Statically analyze migrations for rollback risk patterns (Alembic and Django)."""
     # Auto-detect Django vs Alembic
     from pathlib import Path as _Path
+
     sample_files = list(_Path(versions_dir).rglob("*.py"))[:5]
     is_django = any(is_django_migration(p) for p in sample_files)
 
@@ -55,10 +59,18 @@ def check(
         warnings = analyze_migrations(versions_dir)
 
     if fmt == "json":
-        import json, sys
+        import json
+        import sys
+
         output = [
-            {"revision": w.revision, "file": w.file, "pattern": w.pattern,
-             "severity": w.severity, "message": w.message, "line": w.line}
+            {
+                "revision": w.revision,
+                "file": w.file,
+                "pattern": w.pattern,
+                "severity": w.severity,
+                "message": w.message,
+                "line": w.line,
+            }
             for w in warnings
         ]
         sys.stdout.write(json.dumps(output, indent=2) + "\n")
@@ -88,7 +100,9 @@ def check(
     console.print()
 
     if errors:
-        console.print(f"[red]{len(errors)} error(s)[/red], [yellow]{len(warns)} warning(s)[/yellow]")
+        console.print(
+            f"[red]{len(errors)} error(s)[/red], [yellow]{len(warns)} warning(s)[/yellow]"
+        )
         raise typer.Exit(1)
     elif warns and strict:
         console.print(f"[yellow]{len(warns)} warning(s)[/yellow] (--strict mode)")
@@ -102,6 +116,7 @@ def check(
 # mrt init
 # ──────────────────────────────────────────────
 
+
 @app.command("init")
 def init() -> None:
     """
@@ -109,7 +124,6 @@ def init() -> None:
 
     Auto-detects alembic.ini location.
     """
-    import os
 
     # Find alembic.ini
     ini_candidates = ["alembic.ini", "alembic/alembic.ini", "migrations/alembic.ini"]
@@ -159,27 +173,27 @@ def init() -> None:
 
 def _write_conftest(path: Path, alembic_ini: str, db_url: str) -> None:
     path.write_text(
-        f'import os\n'
-        f'from pytest_mrt import MRTConfig\n\n\n'
-        f'def pytest_configure(config):\n'
-        f'    config._mrt_config = MRTConfig(\n'
+        f"import os\n"
+        f"from pytest_mrt import MRTConfig\n\n\n"
+        f"def pytest_configure(config):\n"
+        f"    config._mrt_config = MRTConfig(\n"
         f'        alembic_ini="{alembic_ini}",\n'
-        f'        db_url={db_url},\n'
+        f"        db_url={db_url},\n"
         f'        # skip={{"revision_id": "Reason this is a known issue"}},\n'
-        f'    )\n'
+        f"    )\n"
     )
 
 
 def _append_conftest(path: Path, alembic_ini: str, db_url: str) -> None:
     existing = path.read_text()
     addition = (
-        f'\n\n# Added by mrt init\n'
-        f'from pytest_mrt import MRTConfig\n\n\n'
-        f'def pytest_configure(config):\n'
-        f'    config._mrt_config = MRTConfig(\n'
+        f"\n\n# Added by mrt init\n"
+        f"from pytest_mrt import MRTConfig\n\n\n"
+        f"def pytest_configure(config):\n"
+        f"    config._mrt_config = MRTConfig(\n"
         f'        alembic_ini="{alembic_ini}",\n'
-        f'        db_url={db_url},\n'
-        f'    )\n'
+        f"        db_url={db_url},\n"
+        f"    )\n"
     )
     path.write_text(existing + addition)
     console.print(f"[green]✓[/green] Updated [bold]{path}[/bold]")
@@ -188,6 +202,7 @@ def _append_conftest(path: Path, alembic_ini: str, db_url: str) -> None:
 # ──────────────────────────────────────────────
 # mrt fix
 # ──────────────────────────────────────────────
+
 
 @app.command("fix")
 def fix(
@@ -199,7 +214,7 @@ def fix(
 
     Shows a diff of the suggested fix. Use --apply to write it to the file.
     """
-    from .core.fixer import generate_fix, apply_fix
+    from .core.fixer import apply_fix, generate_fix
 
     if not Path(migration_file).exists():
         console.print(f"[red]File not found: {migration_file}[/red]")
@@ -243,6 +258,7 @@ def fix(
 # mrt report
 # ──────────────────────────────────────────────
 
+
 @app.command("report")
 def report(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
@@ -256,12 +272,15 @@ def report(
 
     Path(output).write_text(html)
     console.print(f"[green]✓ Report saved to [bold]{output}[/bold][/green]")
-    console.print(f"  Open it in your browser: [link=file://{Path(output).absolute()}]{Path(output).absolute()}[/link]")
+    console.print(
+        f"  Open it in your browser: [link=file://{Path(output).absolute()}]{Path(output).absolute()}[/link]"
+    )
 
 
 # ──────────────────────────────────────────────
 # mrt explain
 # ──────────────────────────────────────────────
+
 
 @app.command("explain")
 def explain(
@@ -276,11 +295,13 @@ def explain(
     try:
         import anthropic
     except ImportError:
-        console.print(Panel(
-            "[red]AI support not installed.[/red]\n\n"
-            "Run: [bold]pip install pytest-mrt\\[ai][/bold]",
-            title="Missing dependency",
-        ))
+        console.print(
+            Panel(
+                "[red]AI support not installed.[/red]\n\n"
+                "Run: [bold]pip install pytest-mrt\\[ai][/bold]",
+                title="Missing dependency",
+            )
+        )
         raise typer.Exit(1)
 
     path = Path(migration_file)
@@ -297,9 +318,10 @@ def explain(
         message = client.messages.create(
             model="claude-opus-4-5",
             max_tokens=1024,
-            messages=[{
-                "role": "user",
-                "content": f"""Explain this Alembic database migration file in plain English for someone who may not be deeply familiar with SQL or database migrations.
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Explain this Alembic database migration file in plain English for someone who may not be deeply familiar with SQL or database migrations.
 
 Cover:
 1. What changes this migration makes to the database (in simple terms)
@@ -313,7 +335,8 @@ Migration file ({path.name}):
 ```python
 {source}
 ```""",
-            }]
+                }
+            ],
         )
 
         explanation = message.content[0].text

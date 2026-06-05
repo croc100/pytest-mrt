@@ -1,9 +1,8 @@
 from __future__ import annotations
+
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 from rich.text import Text
-from rich import box
 
 from .core.verifier import RevisionResult
 
@@ -12,17 +11,20 @@ console = Console()
 
 def print_revision_result(result: RevisionResult) -> None:
     if result.skipped:
-        console.print(f"  [dim]–[/dim]  [bold]{result.revision}[/bold]  [dim]skipped — {result.skip_reason}[/dim]")
+        console.print(
+            f"  [dim]–[/dim]  [bold]{result.revision}[/bold]  [dim]skipped — {result.skip_reason}[/dim]"
+        )
     elif result.passed:
         console.print(f"  [green]✓[/green]  [bold]{result.revision}[/bold]  [dim]reversible[/dim]")
     else:
-        console.print(f"  [red]✗[/red]  [bold]{result.revision}[/bold]  [red]data loss detected[/red]")
+        console.print(
+            f"  [red]✗[/red]  [bold]{result.revision}[/bold]  [red]data loss detected[/red]"
+        )
         for f in result.failures:
             console.print(f"     [dim]└─[/dim] [red]{f}[/red]")
 
 
 def print_check_all_summary(results: list[RevisionResult]) -> None:
-    passed = [r for r in results if r.passed]
     failed = [r for r in results if not r.passed]
 
     console.print()
@@ -35,13 +37,18 @@ def print_check_all_summary(results: list[RevisionResult]) -> None:
     console.print()
 
     if not failed:
-        console.print(Panel(
-            f"[green]All {len(results)} migration(s) are safely reversible.[/green]",
-            border_style="green",
-        ))
+        console.print(
+            Panel(
+                f"[green]All {len(results)} migration(s) are safely reversible.[/green]",
+                border_style="green",
+            )
+        )
     else:
         lines = Text()
-        lines.append(f"{len(failed)} migration(s) will cause data loss on rollback.\n\n", style="red bold")
+        lines.append(
+            f"{len(failed)} migration(s) will cause data loss on rollback.\n\n",
+            style="red bold",
+        )
         for r in failed:
             lines.append(f"  {r.revision}\n", style="red")
             for f in r.failures:

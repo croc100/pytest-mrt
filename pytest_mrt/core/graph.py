@@ -14,7 +14,9 @@ cross-migration patterns that per-file analysis cannot see:
 - Orphaned migrations: migrations with no path to the current head
   (deploy risk — they may run unexpectedly during downgrade).
 """
+
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -26,7 +28,7 @@ from .detector import RiskWarning
 class MigrationNode:
     revision: str
     filename: str
-    down_revision: str | None    # None = base
+    down_revision: str | None  # None = base
     source: str
     ast: MigrationAST
 
@@ -75,6 +77,7 @@ class MigrationGraph:
 
 def _build_graph(versions_dir: str) -> MigrationGraph:
     import re as _re
+
     graph = MigrationGraph()
     for path in sorted(Path(versions_dir).glob("*.py")):
         source = path.read_text()
@@ -85,19 +88,22 @@ def _build_graph(versions_dir: str) -> MigrationGraph:
         revision = m_rev.group(1)
         down_revision = m_down.group(1) if m_down else None
         m_ast = MigrationAST(source, revision, path.name)
-        graph.add(MigrationNode(
-            revision=revision,
-            filename=path.name,
-            down_revision=down_revision,
-            source=source,
-            ast=m_ast,
-        ))
+        graph.add(
+            MigrationNode(
+                revision=revision,
+                filename=path.name,
+                down_revision=down_revision,
+                source=source,
+                ast=m_ast,
+            )
+        )
     return graph
 
 
 # ──────────────────────────────────────────────
 # cross-migration checks
 # ──────────────────────────────────────────────
+
 
 def _check_data_hole_chain(graph: MigrationGraph) -> list[RiskWarning]:
     """
@@ -144,7 +150,6 @@ def _check_data_hole_chain(graph: MigrationGraph) -> list[RiskWarning]:
     for table, drop_list in drops_by_table.items():
         if table not in adds_by_table:
             continue
-        drop_revs = {r for r, _ in drop_list}
         add_revs = set(adds_by_table[table])
 
         # Find add revisions that come after a drop revision in the chain
@@ -155,17 +160,19 @@ def _check_data_hole_chain(graph: MigrationGraph) -> list[RiskWarning]:
                 add_idx = chain_revisions.index(add_rev) if add_rev in chain_revisions else -1
                 if drop_idx >= 0 and add_idx > drop_idx:
                     col = col_key.split(".")[-1]
-                    warnings.append(RiskWarning(
-                        revision=f"{drop_rev}→{add_rev}",
-                        file=graph.nodes[add_rev].filename,
-                        pattern="Data hole chain",
-                        message=(
-                            f"Column dropped in {drop_rev} then re-added in {add_rev} on table '{table}'. "
-                            "Rolling back both migrations restores the schema but permanently loses "
-                            "the original data — this is invisible to per-migration analysis."
-                        ),
-                        severity="warning",
-                    ))
+                    warnings.append(
+                        RiskWarning(
+                            revision=f"{drop_rev}→{add_rev}",
+                            file=graph.nodes[add_rev].filename,
+                            pattern="Data hole chain",
+                            message=(
+                                f"Column dropped in {drop_rev} then re-added in {add_rev} on table '{table}'. "
+                                "Rolling back both migrations restores the schema but permanently loses "
+                                "the original data — this is invisible to per-migration analysis."
+                            ),
+                            severity="warning",
+                        )
+                    )
 
     return warnings
 
@@ -196,16 +203,18 @@ def _check_orphaned_migrations(graph: MigrationGraph) -> list[RiskWarning]:
     orphans = [n for rev, n in graph.nodes.items() if rev not in reachable]
     warnings = []
     for node in orphans:
-        warnings.append(RiskWarning(
-            revision=node.revision,
-            file=node.filename,
-            pattern="Orphaned migration",
-            message=(
-                f"Migration {node.revision} is not reachable from any head. "
-                "It will not run during normal upgrade but may interfere with downgrade."
-            ),
-            severity="warning",
-        ))
+        warnings.append(
+            RiskWarning(
+                revision=node.revision,
+                file=node.filename,
+                pattern="Orphaned migration",
+                message=(
+                    f"Migration {node.revision} is not reachable from any head. "
+                    "It will not run during normal upgrade but may interfere with downgrade."
+                ),
+                severity="warning",
+            )
+        )
     return warnings
 
 

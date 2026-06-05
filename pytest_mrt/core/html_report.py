@@ -1,9 +1,11 @@
 """HTML report generation for migration safety analysis."""
-from __future__ import annotations
-from pathlib import Path
-from datetime import datetime
-from .detector import RiskWarning
 
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+
+from .detector import RiskWarning
 
 _SEVERITY_COLOR = {"error": "#ef4444", "warning": "#f59e0b"}
 _SEVERITY_BG = {"error": "#fef2f2", "warning": "#fffbeb"}
@@ -98,6 +100,7 @@ def generate_html_report(versions_dir: str, warnings: list[RiskWarning]) -> str:
 
     for path in all_files:
         import re
+
         source = path.read_text()
         m = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
         rev = m.group(1) if m else path.stem

@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
+
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 
@@ -38,10 +40,7 @@ class SchemaSnapshot:
                 ti = TableInfo(name=tname)
                 pk_info = insp.get_pk_constraint(tname)
                 ti.pk_cols = pk_info.get("constrained_columns", [])
-                ti.fk_tables = list({
-                    fk["referred_table"]
-                    for fk in insp.get_foreign_keys(tname)
-                })
+                ti.fk_tables = list({fk["referred_table"] for fk in insp.get_foreign_keys(tname)})
                 for col in insp.get_columns(tname):
                     ti.columns[col["name"]] = ColumnInfo(
                         name=col["name"],
@@ -104,17 +103,27 @@ class SchemaDiff:
 
         for t in restored_t - before_t:
             issues.append(
-                SchemaIssue(t, f"Table '{t}' still exists after rollback — downgrade is incomplete", "error")
+                SchemaIssue(
+                    t,
+                    f"Table '{t}' still exists after rollback — downgrade is incomplete",
+                    "error",
+                )
             )
 
         for t in before_t & restored_t:
             before_c = set(before.tables[t].columns)
             restored_c = set(after_rollback.tables[t].columns)
             for col in before_c - restored_c:
-                issues.append(SchemaIssue(t, f"Column '{t}.{col}' missing after rollback", "error"))
+                issues.append(
+                    SchemaIssue(t, f"Column '{t}.{col}' missing after rollback", "error")
+                )
             for col in restored_c - before_c:
                 issues.append(
-                    SchemaIssue(t, f"Column '{t}.{col}' still present after rollback — downgrade is incomplete", "warning")
+                    SchemaIssue(
+                        t,
+                        f"Column '{t}.{col}' still present after rollback — downgrade is incomplete",
+                        "warning",
+                    )
                 )
 
         return issues

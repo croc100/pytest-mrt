@@ -1,10 +1,11 @@
 from __future__ import annotations
+
+import re
 import uuid
-from dataclasses import dataclass, field
-from datetime import date, datetime, time, timezone
+from dataclasses import dataclass
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
-import re
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
@@ -21,6 +22,7 @@ def _q(engine: Engine, name: str) -> str:
 # DB introspection helpers
 # ──────────────────────────────────────────────
 
+
 def _get_enum_values(engine: Engine, table_name: str, col_name: str) -> list[str] | None:
     """
     Query the DB for valid ENUM values for a column.
@@ -30,7 +32,8 @@ def _get_enum_values(engine: Engine, table_name: str, col_name: str) -> list[str
     try:
         with engine.connect() as conn:
             if dialect == "postgresql":
-                result = conn.execute(text("""
+                result = conn.execute(
+                    text("""
                     SELECT e.enumlabel
                     FROM pg_enum e
                     JOIN pg_type t ON t.oid = e.enumtypid
@@ -38,16 +41,21 @@ def _get_enum_values(engine: Engine, table_name: str, col_name: str) -> list[str
                     JOIN pg_class c ON c.oid = a.attrelid
                     WHERE c.relname = :tname AND a.attname = :cname
                     ORDER BY e.enumsortorder
-                """), {"tname": table_name, "cname": col_name})
+                """),
+                    {"tname": table_name, "cname": col_name},
+                )
                 vals = [row[0] for row in result]
                 return vals if vals else None
 
             elif dialect == "mysql":
-                result = conn.execute(text(
-                    "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS "
-                    "WHERE TABLE_NAME = :tname AND COLUMN_NAME = :cname "
-                    "AND TABLE_SCHEMA = DATABASE()"
-                ), {"tname": table_name, "cname": col_name})
+                result = conn.execute(
+                    text(
+                        "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS "
+                        "WHERE TABLE_NAME = :tname AND COLUMN_NAME = :cname "
+                        "AND TABLE_SCHEMA = DATABASE()"
+                    ),
+                    {"tname": table_name, "cname": col_name},
+                )
                 row = result.fetchone()
                 if row and row[0].lower().startswith("enum("):
                     # enum('a','b','c') → ['a', 'b', 'c']
@@ -77,9 +85,10 @@ def _get_unique_constraints(engine: Engine, table_name: str) -> list[list[str]]:
 # value generation
 # ──────────────────────────────────────────────
 
+
 def _unique_seed(col_name: str, row_index: int) -> int:
     """Stable, collision-resistant seed per (column, row)."""
-    return abs(hash(f"mrt_{col_name}_{row_index}")) % 10 ** 8 + 10 ** 8
+    return abs(hash(f"mrt_{col_name}_{row_index}")) % 10**8 + 10**8
 
 
 def _generate_value(
@@ -100,7 +109,7 @@ def _generate_value(
     if any(x in t for x in ("BIGINT", "BIGSERIAL")):
         return seed
     if any(x in t for x in ("TINYINT", "SMALLINT", "MEDIUMINT", "INT", "SERIAL")):
-        return seed % (2 ** 30)
+        return seed % (2**30)
     if any(x in t for x in ("FLOAT", "DOUBLE", "REAL", "NUMERIC", "DECIMAL")):
         return float(seed) / 1000.0
     if "BOOL" in t:
@@ -154,6 +163,7 @@ def _normalize_for_compare(val: Any) -> Any:
 # FK ordering
 # ──────────────────────────────────────────────
 
+
 def _topological_order(tables: dict[str, TableInfo]) -> list[str]:
     order: list[str] = []
     visited: set[str] = set()
@@ -179,6 +189,7 @@ def _topological_order(tables: dict[str, TableInfo]) -> list[str]:
 # seeded row record
 # ──────────────────────────────────────────────
 
+
 @dataclass
 class SeededRow:
     table: str
@@ -190,6 +201,7 @@ class SeededRow:
 # ──────────────────────────────────────────────
 # seeder
 # ──────────────────────────────────────────────
+
 
 class SmartSeeder:
     def __init__(self, engine: Engine):
@@ -261,7 +273,7 @@ class SmartSeeder:
             placeholders = ", ".join(f":p_{c}" for c in row)
             params = {f"p_{c}": v for c, v in row.items()}
             tq = self._q(table.name)
-            stmt = text(f'INSERT INTO {tq} ({cols}) VALUES ({placeholders})')
+            stmt = text(f"INSERT INTO {tq} ({cols}) VALUES ({placeholders})")
 
             try:
                 with self.engine.begin() as conn:
@@ -273,13 +285,13 @@ class SmartSeeder:
                         pk_val = row[pk_col]
                     else:
                         result = conn.execute(
-                            text(f'SELECT {pkq} FROM {tq} ORDER BY {pkq} DESC LIMIT 1')
+                            text(f"SELECT {pkq} FROM {tq} ORDER BY {pkq} DESC LIMIT 1")
                         )
                         pk_val = result.scalar()
 
                     if pk_val is not None:
                         result = conn.execute(
-                            text(f'SELECT * FROM {tq} WHERE {pkq} = :pk'),
+                            text(f"SELECT * FROM {tq} WHERE {pkq} = :pk"),
                             {"pk": pk_val},
                         )
                         full_row = dict(result.mappings().first() or {})
@@ -307,23 +319,22 @@ class SmartSeeder:
             tname = seeded.table
 
             if tname not in existing_tables:
-                failures.append(
-                    f"Table '{tname}' no longer exists after rollback — all data lost"
-                )
+                failures.append(f"Table '{tname}' no longer exists after rollback — all data lost")
                 continue
 
             with self.engine.connect() as conn:
                 result = conn.execute(
-                    text(f'SELECT * FROM {_q(self.engine, tname)} '
-                         f'WHERE {_q(self.engine, seeded.pk_col)} = :pk'),
+                    text(
+                        f"SELECT * FROM {_q(self.engine, tname)} "
+                        f"WHERE {_q(self.engine, seeded.pk_col)} = :pk"
+                    ),
                     {"pk": seeded.pk_val},
                 )
                 row = result.mappings().first()
 
             if row is None:
                 failures.append(
-                    f"Table '{tname}': row {seeded.pk_col}={seeded.pk_val!r} "
-                    "lost after rollback"
+                    f"Table '{tname}': row {seeded.pk_col}={seeded.pk_val!r} lost after rollback"
                 )
                 continue
 

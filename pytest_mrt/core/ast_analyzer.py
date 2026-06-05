@@ -4,19 +4,19 @@ AST-based migration analyzer.
 Replaces regex-based detection with proper Python AST parsing.
 Understands code structure: if/else, with blocks, nested calls, keyword args.
 """
+
 from __future__ import annotations
+
 import ast
-import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Iterator
 
 
 @dataclass
 class CallInfo:
-    method: str          # e.g. "drop_column", "execute"
+    method: str  # e.g. "drop_column", "execute"
     node: ast.Call
-    in_batch: bool = False   # inside op.batch_alter_table(...) as x
+    in_batch: bool = False  # inside op.batch_alter_table(...) as x
 
 
 class MigrationAST:
@@ -107,9 +107,11 @@ class MigrationAST:
             if isinstance(child, ast.With):
                 for item in child.items:
                     ctx = item.context_expr
-                    if (isinstance(ctx, ast.Call) and
-                            isinstance(ctx.func, ast.Attribute) and
-                            ctx.func.attr == "batch_alter_table"):
+                    if (
+                        isinstance(ctx, ast.Call)
+                        and isinstance(ctx.func, ast.Attribute)
+                        and ctx.func.attr == "batch_alter_table"
+                    ):
                         next_in_batch = True
                         break
 
@@ -129,9 +131,11 @@ class MigrationAST:
             if isinstance(node, ast.With):
                 for item in node.items:
                     ctx = item.context_expr
-                    if (isinstance(ctx, ast.Call) and
-                            isinstance(ctx.func, ast.Attribute) and
-                            ctx.func.attr == "batch_alter_table"):
+                    if (
+                        isinstance(ctx, ast.Call)
+                        and isinstance(ctx.func, ast.Attribute)
+                        and ctx.func.attr == "batch_alter_table"
+                    ):
                         for child in ast.walk(node):
                             if child is call_node:
                                 return True

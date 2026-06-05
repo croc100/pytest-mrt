@@ -1,12 +1,15 @@
 from __future__ import annotations
+
+from typing import Iterator
+
 import pytest
 
 from .config import MRTConfig
+from .core.detector import RiskWarning, analyze_migrations
 from .core.runner import MigrationRunner
+from .core.schema import SchemaSnapshot
 from .core.seeder import SmartSeeder
 from .core.verifier import RevisionResult, RollbackVerifier
-from .core.detector import analyze_migrations, RiskWarning
-from .core.schema import SchemaSnapshot
 
 
 class MRTFixture:
@@ -53,9 +56,11 @@ class MRTFixture:
 
         # Apply custom checks
         if self._config.custom_checks:
-            from pathlib import Path
             import re as _re
+            from pathlib import Path
+
             from .core.ast_analyzer import MigrationAST
+
             for path in sorted(Path(versions_dir).glob("*.py")):
                 source = path.read_text()
                 m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
@@ -98,12 +103,12 @@ class MRTFixture:
         result = self._verifier.check_revision(revision)
         if not result.passed:
             pytest.fail(
-                f"Migration {revision} is not safely reversible:\n"
-                f"{result.failure_summary()}"
+                f"Migration {revision} is not safely reversible:\n{result.failure_summary()}"
             )
 
     def assert_all_reversible(self) -> None:
         from .reporter import print_check_all_summary
+
         results = self._verifier.check_all()
         print_check_all_summary(results)
         failed = [r for r in results if not r.passed]
@@ -123,7 +128,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture
-def mrt(request: pytest.FixtureRequest) -> MRTFixture:
+def mrt(request: pytest.FixtureRequest) -> Iterator[MRTFixture]:
     cfg: MRTConfig = getattr(request.config, "_mrt_config", None) or MRTConfig()
     fixture = MRTFixture(cfg)
     yield fixture

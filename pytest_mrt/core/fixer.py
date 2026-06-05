@@ -4,7 +4,9 @@ Rule-based automatic fix generation for common migration issues.
 Analyzes the upgrade() body and generates the missing or incorrect downgrade().
 Does not modify files without explicit user confirmation.
 """
+
 from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,21 +50,21 @@ def _generate_reverse_ops(upgrade_body: str) -> list[str] | None:
     # ADD COLUMN → DROP COLUMN
     for m in re.finditer(
         r'op\.add_column\s*\(\s*["\'](\w+)["\'][^)]*sa\.Column\s*\(\s*["\'](\w+)["\']',
-        upgrade_body, re.DOTALL
+        upgrade_body,
+        re.DOTALL,
     ):
         ops.append(f'op.drop_column("{m.group(1)}", "{m.group(2)}")')
 
     # CREATE INDEX → DROP INDEX
     for m in re.finditer(
-        r'op\.create_index\s*\(\s*["\'](\w+)["\'],\s*["\'](\w+)["\']',
-        upgrade_body
+        r'op\.create_index\s*\(\s*["\'](\w+)["\'],\s*["\'](\w+)["\']', upgrade_body
     ):
         ops.append(f'op.drop_index("{m.group(1)}", table_name="{m.group(2)}")')
 
     # DROP INDEX → CREATE INDEX (with columns)
     for m in re.finditer(
         r'op\.drop_index\s*\(\s*["\'](\w+)["\'][^)]*table_name\s*=\s*["\'](\w+)["\']',
-        upgrade_body
+        upgrade_body,
     ):
         ops.append(
             f'# TODO: recreate index "{m.group(1)}" on table "{m.group(2)}" with correct columns\n'
@@ -71,29 +73,31 @@ def _generate_reverse_ops(upgrade_body: str) -> list[str] | None:
 
     # RENAME TABLE → RENAME BACK
     for m in re.finditer(
-        r'op\.rename_table\s*\(\s*["\'](\w+)["\'],\s*["\'](\w+)["\']',
-        upgrade_body
+        r'op\.rename_table\s*\(\s*["\'](\w+)["\'],\s*["\'](\w+)["\']', upgrade_body
     ):
         ops.append(f'op.rename_table("{m.group(2)}", "{m.group(1)}")')
 
     # RENAME COLUMN → RENAME BACK
     for m in re.finditer(
         r'op\.alter_column\s*\(\s*["\'](\w+)["\'],\s*["\'](\w+)["\'][^)]*new_column_name\s*=\s*["\'](\w+)["\']',
-        upgrade_body, re.DOTALL
+        upgrade_body,
+        re.DOTALL,
     ):
-        ops.append(f'op.alter_column("{m.group(1)}", "{m.group(3)}", new_column_name="{m.group(2)}")')
+        ops.append(
+            f'op.alter_column("{m.group(1)}", "{m.group(3)}", new_column_name="{m.group(2)}")'
+        )
 
     # CREATE UNIQUE CONSTRAINT → DROP CONSTRAINT
     for m in re.finditer(
         r'op\.create_unique_constraint\s*\(\s*["\'](\w+)["\'],\s*["\'](\w+)["\']',
-        upgrade_body
+        upgrade_body,
     ):
         ops.append(f'op.drop_constraint("{m.group(1)}", "{m.group(2)}")')
 
     # CREATE FOREIGN KEY → DROP CONSTRAINT
     for m in re.finditer(
         r'op\.create_foreign_key\s*\(\s*["\'](\w+)["\'],\s*["\'](\w+)["\']',
-        upgrade_body
+        upgrade_body,
     ):
         ops.append(f'op.drop_constraint("{m.group(1)}", "{m.group(2)}", type_="foreignkey")')
 
@@ -125,10 +129,11 @@ def generate_fix(migration_path: str) -> FixSuggestion | None:
 
     # Strip comments and blank lines to detect true noop
     non_comment_lines = [
-        l.strip() for l in downgrade_body.splitlines()
-        if l.strip() and not l.strip().startswith("#")
+        line.strip()
+        for line in downgrade_body.splitlines()
+        if line.strip() and not line.strip().startswith("#")
     ]
-    is_noop = not non_comment_lines or all(l == "pass" for l in non_comment_lines)
+    is_noop = not non_comment_lines or all(line == "pass" for line in non_comment_lines)
 
     if has_downgrade and not is_noop:
         return None  # downgrade looks non-trivial, nothing to fix automatically
