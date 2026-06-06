@@ -6,6 +6,7 @@ import pytest
 
 from .config import MRTConfig
 from .core.detector import RiskWarning, analyze_migrations
+from .exceptions import MRTConfigError
 from .core.runner import MigrationRunner
 from .core.schema import SchemaSnapshot
 from .core.seeder import SmartSeeder
@@ -80,7 +81,7 @@ class MRTFixture:
             from pathlib import Path as _Path
 
             if not _Path(config.alembic_ini).exists():
-                _hint = (
+                raise MRTConfigError(
                     f"\n\n  alembic.ini not found: '{config.alembic_ini}'\n\n"
                     "  If you are using Django migrations (not Alembic), use:\n\n"
                     "    config._mrt_config = MRTConfig(\n"
@@ -89,7 +90,6 @@ class MRTFixture:
                     "    )\n\n"
                     "  See: https://croc100.github.io/pytest-mrt/quickstart/#django"
                 )
-                pytest.fail(_hint, pytrace=False)
 
             self._runner = MigrationRunner(config.alembic_ini, config.db_url)
             self._seeder = SmartSeeder(self._runner.engine)
@@ -237,6 +237,9 @@ def pytest_configure(config: pytest.Config) -> None:
 @pytest.fixture
 def mrt(request: pytest.FixtureRequest) -> Iterator[MRTFixture]:
     cfg: MRTConfig = getattr(request.config, "_mrt_config", None) or MRTConfig()
-    fixture = MRTFixture(cfg)
+    try:
+        fixture = MRTFixture(cfg)
+    except MRTConfigError as e:
+        pytest.fail(str(e), pytrace=False)
     yield fixture
     fixture.reset()
