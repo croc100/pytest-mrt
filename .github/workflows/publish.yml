@@ -45,6 +45,6 @@ jobs:
 
       - name: Publish to PyPI
         if: steps.check.outputs.already_published == 'false'
-        uses: pypa/gh-action-pypi-publish@v1.12.4
+        uses: pypa/gh-action-pypi-publish@v1.14.0
         with:
           skip-existing: true
