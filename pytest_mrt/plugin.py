@@ -6,11 +6,11 @@ import pytest
 
 from .config import MRTConfig
 from .core.detector import RiskWarning, analyze_migrations
-from .exceptions import MRTConfigError
 from .core.runner import MigrationRunner
 from .core.schema import SchemaSnapshot
 from .core.seeder import SmartSeeder
 from .core.verifier import RevisionResult, RollbackVerifier
+from .exceptions import MRTConfigError
 
 
 def _auto_detect_django(config: MRTConfig) -> MRTConfig:
