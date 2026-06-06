@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.0.1] — 2026-06-06
+
+### Fixed
+- Replace `FileNotFoundError` in `MRTFixture` with `pytest.fail()` for cleaner test output when `alembic.ini` is missing (PR #22).
+
+### Changed
+- Extract hardcoded `"claude-opus-4-5"` model name to `config.DEFAULT_EXPLAIN_MODEL` constant; add `MRTConfig.explain_model` field to allow overriding the model without modifying CLI code (PR #22).
+- Add `License :: OSI Approved :: MIT License` classifier to PyPI metadata (PR #25).
+
+### Refactored
+- Introduce `pytest_mrt/exceptions.py` with `MRTConfigError`; decouple `MRTFixture` from pytest by raising a plain Python exception instead of calling `pytest.fail()` directly — the `mrt` fixture wrapper now handles the conversion (PR #24).
+
+---
+
 ## [1.0.0] — 2026-06-06
 
 First stable release. All v1.0 target criteria met.
