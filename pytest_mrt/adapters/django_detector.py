@@ -512,7 +512,15 @@ def analyze_django_migrations(migrations_dir: str) -> list[RiskWarning]:
                 )
             )
             continue
+        source_lines = path.read_text().splitlines()
         for check in _DJANGO_CHECKS:
-            warnings.extend(check(m))
+            for w in check(m):
+                if (
+                    w.line is not None
+                    and w.line <= len(source_lines)
+                    and "# mrt: ignore" in source_lines[w.line - 1]
+                ):
+                    continue
+                warnings.append(w)
 
     return warnings

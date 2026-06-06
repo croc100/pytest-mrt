@@ -636,3 +636,41 @@ def test_syntax_error_migration_reported(tmp_path):
     warnings = analyze_migrations(str(tmp_path))
     assert any(w.pattern == "Syntax error" for w in warnings)
     assert any(w.severity == "error" for w in warnings)
+
+
+def test_mrt_ignore_suppresses_warning(tmp_path):
+    """# mrt: ignore on the same line suppresses that warning."""
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.drop_column('users', 'email')  # mrt: ignore
+        def downgrade():
+            op.add_column('users', 'email')
+    """)
+    warnings = analyze_migrations(str(tmp_path))
+    assert not any(w.pattern == "DROP COLUMN in upgrade" for w in warnings)
+
+
+def test_mrt_ignore_only_suppresses_annotated_line(tmp_path):
+    """# mrt: ignore on one line does not suppress warnings on other lines."""
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.drop_column('users', 'email')  # mrt: ignore
+            op.drop_column('users', 'phone')
+        def downgrade():
+            op.add_column('users', 'email')
+            op.add_column('users', 'phone')
+    """)
+    warnings = analyze_migrations(str(tmp_path))
+    drop_warnings = [w for w in warnings if w.pattern == "DROP COLUMN in upgrade"]
+    assert len(drop_warnings) == 1
+    assert "phone" in drop_warnings[0].message

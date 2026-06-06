@@ -111,6 +111,23 @@ def test_check_json_safe_exits_0(tmp_path, versions_dir):
     assert result.exit_code == 0
 
 
+def test_check_json_warnings_only_exits_1(tmp_path, versions_dir):
+    """--format json with warnings but no errors must exit 1."""
+    (versions_dir / "001.py").write_text(textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.create_index('ix_name', 'users', ['name'])
+        def downgrade():
+            op.drop_index('ix_name', table_name='users')
+    """))
+    result = runner.invoke(app, ["check", str(versions_dir), "--format", "json"])
+    assert result.exit_code == 1
+
+
 def test_check_strict_exits_1_on_warnings(tmp_path, versions_dir):
     # A migration with only warnings (not errors) exits 0 normally
     (versions_dir / "001.py").write_text(textwrap.dedent("""

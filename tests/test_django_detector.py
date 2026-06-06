@@ -384,3 +384,49 @@ def test_missing_atomic_false_check(tmp_path):
     """)
     warnings = analyze_django_migrations(str(tmp_path))
     assert any(w.pattern == "Missing atomic=False" for w in warnings)
+
+
+def test_mrt_ignore_suppresses_django_warning(tmp_path):
+    """# mrt: ignore on the same line suppresses that Django migration warning."""
+    app_dir = tmp_path / "myapp" / "migrations"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "0002_remove.py").write_text(textwrap.dedent("""
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.RemoveField(  # mrt: ignore
+                    model_name='user',
+                    name='phone',
+                ),
+            ]
+    """).lstrip())
+    warnings = analyze_django_migrations(str(tmp_path))
+    assert not any(w.pattern == "RemoveField" for w in warnings)
+
+
+def test_mrt_ignore_only_suppresses_annotated_django_line(tmp_path):
+    """# mrt: ignore on one operation does not suppress others."""
+    app_dir = tmp_path / "myapp" / "migrations"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "0002_multi.py").write_text(textwrap.dedent("""
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.RemoveField(  # mrt: ignore
+                    model_name='user',
+                    name='phone',
+                ),
+                migrations.RemoveField(
+                    model_name='user',
+                    name='email',
+                ),
+            ]
+    """).lstrip())
+    warnings = analyze_django_migrations(str(tmp_path))
+    remove_warnings = [w for w in warnings if w.pattern == "RemoveField"]
+    assert len(remove_warnings) == 1
+    assert "email" in remove_warnings[0].message
