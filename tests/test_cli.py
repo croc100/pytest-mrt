@@ -156,6 +156,85 @@ def test_check_empty_directory_exits_0(tmp_path):
     assert result.exit_code == 0
 
 
+def test_check_nonexistent_path_exits_1(tmp_path):
+    result = runner.invoke(app, ["check", str(tmp_path / "does_not_exist")])
+    assert result.exit_code == 1
+    assert "does not exist" in result.output
+
+
+def test_check_file_instead_of_dir_exits_1(tmp_path):
+    f = tmp_path / "not_a_dir.py"
+    f.write_text("# not a directory")
+    result = runner.invoke(app, ["check", str(f)])
+    assert result.exit_code == 1
+    assert "not a directory" in result.output
+
+
+# ── mrt init Django detection ────────────────────
+
+def test_init_detects_django_via_manage_py(tmp_path, monkeypatch):
+    """init switches to Django mode when manage.py exists and no alembic.ini."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "manage.py").write_text("# django manage")
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
+    result = runner.invoke(
+        app, ["init"],
+        input="\n\n",  # accept all defaults
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "Django" in result.output
+
+
+def test_init_django_creates_django_conftest(tmp_path, monkeypatch):
+    """init writes django_settings into conftest.py for Django projects."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "manage.py").write_text("# django manage")
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
+    runner.invoke(
+        app, ["init"],
+        input="\n\n",
+        catch_exceptions=False,
+    )
+    conftest = tmp_path / "conftest.py"
+    assert conftest.exists()
+    content = conftest.read_text()
+    assert "django_settings" in content
+    assert "alembic_ini" not in content
+
+
+def test_init_django_creates_test_migrations(tmp_path, monkeypatch):
+    """init creates test_migrations.py for Django projects."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "manage.py").write_text("# django manage")
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
+    runner.invoke(
+        app, ["init"],
+        input="\n\n",
+        catch_exceptions=False,
+    )
+    test_file = tmp_path / "test_migrations.py"
+    assert test_file.exists()
+    assert "assert_all_reversible" in test_file.read_text()
+
+
+def test_init_alembic_mode_when_manage_py_and_alembic_ini_both_exist(tmp_path, monkeypatch):
+    """init uses Alembic mode when alembic.ini exists, even if manage.py is present."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "manage.py").write_text("# django manage")
+    (tmp_path / "alembic.ini").write_text("[alembic]\n")
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
+    result = runner.invoke(
+        app, ["init"],
+        input="\nsqlite:///test.db\n",
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    conftest = tmp_path / "conftest.py"
+    if conftest.exists():
+        assert "alembic_ini" in conftest.read_text()
+
+
 # ── mrt fix ──────────────────────────────────────
 
 def test_fix_no_issues(tmp_path):

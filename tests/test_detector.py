@@ -523,3 +523,116 @@ def test_create_type_with_drop_is_safe(tmp_path):
     """))
     warnings = analyze_migrations(str(tmp_path))
     assert not any(w.pattern == "CREATE TYPE without DROP TYPE" for w in warnings)
+
+
+# ── 추가 패턴 커버리지 ──────────────────────────────────────────────────
+
+def test_not_null_nullable_restore_warning(tmp_path):
+    """alter_column nullable=False in upgrade without nullable=True in downgrade."""
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.alter_column('users', 'email', nullable=False)
+        def downgrade():
+            pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "NOT NULL without reverting nullable" in patterns
+
+
+def test_not_null_nullable_restore_safe_when_restored(tmp_path):
+    """alter_column nullable=False with nullable=True in downgrade is safe."""
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.alter_column('users', 'email', nullable=False)
+        def downgrade():
+            op.alter_column('users', 'email', nullable=True)
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "NOT NULL without reverting nullable" not in patterns
+
+
+def test_bulk_insert_no_reverse_warning(tmp_path):
+    """op.bulk_insert() without DELETE in downgrade triggers warning."""
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        import sqlalchemy as sa
+        def upgrade():
+            op.bulk_insert(sa.table('roles'), [{'id': 1, 'name': 'admin'}])
+        def downgrade():
+            pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "bulk_insert without reverse" in patterns
+
+
+def test_bulk_insert_with_delete_is_safe(tmp_path):
+    """op.bulk_insert() with op.execute('DELETE ...') in downgrade is safe."""
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        import sqlalchemy as sa
+        def upgrade():
+            op.bulk_insert(sa.table('roles'), [{'id': 1, 'name': 'admin'}])
+        def downgrade():
+            op.execute("DELETE FROM roles WHERE id = 1")
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "bulk_insert without reverse" not in patterns
+
+
+def test_not_null_raw_sql_warning(tmp_path):
+    """Raw SQL SET NOT NULL without DROP NOT NULL in downgrade triggers warning."""
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute('ALTER TABLE users ALTER COLUMN email SET NOT NULL')
+        def downgrade():
+            pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "NOT NULL via raw SQL without reverse" in patterns
+
+
+def test_context_execute_warning(tmp_path):
+    """context.execute() in upgrade without reverse triggers warning."""
+    migration(tmp_path, "001.py", """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        def upgrade():
+            context.execute('UPDATE users SET active = 1')
+        def downgrade():
+            pass
+    """)
+    patterns = [w.pattern for w in analyze_migrations(str(tmp_path))]
+    assert "context.execute without reverse" in patterns
+
+
+def test_syntax_error_migration_reported(tmp_path):
+    """A migration file with a syntax error is reported as an error."""
+    (tmp_path / "001.py").write_text("def upgrade(: pass\n")  # invalid syntax
+    warnings = analyze_migrations(str(tmp_path))
+    assert any(w.pattern == "Syntax error" for w in warnings)
+    assert any(w.severity == "error" for w in warnings)

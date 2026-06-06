@@ -12,8 +12,48 @@ from .core.seeder import SmartSeeder
 from .core.verifier import RevisionResult, RollbackVerifier
 
 
+def _auto_detect_django(config: MRTConfig) -> MRTConfig:
+    """
+    If django_settings is not set but DJANGO_SETTINGS_MODULE is in the environment
+    and alembic.ini is absent, automatically switch to Django mode.
+    Returns a (possibly updated) MRTConfig.
+    """
+    import os
+    from pathlib import Path
+
+    if config.django_settings is not None:
+        return config  # already explicit
+
+    env_settings = os.environ.get("DJANGO_SETTINGS_MODULE")
+    if not env_settings:
+        return config  # no Django env var
+
+    alembic_missing = not Path(config.alembic_ini).exists()
+    if not alembic_missing:
+        return config  # alembic.ini exists → user probably wants Alembic mode
+
+    try:
+        import django  # noqa: F401
+    except ImportError:
+        return config  # Django not installed
+
+    import warnings
+
+    warnings.warn(
+        f"pytest-mrt: DJANGO_SETTINGS_MODULE='{env_settings}' detected and alembic.ini "
+        f"not found — automatically using Django mode. "
+        f"To make this explicit, set django_settings='{env_settings}' in MRTConfig.",
+        stacklevel=3,
+    )
+
+    from dataclasses import replace
+
+    return replace(config, django_settings=env_settings)
+
+
 class MRTFixture:
     def __init__(self, config: MRTConfig):
+        config = _auto_detect_django(config)
         self._config = config
         self._django_mode = config.django_settings is not None
 
@@ -37,6 +77,20 @@ class MRTFixture:
             self._seeder = SmartSeeder(self._django_runner.engine)
             self._verifier = None  # type: ignore[assignment]
         else:
+            from pathlib import Path as _Path
+
+            if not _Path(config.alembic_ini).exists():
+                _hint = (
+                    f"\n\n  alembic.ini not found: '{config.alembic_ini}'\n\n"
+                    "  If you are using Django migrations (not Alembic), use:\n\n"
+                    "    config._mrt_config = MRTConfig(\n"
+                    "        db_url=os.environ['TEST_DATABASE_URL'],\n"
+                    "        django_settings='myproject.settings_test',\n"
+                    "    )\n\n"
+                    "  See: https://croc100.github.io/pytest-mrt/quickstart/#django"
+                )
+                raise FileNotFoundError(_hint)
+
             self._runner = MigrationRunner(config.alembic_ini, config.db_url)
             self._seeder = SmartSeeder(self._runner.engine)
             self._verifier = RollbackVerifier(

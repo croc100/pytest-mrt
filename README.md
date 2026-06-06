@@ -2,6 +2,8 @@
 
 <p align="center">
   <a href="https://pypi.org/project/pytest-mrt"><img src="https://img.shields.io/pypi/v/pytest-mrt?color=blue" alt="PyPI"></a>
+  <a href="https://pepy.tech/project/pytest-mrt"><img src="https://static.pepy.tech/badge/pytest-mrt" alt="Downloads"></a>
+  <a href="https://github.com/croc100/pytest-mrt/network/dependents"><img src="https://img.shields.io/badge/used%20by-see%20dependents-informational" alt="Used by"></a>
   <a href="https://github.com/croc100/pytest-mrt/actions"><img src="https://img.shields.io/github/actions/workflow/status/croc100/pytest-mrt/ci.yml?branch=main&label=tests" alt="CI"></a>
   <a href="https://codecov.io/gh/croc100/pytest-mrt"><img src="https://codecov.io/gh/croc100/pytest-mrt/graph/badge.svg?token=CODECOV_TOKEN" alt="Coverage"></a>
   <img src="https://img.shields.io/badge/coverage-88%25-brightgreen" alt="Coverage 88%">

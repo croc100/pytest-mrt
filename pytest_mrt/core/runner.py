@@ -13,6 +13,28 @@ class MigrationRunner:
         self.db_url = db_url
         self.alembic_cfg = AlembicConfig(alembic_ini)
         self.alembic_cfg.set_main_option("sqlalchemy.url", db_url)
+
+        # Check for env.py early and give a clear error for Django users
+        try:
+            script = ScriptDirectory.from_config(self.alembic_cfg)
+            import os as _os
+
+            env_py = _os.path.join(script.dir, "env.py")
+            if not _os.path.exists(env_py):
+                raise FileNotFoundError(
+                    f"env.py not found in '{script.dir}'.\n\n"
+                    "  This is required for Alembic dynamic verification.\n"
+                    "  If you are using Django migrations, use django_settings instead:\n\n"
+                    "    MRTConfig(\n"
+                    "        db_url=os.environ['TEST_DATABASE_URL'],\n"
+                    "        django_settings='myproject.settings_test',\n"
+                    "    )\n\n"
+                    "  See: https://croc100.github.io/pytest-mrt/quickstart/#django"
+                )
+        except Exception as exc:
+            if "env.py" in str(exc) or "django_settings" in str(exc):
+                raise
+            # Other ScriptDirectory errors are caught later during actual migration runs
         # NullPool for SQLite: each connection is closed immediately after use,
         # preventing ResourceWarning from unclosed file handles in tests.
         from sqlalchemy.engine.url import make_url

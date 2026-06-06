@@ -128,3 +128,47 @@ def test_verify_restored_fails_missing_column(engine):
     after = SchemaSnapshot.capture(engine)
     issues = SchemaDiff().verify_restored(before, after)
     assert any("email" in i.message for i in issues)
+
+
+def test_diff_compute_type_changed(engine):
+    """SchemaDiff.compute detects column type changes."""
+    _create_users(engine)
+    before = SchemaSnapshot.capture(engine)
+    # SQLite doesn't support ALTER COLUMN TYPE, so we recreate
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN score REAL"))
+    after = SchemaSnapshot.capture(engine)
+    diff = SchemaDiff.compute(before, after)
+    assert "users" in diff.added_columns
+    assert "score" in diff.added_columns["users"]
+
+
+def test_verify_restored_fails_extra_column(engine):
+    """verify_restored detects columns added during rollback that shouldn't be there."""
+    _create_users(engine)
+    before = SchemaSnapshot.capture(engine)
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN score REAL"))
+    after_rollback = SchemaSnapshot.capture(engine)
+    issues = SchemaDiff().verify_restored(before, after_rollback)
+    assert any("score" in i.message for i in issues)
+
+
+def test_diff_compute_dropped_column(engine):
+    """SchemaDiff.compute detects dropped columns."""
+    _create_users(engine)
+    before = SchemaSnapshot.capture(engine)
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users DROP COLUMN email"))
+    after = SchemaSnapshot.capture(engine)
+    diff = SchemaDiff.compute(before, after)
+    assert "users" in diff.dropped_columns
+    assert "email" in diff.dropped_columns["users"]
+
+
+def test_snapshot_captures_nullable(engine):
+    """SchemaSnapshot records nullable flag correctly."""
+    _create_users(engine)
+    snap = SchemaSnapshot.capture(engine)
+    assert snap.tables["users"].columns["name"].nullable is False
+    assert snap.tables["users"].columns["email"].nullable is True

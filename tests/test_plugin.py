@@ -555,3 +555,81 @@ def test_mrt_fixture_risk_score(alembic_env):
     assert not result.passed
     assert result.risk_score > 0
     fixture.reset()
+
+
+# ── _auto_detect_django ────────────────────────────────────────────────
+
+def test_auto_detect_django_switches_mode_when_env_set_and_no_ini(tmp_path, monkeypatch):
+    """_auto_detect_django sets django_settings from env when alembic.ini is missing."""
+    import unittest.mock as mock
+    from pytest_mrt.plugin import _auto_detect_django
+
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
+    monkeypatch.chdir(tmp_path)  # no alembic.ini here
+
+    # Ensure Django import succeeds even if not installed
+    with mock.patch.dict("sys.modules", {"django": mock.MagicMock()}):
+        cfg = MRTConfig(db_url="sqlite:///test.db")
+        result = _auto_detect_django(cfg)
+    assert result.django_settings == "myproject.settings_test"
+
+
+def test_auto_detect_django_no_switch_when_alembic_ini_exists(tmp_path, monkeypatch):
+    """_auto_detect_django does not switch when alembic.ini exists."""
+    from pytest_mrt.plugin import _auto_detect_django
+
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
+    (tmp_path / "alembic.ini").write_text("[alembic]\n")
+    monkeypatch.chdir(tmp_path)
+
+    cfg = MRTConfig(alembic_ini=str(tmp_path / "alembic.ini"), db_url="sqlite:///test.db")
+    result = _auto_detect_django(cfg)
+    assert result.django_settings is None
+
+
+def test_auto_detect_django_no_switch_when_env_not_set(tmp_path, monkeypatch):
+    """_auto_detect_django does nothing when DJANGO_SETTINGS_MODULE is not set."""
+    from pytest_mrt.plugin import _auto_detect_django
+
+    monkeypatch.delenv("DJANGO_SETTINGS_MODULE", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    cfg = MRTConfig(db_url="sqlite:///test.db")
+    result = _auto_detect_django(cfg)
+    assert result.django_settings is None
+
+
+def test_auto_detect_django_no_switch_when_explicit_django_settings(tmp_path, monkeypatch):
+    """_auto_detect_django leaves explicit django_settings alone."""
+    from pytest_mrt.plugin import _auto_detect_django
+
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "env.settings")
+    monkeypatch.chdir(tmp_path)
+
+    cfg = MRTConfig(db_url="sqlite:///test.db", django_settings="explicit.settings")
+    result = _auto_detect_django(cfg)
+    assert result.django_settings == "explicit.settings"
+
+
+# ── MRTFixture missing alembic.ini ─────────────────────────────────────
+
+def test_mrt_fixture_raises_on_missing_alembic_ini(tmp_path, monkeypatch):
+    """MRTFixture raises FileNotFoundError with Django hint when alembic.ini missing."""
+    monkeypatch.delenv("DJANGO_SETTINGS_MODULE", raising=False)
+
+    cfg = MRTConfig(alembic_ini=str(tmp_path / "nonexistent.ini"), db_url="sqlite:///test.db")
+    with pytest.raises(FileNotFoundError, match="django_settings"):
+        MRTFixture(cfg)
+
+
+# ── MigrationRunner missing env.py ─────────────────────────────────────
+
+def test_migration_runner_raises_on_missing_env_py(tmp_path):
+    """MigrationRunner raises FileNotFoundError with Django hint when env.py is absent."""
+    from pytest_mrt.core.runner import MigrationRunner
+
+    ini = tmp_path / "alembic.ini"
+    ini.write_text(f"[alembic]\nscript_location = {tmp_path}\n")
+
+    with pytest.raises(FileNotFoundError, match="django_settings"):
+        MigrationRunner(str(ini), "sqlite:///test.db")
