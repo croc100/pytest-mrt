@@ -263,6 +263,17 @@ def test_topological_order_self_reference():
     assert "nodes" in order
 
 
+def test_topological_order_mutual_fk_no_infinite_loop():
+    """Circular FK between two tables must not loop infinitely."""
+    tables = {
+        "a": TableInfo("a", fk_tables=["b"]),
+        "b": TableInfo("b", fk_tables=["a"]),
+    }
+    order = _topological_order(tables)
+    assert set(order) == {"a", "b"}
+    assert len(order) == 2
+
+
 # ── SmartSeeder ───────────────────────────────────────────────────────
 
 def test_seeder_seed_table_basic(engine):
@@ -421,3 +432,55 @@ def test_seeder_skips_nullable_columns(engine):
     assert len(rows) == 3
     # body is nullable, so it should be NULL in seeded rows
     assert all(row[1] is None for row in rows)
+
+
+# ── SmartSeeder._is_auto_pk ───────────────────────────────────────────
+
+def test_is_auto_pk_serial_type(engine):
+    """SERIAL type string is recognised as auto-generated PK."""
+    seeder = SmartSeeder(engine)
+    col = ColumnInfo(name="id", type_str="SERIAL", nullable=False, primary_key=True)
+    assert seeder._is_auto_pk(col) is True
+
+
+def test_is_auto_pk_auto_increment_type(engine):
+    """AUTO_INCREMENT (MySQL) is recognised as auto-generated PK."""
+    seeder = SmartSeeder(engine)
+    col = ColumnInfo(name="id", type_str="INT AUTO_INCREMENT", nullable=False, primary_key=True)
+    assert seeder._is_auto_pk(col) is True
+
+
+def test_is_auto_pk_nextval_default(engine):
+    """Sequence-backed PK detected via nextval() in the column default."""
+    seeder = SmartSeeder(engine)
+    col = ColumnInfo(name="id", type_str="INTEGER", nullable=False, primary_key=True,
+                     default="nextval('items_id_seq'::regclass)")
+    assert seeder._is_auto_pk(col) is True
+
+
+def test_is_auto_pk_plain_integer_is_not_auto(engine):
+    """Plain INTEGER PK with no default is not auto-generated."""
+    seeder = SmartSeeder(engine)
+    col = ColumnInfo(name="id", type_str="INTEGER", nullable=False, primary_key=True)
+    assert seeder._is_auto_pk(col) is False
+
+
+def test_seed_table_skips_serial_pk_row(engine):
+    """seed_table inserts nothing when the only non-nullable column is a SERIAL PK."""
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE only_serial (id INTEGER NOT NULL PRIMARY KEY)"))
+
+    seeder = SmartSeeder(engine)
+    # Construct TableInfo manually so type_str is SERIAL (as PG would reflect it)
+    table = TableInfo(
+        name="only_serial",
+        columns={
+            "id": ColumnInfo(name="id", type_str="SERIAL", nullable=False, primary_key=True),
+        },
+        pk_cols=["id"],
+    )
+    seeder.seed_table(table)
+
+    with engine.connect() as conn:
+        count = conn.execute(text("SELECT COUNT(*) FROM only_serial")).scalar()
+    assert count == 0
