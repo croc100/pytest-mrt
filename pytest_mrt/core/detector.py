@@ -814,8 +814,16 @@ def analyze_migrations(versions_dir: str) -> list[RiskWarning]:
             )
             continue
         migrations.append(m)
+        source_lines = source.splitlines()
         for check in _PER_FILE_CHECKS:
-            warnings.extend(check(m))
+            for w in check(m):
+                if (
+                    w.line is not None
+                    and w.line <= len(source_lines)
+                    and "# mrt: ignore" in source_lines[w.line - 1]
+                ):
+                    continue
+                warnings.append(w)
 
     warnings.extend(_check_multiple_heads(migrations))
     warnings.extend(analyze_migration_graph(versions_dir))
