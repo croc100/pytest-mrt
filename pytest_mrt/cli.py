@@ -49,7 +49,15 @@ def check(
     # Auto-detect Django vs Alembic
     from pathlib import Path as _Path
 
-    sample_files = list(_Path(versions_dir).rglob("*.py"))[:5]
+    _path = _Path(versions_dir)
+    if not _path.exists():
+        console.print(f"[red]Error: path does not exist: {versions_dir}[/red]")
+        raise typer.Exit(1)
+    if not _path.is_dir():
+        console.print(f"[red]Error: not a directory: {versions_dir}[/red]")
+        raise typer.Exit(1)
+
+    sample_files = list(_path.rglob("*.py"))[:5]
     is_django = any(is_django_migration(p) for p in sample_files)
 
     if is_django:
