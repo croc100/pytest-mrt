@@ -38,6 +38,7 @@ def _auto_detect_django(config: MRTConfig) -> MRTConfig:
         return config  # Django not installed
 
     import warnings
+
     warnings.warn(
         f"pytest-mrt: DJANGO_SETTINGS_MODULE='{env_settings}' detected and alembic.ini "
         f"not found — automatically using Django mode. "
@@ -46,6 +47,7 @@ def _auto_detect_django(config: MRTConfig) -> MRTConfig:
     )
 
     from dataclasses import replace
+
     return replace(config, django_settings=env_settings)
 
 

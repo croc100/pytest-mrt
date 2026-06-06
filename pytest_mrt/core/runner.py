@@ -18,6 +18,7 @@ class MigrationRunner:
         try:
             script = ScriptDirectory.from_config(self.alembic_cfg)
             import os as _os
+
             env_py = _os.path.join(script.dir, "env.py")
             if not _os.path.exists(env_py):
                 raise FileNotFoundError(

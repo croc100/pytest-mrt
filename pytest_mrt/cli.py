@@ -240,9 +240,7 @@ def _init_django(detected_settings: str | None) -> None:
         console.print(f"[dim]DJANGO_SETTINGS_MODULE={detected_settings}[/dim]")
         settings = typer.prompt("Django settings module", default=detected_settings)
     else:
-        console.print(
-            "[yellow]Tip:[/yellow] Set DJANGO_SETTINGS_MODULE or provide it below."
-        )
+        console.print("[yellow]Tip:[/yellow] Set DJANGO_SETTINGS_MODULE or provide it below.")
         settings = typer.prompt("Django settings module (e.g. myproject.settings_test)")
 
     db_url = typer.prompt(
