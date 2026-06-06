@@ -12,8 +12,46 @@ from .core.seeder import SmartSeeder
 from .core.verifier import RevisionResult, RollbackVerifier
 
 
+def _auto_detect_django(config: MRTConfig) -> MRTConfig:
+    """
+    If django_settings is not set but DJANGO_SETTINGS_MODULE is in the environment
+    and alembic.ini is absent, automatically switch to Django mode.
+    Returns a (possibly updated) MRTConfig.
+    """
+    import os
+    from pathlib import Path
+
+    if config.django_settings is not None:
+        return config  # already explicit
+
+    env_settings = os.environ.get("DJANGO_SETTINGS_MODULE")
+    if not env_settings:
+        return config  # no Django env var
+
+    alembic_missing = not Path(config.alembic_ini).exists()
+    if not alembic_missing:
+        return config  # alembic.ini exists → user probably wants Alembic mode
+
+    try:
+        import django  # noqa: F401
+    except ImportError:
+        return config  # Django not installed
+
+    import warnings
+    warnings.warn(
+        f"pytest-mrt: DJANGO_SETTINGS_MODULE='{env_settings}' detected and alembic.ini "
+        f"not found — automatically using Django mode. "
+        f"To make this explicit, set django_settings='{env_settings}' in MRTConfig.",
+        stacklevel=3,
+    )
+
+    from dataclasses import replace
+    return replace(config, django_settings=env_settings)
+
+
 class MRTFixture:
     def __init__(self, config: MRTConfig):
+        config = _auto_detect_django(config)
         self._config = config
         self._django_mode = config.django_settings is not None
 
