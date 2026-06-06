@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
     pass
 
+# Default model for `mrt explain`. Override via MRTConfig(explain_model=...).
+DEFAULT_EXPLAIN_MODEL = "claude-opus-4-5"
+
 
 @dataclass
 class MRTConfig:
@@ -69,3 +72,7 @@ class MRTConfig:
     # Path to the Django project root. Added to sys.path before import.
     # Required if the project is not on the Python path already.
     django_project_dir: str | None = None
+
+    # Model used by `mrt explain`. Defaults to DEFAULT_EXPLAIN_MODEL.
+    # Override to use a different Claude model, e.g. "claude-3-5-haiku-latest".
+    explain_model: str = DEFAULT_EXPLAIN_MODEL

@@ -614,11 +614,11 @@ def test_auto_detect_django_no_switch_when_explicit_django_settings(tmp_path, mo
 # ── MRTFixture missing alembic.ini ─────────────────────────────────────
 
 def test_mrt_fixture_raises_on_missing_alembic_ini(tmp_path, monkeypatch):
-    """MRTFixture raises FileNotFoundError with Django hint when alembic.ini missing."""
+    """MRTFixture calls pytest.fail with a Django hint when alembic.ini is missing."""
     monkeypatch.delenv("DJANGO_SETTINGS_MODULE", raising=False)
 
     cfg = MRTConfig(alembic_ini=str(tmp_path / "nonexistent.ini"), db_url="sqlite:///test.db")
-    with pytest.raises(FileNotFoundError, match="django_settings"):
+    with pytest.raises(pytest.fail.Exception, match="django_settings"):
         MRTFixture(cfg)
 
 

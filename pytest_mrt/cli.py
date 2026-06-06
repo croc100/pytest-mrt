@@ -9,6 +9,7 @@ from rich.table import Table
 
 from . import __version__
 from .adapters.django_detector import analyze_django_migrations, is_django_migration
+from .config import DEFAULT_EXPLAIN_MODEL
 from .core.detector import analyze_migrations
 
 app = typer.Typer(
@@ -411,7 +412,7 @@ def explain(
     try:
         client = anthropic.Anthropic()
         message = client.messages.create(
-            model="claude-opus-4-5",
+            model=DEFAULT_EXPLAIN_MODEL,
             max_tokens=1024,
             messages=[
                 {

@@ -89,7 +89,7 @@ class MRTFixture:
                     "    )\n\n"
                     "  See: https://croc100.github.io/pytest-mrt/quickstart/#django"
                 )
-                raise FileNotFoundError(_hint)
+                pytest.fail(_hint, pytrace=False)
 
             self._runner = MigrationRunner(config.alembic_ini, config.db_url)
             self._seeder = SmartSeeder(self._runner.engine)
