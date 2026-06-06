@@ -561,13 +561,16 @@ def test_mrt_fixture_risk_score(alembic_env):
 
 def test_auto_detect_django_switches_mode_when_env_set_and_no_ini(tmp_path, monkeypatch):
     """_auto_detect_django sets django_settings from env when alembic.ini is missing."""
+    import unittest.mock as mock
     from pytest_mrt.plugin import _auto_detect_django
 
     monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
     monkeypatch.chdir(tmp_path)  # no alembic.ini here
 
-    cfg = MRTConfig(db_url="sqlite:///test.db")
-    result = _auto_detect_django(cfg)
+    # Ensure Django import succeeds even if not installed
+    with mock.patch.dict("sys.modules", {"django": mock.MagicMock()}):
+        cfg = MRTConfig(db_url="sqlite:///test.db")
+        result = _auto_detect_django(cfg)
     assert result.django_settings == "myproject.settings_test"
 
 

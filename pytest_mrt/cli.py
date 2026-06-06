@@ -152,8 +152,6 @@ def init() -> None:
 
     Auto-detects Alembic or Django project type.
     """
-    import os
-
     # ── Detect project type ───────────────────────────────────────────
     is_django, django_settings = _detect_django_project()
 
@@ -237,8 +235,6 @@ def _append_conftest(path: Path, alembic_ini: str, db_url: str) -> None:
 
 def _init_django(detected_settings: str | None) -> None:
     """Interactive init for Django projects."""
-    import os
-
     # Resolve settings module
     if detected_settings:
         console.print(f"[dim]DJANGO_SETTINGS_MODULE={detected_settings}[/dim]")
