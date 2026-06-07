@@ -66,6 +66,11 @@ breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the sta
 
 ---
 
+## v1.3.0 — Incremental CI + pre-commit integration (planned)
+
+- **`mrt check --since <revision>`** — check only migrations added since a given revision; eliminates the need to re-run the full history on every PR in large codebases
+- **pre-commit hook integration** — `.pre-commit-hooks.yaml` + registration on pre-commit.com; run `mrt check` automatically before every push without manual CI setup
+
 ## Next / Under consideration
 
 These are not committed to a specific version yet:
