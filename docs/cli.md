@@ -9,7 +9,7 @@ pytest-mrt has two interfaces:
 
 | Command | What it does | Needs DB? |
 |---|---|---|
-| `mrt check <dir>` | Static analysis — 26 risk patterns | No |
+| `mrt check <dir>` | Static analysis — 44 risk patterns | No |
 | `mrt fix <file>` | Auto-generate missing or broken downgrade() | No |
 | `mrt report <dir>` | HTML safety report of entire migration history | No |
 | `mrt explain <file>` | AI explanation in plain English | No (needs API key) |
@@ -68,16 +68,16 @@ Use the exit code in CI to fail the pipeline automatically.
 
 ```
                          Rollback Risk Analysis
-╭──────────┬─────────────────────────────┬─────────┬─────────────────────────────────────╮
-│ Revision │ Pattern                     │ Sev     │ Message                             │
-├──────────┼─────────────────────────────┼─────────┼─────────────────────────────────────┤
-│ 003      │ DROP COLUMN in upgrade      │ error   │ Column dropped — data permanently   │
-│          │                             │         │ lost on rollback                    │
-├──────────┼─────────────────────────────┼─────────┼─────────────────────────────────────┤
-│ 004      │ No-op downgrade             │ error   │ downgrade() does nothing            │
-├──────────┼─────────────────────────────┼─────────┼─────────────────────────────────────┤
-│ 005      │ INDEX without CONCURRENTLY  │ warning │ Locks table during index build      │
-╰──────────┴─────────────────────────────┴─────────┴─────────────────────────────────────╯
+╭──────────┬─────────────────────────────┬─────────┬──────┬─────────┬──────────────────────────────────╮
+│ Revision │ Pattern                     │ Sev     │ Line │ Code    │ Message                          │
+├──────────┼─────────────────────────────┼─────────┼──────┼─────────┼──────────────────────────────────┤
+│ 003      │ DROP COLUMN in upgrade      │ error   │   14 │ MRT103  │ Column dropped — data            │
+│          │                             │         │      │         │ permanently lost on rollback     │
+├──────────┼─────────────────────────────┼─────────┼──────┼─────────┼──────────────────────────────────┤
+│ 004      │ No-op downgrade             │ error   │    8 │ MRT102  │ downgrade() does nothing         │
+├──────────┼─────────────────────────────┼─────────┼──────┼─────────┼──────────────────────────────────┤
+│ 005      │ INDEX without CONCURRENTLY  │ warning │   19 │ MRT207  │ Locks table during index build   │
+╰──────────┴─────────────────────────────┴─────────┴──────┴─────────┴──────────────────────────────────╯
 
 2 error(s), 1 warning(s)
 ```
@@ -94,7 +94,7 @@ When there are no problems:
 
 ```bash
 mrt version
-# pytest-mrt 0.2.1
+# pytest-mrt 1.2.0
 ```
 
 ---

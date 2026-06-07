@@ -1,6 +1,6 @@
 # Risk Patterns
 
-pytest-mrt detects **26 patterns** across two categories.
+pytest-mrt detects **44 patterns** across two categories.
 
 Run static analysis instantly — no database needed:
 
