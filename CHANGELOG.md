@@ -7,6 +7,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.1.0] — 2026-06-07
+
+### Added
+- **Built-in default tests**: Five tests are now auto-collected when `MRTConfig` is registered in `conftest.py` — no imports required. Tests: `test_mrt_single_head`, `test_mrt_upgrade`, `test_mrt_downgrade_base`, `test_mrt_static_no_errors`, `test_mrt_schema_matches_models`. Disable with `mrt_default_tests = "false"` in `pytest.ini` / `pyproject.toml`.
+- **Schema drift detection**: `MRTFixture.assert_schema_matches()` — fails if the DB schema after running all migrations does not match the SQLAlchemy model definitions. Accepts a `MetaData` instance or an import-path string (`"myapp.models:Base"`). Django mode delegates to `manage.py makemigrations --check`.
+- **`mrt drift` CLI command**: `mrt drift myapp.models:Base --config alembic.ini --db-url sqlite:///test.db` — runs migrations to head, compares schema against models, prints a diff table, exits 1 on drift.
+- **`MRTConfig.target_metadata`**: New field (`str | None`) — import path for the SQLAlchemy `Base` or `MetaData` used by `assert_schema_matches()` and `test_mrt_schema_matches_models`.
+
+---
+
 ## [1.0.1] — 2026-06-06
 
 ### Fixed

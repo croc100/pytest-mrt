@@ -72,4 +72,8 @@ class MigrationRunner:
 
     def get_versions_dir(self) -> str:
         script = ScriptDirectory.from_config(self.alembic_cfg)
-        return script.dir
+        # script.versions returns the single version_locations path (where .py migration files live).
+        # script.dir is the script_location root (contains env.py, script.py.mako, etc.) — not what we want.
+        # script.versions raises CommandError when multiple version_locations are configured; surface
+        # that instead of silently falling back to script.dir (which contains non-migration files).
+        return script.versions
