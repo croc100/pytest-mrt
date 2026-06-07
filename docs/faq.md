@@ -31,20 +31,23 @@ pytest-mrt auto-detects which framework you're using based on whether the migrat
 | | Alembic | Django |
 |---|---|---|
 | **Static analysis** | ✅ Full | ✅ Full |
-| **Dynamic rollback** | ✅ Full | ⚠️ Not yet (use Alembic adapter) |
+| **Dynamic rollback** | ✅ Full | ✅ Full (`DjangoMigrationRunner`) |
 | **`mrt fix`** | ✅ | ❌ (Django doesn't have a `downgrade()`) |
 
 ### Django migrations don't have `downgrade()` — how does pytest-mrt help?
 
-For Django, pytest-mrt focuses on **static analysis**: detecting `RemoveField`, `DeleteModel`, `RunPython` without `reverse_code`, `RunSQL` without `reverse_sql`, and unsafe `AddField` patterns. These are the most common sources of irreversible Django migrations.
+For Django, pytest-mrt provides both **static analysis** and **dynamic rollback verification**:
 
-Dynamic rollback testing for Django (actually running `migrate --backwards`) is on the roadmap.
+- **Static**: detects `RemoveField`, `DeleteModel`, `RunPython` without `reverse_code`, `RunSQL` without `reverse_sql`, unsafe `AddField` patterns, and more (10 Django-specific patterns).
+- **Dynamic**: `DjangoMigrationRunner` runs the full `migrate` / `migrate --backwards` cycle and verifies data integrity, just like Alembic mode.
 
 ---
 
 ## Configuration
 
 ### How do I skip a migration I know is irreversible?
+
+For **dynamic tests**, use `skip` in `MRTConfig`:
 
 ```python
 config._mrt_config = MRTConfig(
@@ -55,6 +58,15 @@ config._mrt_config = MRTConfig(
 ```
 
 Skipped revisions appear in reports as "skipped" with the documented reason. **Always include a reason** — this creates an audit trail for your team.
+
+For **static analysis** (`mrt check`), suppress a specific warning on a line with `# noqa: MRTxxx`:
+
+```python
+def upgrade():
+    op.drop_column("users", "phone")  # noqa: MRT103
+```
+
+Use a bare `# noqa` to suppress all MRT warnings on a line.
 
 ### How do I provide custom seed data for a table?
 
@@ -161,8 +173,8 @@ See the [performance guide](best-practices.md#performance) for strategies includ
 | SQLite | ✅ | ✅ |
 | PostgreSQL | ✅ | ✅ (`pip install pytest-mrt[postgres]`) |
 | MySQL / MariaDB | ✅ | ✅ (`pip install pytest-mrt[mysql]`) |
-| Oracle | ✅ (partial) | ❌ Planned |
-| SQL Server | ✅ (partial) | ❌ Planned |
+| Oracle | ✅ | ✅ (`pip install pytest-mrt[oracle]`) |
+| SQL Server | ✅ | ✅ (`pip install pytest-mrt[mssql]`) |
 
 ### Can I test against multiple databases in CI?
 

@@ -175,7 +175,7 @@ This is fast (no DB needed) and catches things like:
 - `op.drop_column()` in upgrade — data loss even if downgrade re-adds the column
 - `def downgrade(): pass` — rollback silently does nothing
 - `ALTER TYPE ADD VALUE` — can't be rolled back in PostgreSQL
-- ...and [21 more patterns](patterns.md)
+- ...and [40+ more patterns](patterns.md)
 
 **Exit codes:**
 
@@ -189,6 +189,42 @@ Add `--strict` to also fail on warnings:
 ```bash
 mrt check migrations/versions/ --strict
 ```
+
+---
+
+## Built-in default tests
+
+When `MRTConfig` is configured, pytest-mrt automatically injects 6 safety tests into your suite — no extra test files needed:
+
+| Test | What it checks |
+|---|---|
+| `test_mrt_single_head` | Migration history has exactly one head |
+| `test_mrt_upgrade` | `alembic upgrade head` completes without error |
+| `test_mrt_downgrade_base` | Full up → down → up cycle succeeds |
+| `test_mrt_up_down_consistency` | Every migration is safely reversible |
+| `test_mrt_static_no_errors` | Zero static analysis errors |
+| `test_mrt_schema_matches_models` | DB schema matches ORM models (requires `target_metadata`) |
+
+To opt out of a specific test:
+
+```python
+MRTConfig(
+    skip_default_tests={"test_mrt_schema_matches_models"},
+)
+```
+
+---
+
+## Suppressing known warnings
+
+Use `# noqa: MRTxxx` to suppress a specific warning on a line (ruff/flake8 convention):
+
+```python
+def upgrade():
+    op.drop_column("users", "legacy_col")  # noqa: MRT103
+```
+
+Use bare `# noqa` to suppress all MRT warnings on a line.
 
 ---
 
@@ -299,6 +335,6 @@ Run `alembic upgrade head` on your test database first, then run the tests again
 
 ## What to read next
 
-- [All 24 risk patterns explained →](patterns.md)
+- [All 44 risk patterns explained →](patterns.md)
 - [CLI reference →](cli.md)
 - [Contributing a new pattern →](contributing.md)
