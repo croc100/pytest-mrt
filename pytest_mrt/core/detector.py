@@ -23,6 +23,27 @@ class RiskWarning:
     message: str
     severity: str  # "error" | "warning"
     line: int | None = None
+    code: str = ""  # e.g. "MRT201"
+
+
+def _is_suppressed(line_content: str, code: str) -> bool:
+    """Return True if the source line carries a suppression comment for *code*.
+
+    Recognised forms (ruff/flake8 convention):
+      # noqa             — suppress all MRT codes on this line
+      # noqa: MRT201     — suppress one specific code
+      # noqa: MRT201, MRT202  — suppress multiple codes
+      # mrt: ignore      — legacy alias (kept for backwards compatibility)
+    """
+    if "# mrt: ignore" in line_content:
+        return True
+    m = re.search(r"#\s*noqa(?::\s*([A-Z0-9,\s]+))?", line_content)
+    if m is None:
+        return False
+    raw = m.group(1)
+    if raw is None:
+        return True  # bare # noqa — suppress everything
+    return code in {c.strip() for c in raw.split(",")}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -31,9 +52,14 @@ class RiskWarning:
 
 
 def _warn(
-    m: MigrationAST, pattern: str, message: str, severity: str, line: int | None = None
+    m: MigrationAST,
+    pattern: str,
+    message: str,
+    severity: str,
+    line: int | None = None,
+    code: str = "",
 ) -> RiskWarning:
-    return RiskWarning(m.revision, m.filename, pattern, message, severity, line)
+    return RiskWarning(m.revision, m.filename, pattern, message, severity, line, code)
 
 
 def _sql(call) -> str:
@@ -53,6 +79,7 @@ def _check_downgrade_exists(m: MigrationAST) -> list[RiskWarning]:
                 "Missing downgrade",
                 "No downgrade() function — migration is permanently irreversible",
                 "error",
+                code="MRT101",
             )
         ]
     return []
@@ -67,6 +94,7 @@ def _check_noop_downgrade(m: MigrationAST) -> list[RiskWarning]:
                 "downgrade() body is empty or pass — rollback silently does nothing",
                 "error",
                 line=m.downgrade_fn.lineno,
+                code="MRT102",
             )
         ]
     return []
@@ -86,6 +114,7 @@ def _check_drop_column_in_upgrade(m: MigrationAST) -> list[RiskWarning]:
                     "column data is permanently lost even if downgrade re-adds the column",
                     "error",
                     line=c.node.lineno,
+                    code="MRT201",
                 )
             )
     return warnings
@@ -103,6 +132,7 @@ def _check_drop_table_in_upgrade(m: MigrationAST) -> list[RiskWarning]:
                     f"op.drop_table('{table}') — all rows permanently lost on rollback",
                     "error",
                     line=c.node.lineno,
+                    code="MRT202",
                 )
             )
     return warnings
@@ -118,6 +148,7 @@ def _check_truncate(m: MigrationAST) -> list[RiskWarning]:
                     "TRUNCATE in upgrade destroys all data — cannot be rolled back",
                     "error",
                     line=c.node.lineno,
+                    code="MRT203",
                 )
             ]
     return []
@@ -142,6 +173,7 @@ def _check_not_null_no_default(m: MigrationAST) -> list[RiskWarning]:
                             "will fail on non-empty tables and leave column in invalid state on rollback",
                             "warning",
                             line=c.node.lineno,
+                            code="MRT401",
                         )
                     )
     return warnings
@@ -159,6 +191,7 @@ def _check_raw_execute(m: MigrationAST) -> list[RiskWarning]:
                 "manually verify the downgrade correctly reverses this",
                 "warning",
                 line=up_exec[0].node.lineno,
+                code="MRT104",
             )
         ]
     return []
@@ -176,6 +209,7 @@ def _check_data_migration_no_reverse(m: MigrationAST) -> list[RiskWarning]:
                 "Bulk UPDATE in upgrade but downgrade has no corresponding UPDATE — "
                 "data transformation is one-way",
                 "warning",
+                code="MRT103",
             )
         ]
     return []
@@ -200,6 +234,7 @@ def _check_rename_table_without_reverse(m: MigrationAST) -> list[RiskWarning]:
                         f"Table renamed '{old}' → '{new}' but downgrade does not rename it back",
                         "error",
                         line=c.node.lineno,
+                        code="MRT301",
                     )
                 )
     return warnings
@@ -229,6 +264,7 @@ def _check_rename_column_without_reverse(m: MigrationAST) -> list[RiskWarning]:
                 "but downgrade does not rename it back",
                 "error",
                 line=c.node.lineno,
+                code="MRT302",
             )
         ]
     return []
@@ -250,6 +286,7 @@ def _check_drop_view(m: MigrationAST) -> list[RiskWarning]:
                         "queries against this view will fail after rollback",
                         "error",
                         line=c.node.lineno,
+                        code="MRT207",
                     )
                 ]
     return []
@@ -268,6 +305,7 @@ def _check_sequence_reset(m: MigrationAST) -> list[RiskWarning]:
                         "counter will not revert on rollback, causing ID gaps or duplicates",
                         "warning",
                         line=c.node.lineno,
+                        code="MRT501",
                     )
                 ]
     return []
@@ -284,6 +322,7 @@ def _check_enum_type_change(m: MigrationAST) -> list[RiskWarning]:
                     "if any row already uses the new value",
                     "error",
                     line=c.node.lineno,
+                    code="MRT304",
                 )
             ]
     return []
@@ -302,6 +341,7 @@ def _check_multi_step_destructive(m: MigrationAST) -> list[RiskWarning]:
                 "Migration adds a column, migrates data, then drops the original in one step — "
                 "the combined operation is irreversible",
                 "error",
+                code="MRT208",
             )
         ]
     return []
@@ -322,6 +362,7 @@ def _check_cascade_delete(m: MigrationAST) -> list[RiskWarning]:
                             "FK with ON DELETE CASCADE — child rows silently deleted with parent",
                             "warning",
                             line=c.node.lineno,
+                            code="MRT204",
                         )
                     ]
     return []
@@ -342,6 +383,7 @@ def _check_index_without_concurrently(m: MigrationAST) -> list[RiskWarning]:
                         "locks table for the entire build duration",
                         "warning",
                         line=c.node.lineno,
+                        code="MRT407",
                     )
                 )
     return warnings
@@ -365,6 +407,7 @@ def _check_add_column_with_default(m: MigrationAST) -> list[RiskWarning]:
                             "with a literal value instead for a zero-lock migration",
                             "warning",
                             line=c.node.lineno,
+                            code="MRT404",
                         )
                     ]
                 if has_server_default:
@@ -377,6 +420,7 @@ def _check_add_column_with_default(m: MigrationAST) -> list[RiskWarning]:
                             "Verify your PostgreSQL version before deploying.",
                             "warning",
                             line=c.node.lineno,
+                            code="MRT405",
                         )
                     ]
     return []
@@ -393,6 +437,7 @@ def _check_unique_constraint_existing(m: MigrationAST) -> list[RiskWarning]:
                     f"Adding UNIQUE constraint '{name}' — will fail if duplicates already exist",
                     "warning",
                     line=c.node.lineno,
+                    code="MRT406",
                 )
             ]
     return []
@@ -413,6 +458,7 @@ def _check_drop_index_without_reverse(m: MigrationAST) -> list[RiskWarning]:
                 "query performance and unique guarantees are not restored",
                 "warning",
                 line=up_drops[0].node.lineno,
+                code="MRT408",
             )
         ]
     return []
@@ -438,6 +484,7 @@ def _check_drop_constraint_without_reverse(m: MigrationAST) -> list[RiskWarning]
                 "data integrity guarantees are permanently removed after rollback",
                 "warning",
                 line=up_drops[0].node.lineno,
+                code="MRT409",
             )
         ]
     return []
@@ -462,6 +509,7 @@ def _check_not_null_nullable_restore(m: MigrationAST) -> list[RiskWarning]:
                 "NOT NULL without reverting nullable",
                 "Column set NOT NULL in upgrade but downgrade does not restore nullable=True",
                 "warning",
+                code="MRT402",
             )
         ]
     return []
@@ -480,6 +528,7 @@ def _check_column_type_change(m: MigrationAST) -> list[RiskWarning]:
                     "and downgrade must restore the original type",
                     "warning",
                     line=c.node.lineno,
+                    code="MRT303",
                 )
             ]
     return []
@@ -499,6 +548,7 @@ def _check_batch_alter_drop(m: MigrationAST) -> list[RiskWarning]:
                         "data permanently lost even if downgrade re-adds the column",
                         "error",
                         line=c.node.lineno,
+                        code="MRT206",
                     )
                 )
             elif c.method == "drop_constraint":
@@ -511,6 +561,7 @@ def _check_batch_alter_drop(m: MigrationAST) -> list[RiskWarning]:
                         "downgrade must recreate it",
                         "warning",
                         line=c.node.lineno,
+                        code="MRT410",
                     )
                 )
     return warnings
@@ -535,6 +586,7 @@ def _check_not_null_raw_sql(m: MigrationAST) -> list[RiskWarning]:
                             "column stays NOT NULL after rollback",
                             "warning",
                             line=c.node.lineno,
+                            code="MRT403",
                         )
                     ]
     return []
@@ -560,6 +612,7 @@ def _check_bulk_insert_no_reverse(m: MigrationAST) -> list[RiskWarning]:
                 "rollback leaves the inserted data in the database",
                 "warning",
                 line=up_bulk[0].node.lineno,
+                code="MRT106",
             )
         ]
     return []
@@ -607,6 +660,7 @@ def _check_context_execute(m: MigrationAST) -> list[RiskWarning]:
             "verify the downgrade correctly reverses this SQL",
             "warning",
             line=ctx_calls[0].lineno,
+            code="MRT105",
         )
     ]
 
@@ -643,6 +697,7 @@ def _check_drop_foreign_key(m: MigrationAST) -> list[RiskWarning]:
                 "Fix: add op.create_foreign_key(...) to downgrade() to restore the constraint.",
                 "error",
                 line=c.node.lineno,
+                code="MRT205",
             )
         )
     return warnings
@@ -678,6 +733,7 @@ def _check_create_trigger_without_drop(m: MigrationAST) -> list[RiskWarning]:
             "upgrade() creates a trigger via SQL but downgrade() does not DROP it. "
             "Fix: add op.execute('DROP TRIGGER IF EXISTS <name> ON <table>') to downgrade().",
             "error",
+            code="MRT502",
         )
     ]
 
@@ -712,6 +768,7 @@ def _check_create_type_without_drop(m: MigrationAST) -> list[RiskWarning]:
             "Fix: add op.execute('DROP TYPE IF EXISTS <typename>') to downgrade(). "
             "Ensure all columns using the type are dropped first.",
             "error",
+            code="MRT503",
         )
     ]
 
@@ -772,6 +829,7 @@ def _check_multiple_heads(migrations: list[MigrationAST]) -> list[RiskWarning]:
                     f"Revisions {revs} both branch from '{parent}' — "
                     "run `alembic merge heads` to resolve",
                     "error",
+                    code="MRT901",
                 )
             )
     return warnings
@@ -810,6 +868,7 @@ def analyze_migrations(versions_dir: str) -> list[RiskWarning]:
                     "Syntax error",
                     f"Could not parse migration file: {m._parse_error}",
                     "error",
+                    code="MRT902",
                 )
             )
             continue
@@ -820,7 +879,7 @@ def analyze_migrations(versions_dir: str) -> list[RiskWarning]:
                 if (
                     w.line is not None
                     and w.line <= len(source_lines)
-                    and "# mrt: ignore" in source_lines[w.line - 1]
+                    and _is_suppressed(source_lines[w.line - 1], w.code)
                 ):
                     continue
                 warnings.append(w)

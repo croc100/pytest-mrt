@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..core.detector import RiskWarning
+from ..core.detector import RiskWarning, _is_suppressed
 
 
 @dataclass
@@ -154,9 +154,10 @@ def _warn(
     message: str,
     severity: str,
     line: int | None = None,
+    code: str = "",
 ) -> RiskWarning:
     rev = f"{m.app_label}.{m.migration_name}"
-    return RiskWarning(rev, m.filename, pattern, message, severity, line)
+    return RiskWarning(rev, m.filename, pattern, message, severity, line, code)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -180,6 +181,7 @@ def _check_remove_field(m: DjangoMigrationAST) -> list[RiskWarning]:
                     "field data is permanently lost even if migration is reversed",
                     "error",
                     line=op.lineno,
+                    code="MRT209",
                 )
             )
     return warnings
@@ -199,6 +201,7 @@ def _check_delete_model(m: DjangoMigrationAST) -> list[RiskWarning]:
                     f"migrations.DeleteModel('{model}') — all rows permanently lost on rollback",
                     "error",
                     line=op.lineno,
+                    code="MRT210",
                 )
             )
     return warnings
@@ -239,6 +242,7 @@ def _check_add_field_not_null(m: DjangoMigrationAST) -> list[RiskWarning]:
                     "will fail on non-empty tables. Use null=True or provide a default.",
                     "error",
                     line=op.lineno,
+                    code="MRT411",
                 )
             )
         elif null_val is None and not has_default:
@@ -269,6 +273,7 @@ def _check_add_field_not_null(m: DjangoMigrationAST) -> list[RiskWarning]:
                         "will fail on non-empty tables if null is not set to True",
                         "warning",
                         line=op.lineno,
+                        code="MRT411",
                     )
                 )
     return warnings
@@ -303,6 +308,7 @@ def _check_alter_field_not_null(m: DjangoMigrationAST) -> list[RiskWarning]:
                     "will fail if any existing rows have NULL in this field",
                     "error",
                     line=op.lineno,
+                    code="MRT412",
                 )
             )
     return warnings
@@ -328,6 +334,7 @@ def _check_run_sql_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
                     "migration cannot be reversed automatically",
                     "error",
                     line=op.lineno,
+                    code="MRT108",
                 )
             )
     return warnings
@@ -348,6 +355,7 @@ def _check_run_sql_dangerous(m: DjangoMigrationAST) -> list[RiskWarning]:
                     "RunSQL contains TRUNCATE — destroys all data with no undo",
                     "error",
                     line=op.lineno,
+                    code="MRT212",
                 )
             )
         elif re.search(r"\bDROP\s+TABLE\b", sql):
@@ -358,6 +366,7 @@ def _check_run_sql_dangerous(m: DjangoMigrationAST) -> list[RiskWarning]:
                     "RunSQL contains DROP TABLE — all rows permanently lost",
                     "error",
                     line=op.lineno,
+                    code="MRT211",
                 )
             )
     return warnings
@@ -378,6 +387,7 @@ def _check_run_python_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
                     "data transformation cannot be undone on rollback",
                     "error",
                     line=op.lineno,
+                    code="MRT107",
                 )
             )
     return warnings
@@ -409,6 +419,7 @@ def _check_rename_model_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
                     "verify rollback order is safe",
                     "warning",
                     line=op.lineno,
+                    code="MRT305",
                 )
             )
     return warnings
@@ -437,6 +448,7 @@ def _check_add_index_no_concurrently(m: DjangoMigrationAST) -> list[RiskWarning]
                     "and use Meta.indexes or a CONCURRENTLY migration",
                     "warning",
                     line=op.lineno,
+                    code="MRT413",
                 )
             )
     return warnings
@@ -456,6 +468,7 @@ def _check_missing_atomic_false(m: DjangoMigrationAST) -> list[RiskWarning]:
                 "This migration contains operations that should run with atomic=False "
                 "to allow CONCURRENTLY index operations without locking the table",
                 "warning",
+                code="MRT414",
             )
         ]
     return []
@@ -509,6 +522,7 @@ def analyze_django_migrations(migrations_dir: str) -> list[RiskWarning]:
                     "Syntax error",
                     f"Could not parse: {m._parse_error}",
                     "error",
+                    code="MRT902",
                 )
             )
             continue
@@ -518,7 +532,7 @@ def analyze_django_migrations(migrations_dir: str) -> list[RiskWarning]:
                 if (
                     w.line is not None
                     and w.line <= len(source_lines)
-                    and "# mrt: ignore" in source_lines[w.line - 1]
+                    and _is_suppressed(source_lines[w.line - 1], w.code)
                 ):
                     continue
                 warnings.append(w)

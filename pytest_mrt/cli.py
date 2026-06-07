@@ -75,6 +75,7 @@ def check(
             {
                 "revision": w.revision,
                 "file": w.file,
+                "code": w.code,
                 "pattern": w.pattern,
                 "severity": w.severity,
                 "message": w.message,
@@ -100,6 +101,7 @@ def check(
 
     table = Table(box=box.ROUNDED, title="Rollback Risk Analysis", show_lines=True)
     table.add_column("Revision", style="cyan", no_wrap=True)
+    table.add_column("Code", style="dim", no_wrap=True)
     table.add_column("Pattern", no_wrap=True)
     table.add_column("Sev", no_wrap=True)
     table.add_column("Line", no_wrap=True, justify="right")
@@ -108,7 +110,7 @@ def check(
     for w in warnings:
         c = _severity_color(w.severity)
         line_str = str(w.line) if w.line is not None else ""
-        table.add_row(w.revision, w.pattern, f"[{c}]{w.severity}[/{c}]", line_str, w.message)
+        table.add_row(w.revision, w.code, w.pattern, f"[{c}]{w.severity}[/{c}]", line_str, w.message)
 
     console.print(table)
     console.print()
