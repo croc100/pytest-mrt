@@ -7,6 +7,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.3.0] — 2026-06-08
+
+### Added
+- **`mrt check --since <revision>`** — scan only migrations added since a given git revision or tag. Eliminates re-scanning the full history on every PR in large codebases. Works with any git ref: `--since main`, `--since v1.2.0`, `--since HEAD~3`.
+- **pre-commit hook integration** — `.pre-commit-hooks.yaml` ships with pytest-mrt. Add `mrt check` to your pre-commit pipeline with two lines:
+  ```yaml
+  - repo: https://github.com/croc100/pytest-mrt
+    rev: v1.3.0
+    hooks:
+      - id: mrt-check
+  ```
+- **Django-aware `mrt fix`** — `mrt fix <migration.py>` now works on Django migrations:
+  - `RunSQL` without `reverse_sql`: adds `reverse_sql=migrations.RunSQL.noop`
+  - `RunPython` without `reverse_code`: adds `reverse_code=migrations.RunPython.noop`
+  - `RemoveField`: injects a `RunPython(backup, restore)` operation before the field removal. The backup function copies column data to `_mrt_backups` using keyset pagination (safe for large tables, no server-side cursors). The restore function writes the data back when rolling back.
+  - `DeleteModel`: same as `RemoveField` but backs up all columns. The restore function uses `disable_constraint_checking()` to handle FK dependencies safely.
+  - Inline type codec (`__mrt_enc` / `__mrt_dec`) injected once per migration — no runtime pytest-mrt dependency in production migrations. Handles `Decimal`, `datetime` (naive + tz-aware), `date`, `time`, `UUID`, `bytes`.
+  - Use `--apply` to write the fix to the file.
+- **`mrt clean-backups`** — removes backup rows from `_mrt_backups` after deployment is confirmed stable. Supports `--label` to remove a single migration's backup, `--list` to preview, `--yes` to skip confirmation.
+
+### Changed
+- `mrt fix` output for Django migrations includes a `[Django]` tag and a per-operation table (Line / Operation / Fix / Confidence).
+
+---
+
 ## [1.2.0] — 2026-06-07
 
 ### Added
