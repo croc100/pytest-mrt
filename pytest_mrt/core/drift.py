@@ -10,8 +10,7 @@ def load_metadata(metadata_path: str):
     """
     if ":" not in metadata_path:
         raise ValueError(
-            f"Invalid metadata path '{metadata_path}'. "
-            "Use the form 'myapp.models:Base'."
+            f"Invalid metadata path '{metadata_path}'. Use the form 'myapp.models:Base'."
         )
     module_path, attr = metadata_path.rsplit(":", 1)
     if "." in attr:

@@ -191,7 +191,9 @@ def drift(
         table.add_row(str(i), describe_diff(d))
 
     console.print(table)
-    console.print(f"\n[red]{len(diffs)} difference(s) found.[/red] Run migrations or update your models.")
+    console.print(
+        f"\n[red]{len(diffs)} difference(s) found.[/red] Run migrations or update your models."
+    )
     raise typer.Exit(1)
 
 

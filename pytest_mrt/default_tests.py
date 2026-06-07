@@ -11,6 +11,7 @@ You can also import individual tests explicitly:
 
     from pytest_mrt.default_tests import test_mrt_upgrade, test_mrt_downgrade_base
 """
+
 from __future__ import annotations
 
 import pytest
