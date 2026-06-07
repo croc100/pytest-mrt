@@ -321,7 +321,7 @@ def pytest_collection_modifyitems(
 
         dt_path = Path(_dt.__file__)
         module = _PytestModule.from_parent(session, path=dt_path)
-        new_items = list(module.collect())
+        new_items: list[pytest.Item] = [i for i in module.collect() if isinstance(i, pytest.Item)]
         items[:0] = new_items
     except Exception as _exc:
         import warnings
