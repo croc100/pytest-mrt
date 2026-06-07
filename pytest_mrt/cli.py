@@ -3,6 +3,7 @@ from rich.console import Console
 
 from . import __version__
 from .commands.check import check
+from .commands.clean_backups import clean_backups
 from .commands.drift_cmd import drift
 from .commands.fix import fix
 from .commands.init import init
@@ -28,3 +29,4 @@ app.command("init")(init)
 app.command("fix")(fix)
 app.command("report")(report)
 app.command("explain")(explain)
+app.command("clean-backups")(clean_backups)
