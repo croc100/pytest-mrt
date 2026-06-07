@@ -6,7 +6,7 @@
   <a href="https://github.com/croc100/pytest-mrt/network/dependents"><img src="https://img.shields.io/badge/used%20by-see%20dependents-informational" alt="Used by"></a>
   <a href="https://github.com/croc100/pytest-mrt/actions"><img src="https://img.shields.io/github/actions/workflow/status/croc100/pytest-mrt/ci.yml?branch=main&label=tests" alt="CI"></a>
   <a href="https://codecov.io/gh/croc100/pytest-mrt"><img src="https://codecov.io/gh/croc100/pytest-mrt/graph/badge.svg?token=CODECOV_TOKEN" alt="Coverage"></a>
-  <img src="https://img.shields.io/badge/coverage-88%25-brightgreen" alt="Coverage 88%">
+  <img src="https://img.shields.io/badge/coverage-81%25-yellowgreen" alt="Coverage 81%">
   <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="Production/Stable">
   <a href="https://pypi.org/project/pytest-mrt"><img src="https://img.shields.io/pypi/pyversions/pytest-mrt" alt="Python"></a>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
@@ -30,10 +30,7 @@ Most tools verify that migrations *run* without errors.
 pytest-mrt verifies that your data *survives* a rollback.
 
 It seeds real rows before each migration, rolls back, and checks nothing was lost.
-It also statically scans migration files for 30 known dangerous patterns across both Alembic and Django migrations.
-
-> **Django note**: static pattern detection is fully supported. Dynamic rollback verification
-> (`manage.py migrate --backwards`) is on the [roadmap](ROADMAP.md) for v0.9 — not yet implemented.
+It also statically scans migration files for 44 known dangerous patterns across both Alembic and Django migrations.
 
 ## Install
 
@@ -83,13 +80,13 @@ mrt check migrations/versions/
 ```
 
 ```
-╭──────────┬──────────────────────────┬─────────┬──────┬────────────────────────────────────╮
-│ Revision │ Pattern                  │ Sev     │ Line │ Message                            │
-├──────────┼──────────────────────────┼─────────┼──────┼────────────────────────────────────┤
-│ 004      │ DROP COLUMN in upgrade   │ error   │   12 │ Data permanently lost on rollback  │
-│ 005      │ No-op downgrade          │ error   │    8 │ downgrade() does nothing           │
-│ 006      │ INDEX without CONCURR.   │ warning │   19 │ Locks table during index build     │
-╰──────────┴──────────────────────────┴─────────┴──────┴────────────────────────────────────╯
+╭──────────┬──────────────────────────┬─────────┬──────┬─────────┬────────────────────────────────────╮
+│ Revision │ Pattern                  │ Sev     │ Line │ Code    │ Message                            │
+├──────────┼──────────────────────────┼─────────┼──────┼─────────┼────────────────────────────────────┤
+│ 004      │ DROP COLUMN in upgrade   │ error   │   12 │ MRT103  │ Data permanently lost on rollback  │
+│ 005      │ No-op downgrade          │ error   │    8 │ MRT102  │ downgrade() does nothing           │
+│ 006      │ INDEX without CONCURR.   │ warning │   19 │ MRT207  │ Locks table during index build     │
+╰──────────┴──────────────────────────┴─────────┴──────┴─────────┴────────────────────────────────────╯
 2 error(s), 1 warning(s)
 ```
 
@@ -175,6 +172,38 @@ Safe to run `mrt check` on every commit. Dynamic suite fits comfortably for proj
 For larger codebases, use `MRTConfig(skip={...})` to exclude already-reviewed revisions.
 See [benchmarks](docs/benchmarks.md) for methodology and PostgreSQL/MySQL numbers.
 
+## Built-in default tests (v1.1.0)
+
+pytest-mrt automatically injects 6 safety tests into your suite when the `mrt` fixture is configured — no test files needed:
+
+| Test | What it checks |
+|---|---|
+| `test_mrt_single_head` | Migration history has exactly one head |
+| `test_mrt_upgrade` | `alembic upgrade head` completes without error |
+| `test_mrt_downgrade_base` | `alembic downgrade base` then re-upgrade completes cleanly |
+| `test_mrt_up_down_consistency` | Every migration is safely reversible (per-revision rollback) |
+| `test_mrt_static_no_errors` | Zero static analysis errors in all migration files |
+| `test_mrt_schema_matches_models` | Database schema matches ORM models after upgrade (requires `target_metadata`) |
+
+To opt out of specific tests, use `MRTConfig(skip_default_tests={...})`.
+
+## Suppress known risks (v1.2.0)
+
+Use `# noqa: MRTxxx` on any line to suppress a specific warning — the same convention as ruff and flake8:
+
+```python
+def upgrade():
+    op.drop_column("users", "phone")  # noqa: MRT103
+```
+
+To suppress all MRT warnings on a line:
+
+```python
+    op.drop_column("users", "legacy_col")  # noqa
+```
+
+Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
@@ -184,7 +213,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 Full docs at **[croc100.github.io/pytest-mrt](https://croc100.github.io/pytest-mrt)**
 
 - [Getting started (step-by-step)](https://croc100.github.io/pytest-mrt/quickstart/)
-- [All 30 patterns explained](https://croc100.github.io/pytest-mrt/patterns/)
+- [All 44 patterns explained](https://croc100.github.io/pytest-mrt/patterns/)
 - [CLI & fixture reference](https://croc100.github.io/pytest-mrt/cli/)
 - [Detection accuracy report](docs/accuracy.md) — what each pattern catches and doesn't catch
 - [API reference](docs/api.md) — stable public API
@@ -198,7 +227,6 @@ pytest-mrt is MIT-licensed and free to use. If it saves you from a production in
 
 Sponsorship directly funds:
 - New pattern development (Oracle, SQL Server, more Django patterns)
-- Django dynamic rollback verification (v0.9 target)
 - Maintained compatibility with new Alembic and SQLAlchemy releases
 
 ## License

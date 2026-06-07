@@ -4,7 +4,7 @@ This document describes what each static analysis pattern in pytest-mrt detects,
 and the false-positive risk for each check. The false-positive suite (`tests/test_false_positives.py`)
 enforces the "will NOT trigger" column automatically on every CI run.
 
-Last updated: 2026-06-06 · pytest-mrt v0.8.0 · 30 Alembic patterns + 10 Django patterns
+Last updated: 2026-06-07 · pytest-mrt v1.2.0 · 34 Alembic patterns + 10 Django patterns
 
 ---
 
@@ -19,7 +19,7 @@ Last updated: 2026-06-06 · pytest-mrt v0.8.0 · 30 Alembic patterns + 10 Django
 
 ---
 
-## Alembic patterns (30)
+## Alembic patterns (34)
 
 ### Per-file checks
 
@@ -79,7 +79,7 @@ Last updated: 2026-06-06 · pytest-mrt v0.8.0 · 30 Alembic patterns + 10 Django
 | **Severity** | warning |
 | **Will catch** | `op.add_column` / `op.alter_column` with `nullable=False` and no `server_default` or `default` |
 | **Will NOT catch** | NOT NULL added via raw SQL `ALTER TABLE ... SET NOT NULL` (covered by #25) |
-| **False-positive risk** | Low — fires on new tables too; intentional for new tables can be suppressed with `skip` |
+| **False-positive risk** | Low — fires on new tables too; intentional cases can be suppressed with `# noqa: MRT201` |
 
 ---
 
@@ -361,7 +361,7 @@ Last updated: 2026-06-06 · pytest-mrt v0.8.0 · 30 Alembic patterns + 10 Django
 | **Severity** | warning |
 | **Will catch** | Migration files unreachable from any current head in the dependency graph |
 | **Will NOT catch** | Orphans in branches that were intentionally kept separate |
-| **False-positive risk** | Medium — feature branches and squashed migrations may appear as orphans; use `--skip` to suppress |
+| **False-positive risk** | Medium — feature branches and squashed migrations may appear as orphans; use `# noqa: MRTXXX` on the line to suppress |
 
 ---
 
@@ -471,12 +471,12 @@ Last updated: 2026-06-06 · pytest-mrt v0.8.0 · 30 Alembic patterns + 10 Django
 
 | Scope | Total patterns | Error | Warning |
 |-------|---------------|-------|---------|
-| Alembic per-file | 29 | 13 | 16 |
+| Alembic per-file | 31 | 13 | 18 |
 | Alembic graph | 3 | 1 | 2 |
 | Django | 10 | 5 | 5 |
-| **Total** | **42** | **19** | **23** |
+| **Total** | **44** | **19** | **25** |
 
-False-positive risk distribution across all 42 patterns:
+False-positive risk distribution across all 44 patterns:
 
 | Risk level | Count |
 |-----------|-------|
@@ -486,6 +486,20 @@ False-positive risk distribution across all 42 patterns:
 
 The false-positive test suite (`tests/test_false_positives.py`) enforces 30+ cases that must
 produce zero warnings, covering the most common medium-risk patterns.
+
+---
+
+## Suppressing false positives
+
+When a pattern fires on intentional code, suppress it with `# noqa: MRTxxx` on the offending line (same convention as ruff/flake8):
+
+```python
+def upgrade():
+    op.drop_column("users", "legacy_col")  # noqa: MRT103
+    op.alter_column("orders", "amount", type_=sa.Numeric)  # noqa: MRT202
+```
+
+Use a bare `# noqa` to suppress all MRT warnings on a line. The legacy `# mrt: ignore` syntax is also supported.
 
 ---
 

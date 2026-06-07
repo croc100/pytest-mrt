@@ -194,7 +194,14 @@ Some patterns are warnings, not errors. If your migration intentionally drops a 
 1. **Acknowledge it** — the warning tells reviewers to double-check the PR
 2. **Run with `--strict` only on errors** — omit `--strict` to let warnings pass CI
 
-There is no per-migration skip/ignore mechanism yet — [it's on the roadmap](https://github.com/croc100/pytest-mrt/issues).
+You can suppress a specific warning on any line using `# noqa: MRTxxx` (same convention as ruff/flake8):
+
+```python
+def upgrade():
+    op.drop_column("users", "phone")  # noqa: MRT103
+```
+
+To suppress all MRT warnings on a line, use a bare `# noqa`. To suppress by severity instead, run `mrt check` without `--strict` — this makes warnings non-blocking while still reporting them.
 
 ---
 
