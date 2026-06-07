@@ -1,4 +1,5 @@
 """Tests for MigrationAST helper methods in ast_analyzer.py."""
+
 from __future__ import annotations
 
 import ast
@@ -12,6 +13,7 @@ def _ast(source: str) -> MigrationAST:
 
 
 # ── module_var ────────────────────────────────────────────────────────
+
 
 def test_module_var_string():
     m = _ast("""
@@ -44,12 +46,14 @@ def test_module_var_missing_returns_none():
 
 # ── parse error ───────────────────────────────────────────────────────
 
+
 def test_parse_error_sets_flag():
     m = MigrationAST("def upgrade(: pass\n", "001", "001.py")
     assert m._parse_error is not None
 
 
 # ── is_noop ───────────────────────────────────────────────────────────
+
 
 def test_is_noop_with_pass():
     m = _ast("""
@@ -82,6 +86,7 @@ def test_is_noop_with_none():
 
 # ── str_arg ───────────────────────────────────────────────────────────
 
+
 def test_str_arg_returns_string():
     tree = ast.parse("op.drop_table('users')")
     call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call))
@@ -102,6 +107,7 @@ def test_str_arg_non_constant_returns_none():
 
 # ── has_kwarg ─────────────────────────────────────────────────────────
 
+
 def test_has_kwarg_true():
     tree = ast.parse("op.alter_column('t', 'c', nullable=False)")
     call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call))
@@ -116,6 +122,7 @@ def test_has_kwarg_false():
 
 # ── kwarg_str ─────────────────────────────────────────────────────────
 
+
 def test_kwarg_str_returns_value():
     tree = ast.parse("op.create_index('ix', 'users', schema='public')")
     call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call))
@@ -129,6 +136,7 @@ def test_kwarg_str_missing_returns_none():
 
 
 # ── kwarg_bool ────────────────────────────────────────────────────────
+
 
 def test_kwarg_bool_true():
     tree = ast.parse("op.alter_column('t', 'c', nullable=True)")
@@ -156,6 +164,7 @@ def test_kwarg_bool_missing_returns_none():
 
 # ── sql_content ───────────────────────────────────────────────────────
 
+
 def test_sql_content_plain_string():
     tree = ast.parse("op.execute('SELECT 1')")
     call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call))
@@ -177,10 +186,9 @@ def test_sql_content_no_args():
 
 # ── find_column_calls ─────────────────────────────────────────────────
 
+
 def test_find_column_calls_sa_column():
-    tree = ast.parse(
-        "op.create_table('t', sa.Column('id', sa.Integer, primary_key=True))"
-    )
+    tree = ast.parse("op.create_table('t', sa.Column('id', sa.Integer, primary_key=True))")
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
     outer = calls[0]
     cols = MigrationAST.find_column_calls(outer)
@@ -188,9 +196,7 @@ def test_find_column_calls_sa_column():
 
 
 def test_find_column_calls_bare_column():
-    tree = ast.parse(
-        "op.create_table('t', Column('id', Integer, primary_key=True))"
-    )
+    tree = ast.parse("op.create_table('t', Column('id', Integer, primary_key=True))")
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
     outer = calls[0]
     cols = MigrationAST.find_column_calls(outer)
@@ -198,6 +204,7 @@ def test_find_column_calls_bare_column():
 
 
 # ── upgrade_methods / downgrade_methods ───────────────────────────────
+
 
 def test_upgrade_methods_returns_set():
     m = _ast("""
@@ -215,6 +222,7 @@ def test_upgrade_methods_returns_set():
 
 
 # ── nested function not counted ───────────────────────────────────────
+
 
 def test_nested_function_calls_not_attributed_to_upgrade(tmp_path):
     """Calls inside a nested def inside upgrade() should not appear in upgrade_calls."""

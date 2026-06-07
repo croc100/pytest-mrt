@@ -1,4 +1,5 @@
 """Integration tests for MRTFixture (plugin.py)."""
+
 from __future__ import annotations
 
 import textwrap
@@ -19,13 +20,18 @@ def _setup_alembic(tmp: Path, db_path: str) -> tuple[str, str]:
     versions = tmp / "versions"
     versions.mkdir()
 
-    _write(tmp / "alembic.ini", f"""
+    _write(
+        tmp / "alembic.ini",
+        f"""
         [alembic]
         script_location = {tmp}
         sqlalchemy.url = sqlite:///{db_path}
-    """)
+    """,
+    )
 
-    _write(tmp / "env.py", """
+    _write(
+        tmp / "env.py",
+        """
         from alembic import context
         from sqlalchemy import engine_from_config, pool
 
@@ -52,9 +58,12 @@ def _setup_alembic(tmp: Path, db_path: str) -> tuple[str, str]:
             run_migrations_offline()
         else:
             run_migrations_online()
-    """)
+    """,
+    )
 
-    _write(tmp / "script.py.mako", """
+    _write(
+        tmp / "script.py.mako",
+        """
         \"\"\"${message}\"\"\"
         revision = '${up_revision}'
         down_revision = ${repr(down_revision)}
@@ -63,7 +72,8 @@ def _setup_alembic(tmp: Path, db_path: str) -> tuple[str, str]:
 
         def upgrade(): ${upgrades if upgrades else "pass"}
         def downgrade(): ${downgrades if downgrades else "pass"}
-    """)
+    """,
+    )
 
     return str(tmp / "alembic.ini"), str(versions)
 
@@ -81,7 +91,10 @@ def _add_migration(versions_dir: str, filename: str, content: str) -> None:
 
 
 def _simple_reversible_migration(versions_dir: str) -> None:
-    _add_migration(versions_dir, "001_users.py", textwrap.dedent("""
+    _add_migration(
+        versions_dir,
+        "001_users.py",
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -98,10 +111,12 @@ def _simple_reversible_migration(versions_dir: str) -> None:
 
         def downgrade():
             op.drop_table('users')
-    """))
+    """),
+    )
 
 
 # ── MRTFixture construction ────────────────────────────────────────────
+
 
 def test_mrt_fixture_upgrade_downgrade(alembic_env):
     _simple_reversible_migration(alembic_env["versions"])
@@ -144,7 +159,10 @@ def test_mrt_fixture_assert_reversible_passes(alembic_env):
 
 
 def test_mrt_fixture_assert_reversible_fails_on_noop(alembic_env):
-    _add_migration(alembic_env["versions"], "001_noop.py", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_noop.py",
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -161,7 +179,8 @@ def test_mrt_fixture_assert_reversible_fails_on_noop(alembic_env):
 
         def downgrade():
             pass
-    """))
+    """),
+    )
 
     cfg = MRTConfig(
         alembic_ini=alembic_env["ini"],
@@ -175,7 +194,10 @@ def test_mrt_fixture_assert_reversible_fails_on_noop(alembic_env):
 
 def test_mrt_fixture_assert_all_reversible_passes(alembic_env):
     _simple_reversible_migration(alembic_env["versions"])
-    _add_migration(alembic_env["versions"], "002_add_email.py", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "002_add_email.py",
+        textwrap.dedent("""
         revision = '002'
         down_revision = '001'
         branch_labels = None
@@ -189,7 +211,8 @@ def test_mrt_fixture_assert_all_reversible_passes(alembic_env):
 
         def downgrade():
             op.drop_column('users', 'email')
-    """))
+    """),
+    )
 
     cfg = MRTConfig(
         alembic_ini=alembic_env["ini"],
@@ -228,7 +251,10 @@ def test_mrt_fixture_check_all(alembic_env):
 
 
 def test_mrt_fixture_check_static(alembic_env):
-    _add_migration(alembic_env["versions"], "001_risky.py", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_risky.py",
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -241,7 +267,8 @@ def test_mrt_fixture_check_static(alembic_env):
 
         def downgrade():
             pass
-    """))
+    """),
+    )
 
     cfg = MRTConfig(
         alembic_ini=alembic_env["ini"],
@@ -253,7 +280,10 @@ def test_mrt_fixture_check_static(alembic_env):
 
 
 def test_mrt_fixture_assert_no_static_errors_fails(alembic_env):
-    _add_migration(alembic_env["versions"], "001_noop_down.py", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_noop_down.py",
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -266,7 +296,8 @@ def test_mrt_fixture_assert_no_static_errors_fails(alembic_env):
 
         def downgrade():
             pass
-    """))
+    """),
+    )
 
     cfg = MRTConfig(
         alembic_ini=alembic_env["ini"],
@@ -294,7 +325,10 @@ def test_mrt_fixture_custom_seeds(alembic_env):
 
 
 def test_mrt_fixture_severity_overrides(alembic_env):
-    _add_migration(alembic_env["versions"], "001_risky.py", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_risky.py",
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -307,7 +341,8 @@ def test_mrt_fixture_severity_overrides(alembic_env):
 
         def downgrade():
             pass
-    """))
+    """),
+    )
 
     cfg = MRTConfig(
         alembic_ini=alembic_env["ini"],
@@ -432,9 +467,7 @@ def test_mrt_fixture_assert_data_intact_failure(alembic_env):
     fixture.upgrade("001")
 
     # Inject a ghost row that doesn't actually exist in the DB
-    fixture._seeder._rows.append(
-        SeededRow("users", "id", 9999, {"id": 9999, "name": "ghost"})
-    )
+    fixture._seeder._rows.append(SeededRow("users", "id", 9999, {"id": 9999, "name": "ghost"}))
 
     with pytest.raises(BaseException):
         fixture.assert_data_intact()
@@ -445,7 +478,10 @@ def test_mrt_fixture_assert_data_intact_failure(alembic_env):
 
 def test_mrt_fixture_assert_reversible_failure_calls_fail(alembic_env):
     """assert_reversible() calls pytest.fail on non-reversible migration."""
-    _add_migration(alembic_env["versions"], "001_noop_d.py", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_noop_d.py",
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -461,7 +497,8 @@ def test_mrt_fixture_assert_reversible_failure_calls_fail(alembic_env):
 
         def downgrade():
             pass
-    """))
+    """),
+    )
 
     cfg = MRTConfig(
         alembic_ini=alembic_env["ini"],
@@ -477,7 +514,10 @@ def test_mrt_fixture_assert_reversible_failure_calls_fail(alembic_env):
 
 def test_mrt_fixture_assert_all_reversible_failure_calls_fail(alembic_env):
     """assert_all_reversible() calls pytest.fail when any migration fails."""
-    _add_migration(alembic_env["versions"], "001_noop_d2.py", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_noop_d2.py",
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -493,7 +533,8 @@ def test_mrt_fixture_assert_all_reversible_failure_calls_fail(alembic_env):
 
         def downgrade():
             pass
-    """))
+    """),
+    )
 
     cfg = MRTConfig(
         alembic_ini=alembic_env["ini"],
@@ -513,8 +554,8 @@ def test_mrt_pytest_fixture_via_pytester(pytester, alembic_env):
         from pytest_mrt import MRTConfig
         def pytest_configure(config):
             config._mrt_config = MRTConfig(
-                alembic_ini="{alembic_env['ini']}",
-                db_url="{alembic_env['db_url']}",
+                alembic_ini="{alembic_env["ini"]}",
+                db_url="{alembic_env["db_url"]}",
             )
     """)
     pytester.makepyfile("""
@@ -531,7 +572,10 @@ def test_mrt_pytest_fixture_via_pytester(pytester, alembic_env):
 
 
 def test_mrt_fixture_risk_score(alembic_env):
-    _add_migration(alembic_env["versions"], "001_noop.py", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_noop.py",
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -547,7 +591,8 @@ def test_mrt_fixture_risk_score(alembic_env):
 
         def downgrade():
             pass
-    """))
+    """),
+    )
 
     cfg = MRTConfig(
         alembic_ini=alembic_env["ini"],
@@ -561,6 +606,7 @@ def test_mrt_fixture_risk_score(alembic_env):
 
 
 # ── _auto_detect_django ────────────────────────────────────────────────
+
 
 def test_auto_detect_django_switches_mode_when_env_set_and_no_ini(tmp_path, monkeypatch):
     """_auto_detect_django sets django_settings from env when alembic.ini is missing."""
@@ -617,6 +663,7 @@ def test_auto_detect_django_no_switch_when_explicit_django_settings(tmp_path, mo
 
 # ── MRTFixture missing alembic.ini ─────────────────────────────────────
 
+
 def test_mrt_fixture_raises_on_missing_alembic_ini(tmp_path, monkeypatch):
     """MRTFixture raises MRTConfigError with a Django hint when alembic.ini is missing."""
     from pytest_mrt.exceptions import MRTConfigError
@@ -629,6 +676,7 @@ def test_mrt_fixture_raises_on_missing_alembic_ini(tmp_path, monkeypatch):
 
 
 # ── MigrationRunner missing env.py ─────────────────────────────────────
+
 
 def test_migration_runner_raises_on_missing_env_py(tmp_path):
     """MigrationRunner raises FileNotFoundError with Django hint when env.py is absent."""

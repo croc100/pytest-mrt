@@ -32,9 +32,8 @@ def _no_errors(versions_dir: Path) -> None:
     """Assert that analyzing versions_dir produces no error-severity warnings."""
     warnings = analyze_migrations(str(versions_dir))
     errors = [w for w in warnings if w.severity == "error"]
-    assert errors == [], (
-        f"Expected zero errors but got {len(errors)}:\n"
-        + "\n".join(f"  [{w.pattern}] {w.message}" for w in errors)
+    assert errors == [], f"Expected zero errors but got {len(errors)}:\n" + "\n".join(
+        f"  [{w.pattern}] {w.message}" for w in errors
     )
 
 
@@ -43,7 +42,10 @@ def _no_errors(versions_dir: Path) -> None:
 
 def test_safe_create_and_drop_table(versions_dir):
     """CREATE TABLE in upgrade + DROP TABLE in downgrade = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -60,13 +62,17 @@ def test_safe_create_and_drop_table(versions_dir):
 
         def downgrade():
             op.drop_table('users')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
 def test_safe_add_and_drop_nullable_column(versions_dir):
     """ADD COLUMN nullable + DROP COLUMN in downgrade = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -80,13 +86,17 @@ def test_safe_add_and_drop_nullable_column(versions_dir):
 
         def downgrade():
             op.drop_column('users', 'bio')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
 def test_safe_add_not_null_column_with_server_default(versions_dir):
     """ADD NOT NULL column with server_default = safe (data won't break)."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -101,13 +111,17 @@ def test_safe_add_not_null_column_with_server_default(versions_dir):
 
         def downgrade():
             op.drop_column('users', 'status')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
 def test_safe_rename_table_with_reverse(versions_dir):
     """RENAME TABLE with correct reverse = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -120,13 +134,17 @@ def test_safe_rename_table_with_reverse(versions_dir):
 
         def downgrade():
             op.rename_table('new_name', 'old_name')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
 def test_safe_rename_column_with_reverse(versions_dir):
     """RENAME COLUMN with correct reverse = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -139,13 +157,17 @@ def test_safe_rename_column_with_reverse(versions_dir):
 
         def downgrade():
             op.alter_column('users', 'new_col', new_column_name='old_col')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
 def test_safe_create_and_drop_index(versions_dir):
     """CREATE INDEX + DROP INDEX in downgrade = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -158,13 +180,17 @@ def test_safe_create_and_drop_index(versions_dir):
 
         def downgrade():
             op.drop_index('ix_users_email', table_name='users')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
 def test_safe_create_and_drop_unique_constraint(versions_dir):
     """CREATE UNIQUE CONSTRAINT on empty table + DROP in downgrade = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -177,13 +203,17 @@ def test_safe_create_and_drop_unique_constraint(versions_dir):
 
         def downgrade():
             op.drop_constraint('uq_users_email', 'users', type_='unique')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
 def test_safe_create_and_drop_foreign_key(versions_dir):
     """CREATE FOREIGN KEY + DROP in downgrade = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -196,13 +226,17 @@ def test_safe_create_and_drop_foreign_key(versions_dir):
 
         def downgrade():
             op.drop_constraint('fk_posts_user', 'posts', type_='foreignkey')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
 def test_safe_drop_foreign_key_with_restore(versions_dir):
     """DROP FK in upgrade + CREATE FK in downgrade = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -215,7 +249,8 @@ def test_safe_drop_foreign_key_with_restore(versions_dir):
 
         def downgrade():
             op.create_foreign_key('fk_posts_user', 'posts', 'users', ['user_id'], ['id'])
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
@@ -224,7 +259,10 @@ def test_safe_drop_foreign_key_with_restore(versions_dir):
 
 def test_safe_data_migration_with_reverse(versions_dir):
     """op.execute() data migration with a proper reverse = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -237,13 +275,17 @@ def test_safe_data_migration_with_reverse(versions_dir):
 
         def downgrade():
             op.execute("UPDATE users SET status = NULL WHERE status = 'active'")
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
 def test_safe_run_sql_with_reverse(versions_dir):
     """Plain execute SQL with matching downgrade execute = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -256,7 +298,8 @@ def test_safe_run_sql_with_reverse(versions_dir):
 
         def downgrade():
             op.execute("DELETE FROM settings WHERE key = 'maintenance'")
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
@@ -265,7 +308,10 @@ def test_safe_run_sql_with_reverse(versions_dir):
 
 def test_safe_batch_alter_add_column(versions_dir):
     """batch_alter_table ADD COLUMN (no drop) = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -281,7 +327,8 @@ def test_safe_batch_alter_add_column(versions_dir):
         def downgrade():
             with op.batch_alter_table('users') as batch_op:
                 batch_op.drop_column('nickname')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
@@ -290,7 +337,10 @@ def test_safe_batch_alter_add_column(versions_dir):
 
 def test_safe_concurrently_index(versions_dir):
     """CONCURRENTLY index via op.execute() with matching drop = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -303,7 +353,8 @@ def test_safe_concurrently_index(versions_dir):
 
         def downgrade():
             op.execute('DROP INDEX CONCURRENTLY IF EXISTS ix_email')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
@@ -312,7 +363,10 @@ def test_safe_concurrently_index(versions_dir):
 
 def test_safe_create_trigger_with_drop(versions_dir):
     """CREATE TRIGGER in upgrade + DROP TRIGGER in downgrade = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -329,13 +383,17 @@ def test_safe_create_trigger_with_drop(versions_dir):
 
         def downgrade():
             op.execute('DROP TRIGGER IF EXISTS update_timestamp ON users')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
 def test_safe_create_type_with_drop(versions_dir):
     """CREATE TYPE in upgrade + DROP TYPE in downgrade = safe."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -352,7 +410,8 @@ def test_safe_create_type_with_drop(versions_dir):
         def downgrade():
             op.drop_column('users', 'role')
             op.execute('DROP TYPE IF EXISTS user_role')
-    """)
+    """,
+    )
     _no_errors(versions_dir)
 
 
@@ -362,7 +421,10 @@ def test_safe_create_type_with_drop(versions_dir):
 def test_safe_empty_migration_both_pass(versions_dir):
     """Both upgrade() and downgrade() are pass — no-op migration = no error (noop check
     only fires when upgrade changes schema but downgrade does nothing)."""
-    _write(versions_dir, "001.py", """
+    _write(
+        versions_dir,
+        "001.py",
+        """
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -373,7 +435,8 @@ def test_safe_empty_migration_both_pass(versions_dir):
 
         def downgrade():
             pass
-    """)
+    """,
+    )
     # A fully no-op migration (upgrade=pass) does NOT trigger the noop_downgrade check
     warnings = analyze_migrations(str(versions_dir))
     noop_errors = [w for w in warnings if w.pattern == "noop downgrade" and w.severity == "error"]

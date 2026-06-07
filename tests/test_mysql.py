@@ -170,7 +170,9 @@ def test_mysql_noop_downgrade_fails(my_env):
         verifier = RollbackVerifier(runner)
         result = verifier.check_revision("001")
         assert not result.passed
-        assert any("still exists" in f.lower() or "incomplete" in f.lower() for f in result.failures)
+        assert any(
+            "still exists" in f.lower() or "incomplete" in f.lower() for f in result.failures
+        )
     finally:
         runner.downgrade_base()
         engine = create_engine(my_env["db_url"])
@@ -297,7 +299,7 @@ def test_mysql_nullpool_no_connection_leak(my_env):
             f"00{i}_step.py",
             f"""
             revision = '00{i}'
-            down_revision = {'None' if i == 1 else f"'00{i - 1}'"}
+            down_revision = {"None" if i == 1 else f"'00{i - 1}'"}
             branch_labels = None
             depends_on = None
 

@@ -61,15 +61,21 @@ mrt check migrations/versions/
 
 #### `--since` — incremental scanning
 
-In large codebases, scanning the full migration history on every PR is wasteful. `--since` limits the scan to migrations whose files were added after the given git ref:
+In large codebases, scanning the full migration history on every PR is wasteful. `--since` limits the scan to migrations that come *after* the given revision in the migration dependency chain.
 
+**Alembic** — pass a revision ID:
 ```bash
-mrt check migrations/versions/ --since main
-mrt check myapp/migrations/ --since v1.2.0
-mrt check myapp/migrations/ --since HEAD~5
+mrt check migrations/versions/ --since a1b2c3d4
 ```
+Only revisions whose `down_revision` ancestry includes `a1b2c3d4` are checked.
 
-This is the recommended setup for CI: check only the migrations that changed in the current PR branch.
+**Django** — pass `app_label.migration_name`:
+```bash
+mrt check myapp/migrations/ --since myapp.0010_add_email
+```
+Only migrations that depend on `0010_add_email` (directly or transitively) are checked.
+
+This is the recommended CI pattern: pass the last migration on the base branch so only the PR's new migrations are scanned.
 
 ### Exit codes
 

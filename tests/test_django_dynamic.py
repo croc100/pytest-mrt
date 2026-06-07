@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "tests.django_app",
     "tests.django_bad_app",
+    "tests.django_fixer_app",
 ]
 
 
@@ -99,9 +100,7 @@ def test_django_verifier_noop_downgrade_fails(django_runner):
     assert results, "No results — django_bad_app migration not found"
     # The first result must be a failure: schema drift (leaked table not dropped)
     first = results[0]
-    assert not first.passed, (
-        "Expected noop downgrade to be detected as a failure, but it passed"
-    )
+    assert not first.passed, "Expected noop downgrade to be detected as a failure, but it passed"
     assert any("leaked" in f.lower() or "still exists" in f.lower() for f in first.failures), (
         f"Expected 'still exists' schema error, got: {first.failures}"
     )

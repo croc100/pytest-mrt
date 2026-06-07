@@ -1,4 +1,5 @@
 """Tests for HTML report generation."""
+
 from __future__ import annotations
 
 import pytest
@@ -12,12 +13,10 @@ def versions_dir(tmp_path):
     v = tmp_path / "versions"
     v.mkdir()
     (v / "001_create_users.py").write_text(
-        "revision = '001'\ndown_revision = None\n"
-        "def upgrade(): pass\ndef downgrade(): pass\n"
+        "revision = '001'\ndown_revision = None\ndef upgrade(): pass\ndef downgrade(): pass\n"
     )
     (v / "002_add_col.py").write_text(
-        "revision = '002'\ndown_revision = '001'\n"
-        "def upgrade(): pass\ndef downgrade(): pass\n"
+        "revision = '002'\ndown_revision = '001'\ndef upgrade(): pass\ndef downgrade(): pass\n"
     )
     return str(v)
 
@@ -44,8 +43,9 @@ def test_html_report_shows_safe_when_no_warnings(versions_dir):
 
 def test_html_report_shows_error_warning(versions_dir):
     warnings = [
-        RiskWarning("001", "001.py", "DROP COLUMN in upgrade",
-                    "Data permanently lost", "error", line=12)
+        RiskWarning(
+            "001", "001.py", "DROP COLUMN in upgrade", "Data permanently lost", "error", line=12
+        )
     ]
     html = generate_html_report(versions_dir, warnings)
     assert "DROP COLUMN in upgrade" in html
@@ -53,17 +53,13 @@ def test_html_report_shows_error_warning(versions_dir):
 
 
 def test_html_report_line_number_shown(versions_dir):
-    warnings = [
-        RiskWarning("001", "001.py", "TRUNCATE", "Destroys all data", "error", line=42)
-    ]
+    warnings = [RiskWarning("001", "001.py", "TRUNCATE", "Destroys all data", "error", line=42)]
     html = generate_html_report(versions_dir, warnings)
     assert "42" in html
 
 
 def test_html_report_summary_counts(versions_dir):
-    warnings = [
-        RiskWarning("001", "001.py", "DROP TABLE in upgrade", "msg", "error")
-    ]
+    warnings = [RiskWarning("001", "001.py", "DROP TABLE in upgrade", "msg", "error")]
     html = generate_html_report(versions_dir, warnings)
     # 1 risky, 1 safe (002 has no warnings)
     assert "Will lose data" in html

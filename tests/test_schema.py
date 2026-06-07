@@ -1,4 +1,5 @@
 """Tests for SchemaSnapshot, SchemaDiff, and SchemaIssue."""
+
 from __future__ import annotations
 
 import pytest
@@ -16,13 +17,15 @@ def engine():
 
 def _create_users(engine):
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE users (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
                 email TEXT
             )
-        """))
+        """)
+        )
 
 
 def test_snapshot_captures_tables(engine):

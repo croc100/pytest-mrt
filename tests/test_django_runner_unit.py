@@ -14,6 +14,7 @@ import pytest
 
 # ── DjangoMigration ──────────────────────────────────────────────────────
 
+
 def test_migration_revision():
     from pytest_mrt.adapters.django_runner import DjangoMigration
 
@@ -29,6 +30,7 @@ def test_migration_filename():
 
 
 # ── _sqlalchemy_url_to_django_db ─────────────────────────────────────────
+
 
 def test_sqlite_file_url():
     from pytest_mrt.adapters.django_runner import _sqlalchemy_url_to_django_db
@@ -93,6 +95,7 @@ def test_oracle_url():
 
 # ── _configure_django helpers ─────────────────────────────────────────────
 
+
 def _make_django_mocks(configured: bool = False):
     mock_settings = mock.MagicMock()
     mock_settings.configured = configured
@@ -110,6 +113,7 @@ def _make_django_mocks(configured: bool = False):
 
 
 # ── _configure_django ─────────────────────────────────────────────────────
+
 
 def test_configure_already_configured():
     """Returns early without calling setup() when settings are already configured."""
@@ -170,18 +174,23 @@ def test_configure_import_error():
 
 # ── DjangoMigrationRunner fixture ────────────────────────────────────────
 
+
 @pytest.fixture
 def runner():
     """DjangoMigrationRunner with Django and SQLAlchemy dependencies mocked."""
-    with mock.patch("pytest_mrt.adapters.django_runner._configure_django"), \
-         mock.patch("pytest_mrt.adapters.django_runner.create_engine") as mock_ce:
+    with (
+        mock.patch("pytest_mrt.adapters.django_runner._configure_django"),
+        mock.patch("pytest_mrt.adapters.django_runner.create_engine") as mock_ce,
+    ):
         mock_ce.return_value = mock.MagicMock()
         from pytest_mrt.adapters.django_runner import DjangoMigrationRunner
 
         return DjangoMigrationRunner("sqlite:///:memory:")
 
 
-def _attach_executor(runner, *, leaf_plans=None, node_parent=None, node_missing=False, applied=None):
+def _attach_executor(
+    runner, *, leaf_plans=None, node_parent=None, node_missing=False, applied=None
+):
     """Attach a configured mock _executor() to *runner* and return the mock executor."""
     mock_exec = mock.MagicMock()
 
@@ -208,6 +217,7 @@ def _attach_executor(runner, *, leaf_plans=None, node_parent=None, node_missing=
 
 
 # ── DjangoMigrationRunner methods ────────────────────────────────────────
+
 
 def test_runner_upgrade(runner):
     mock_exec = _attach_executor(runner)

@@ -38,6 +38,11 @@ def explain(
     Requires: pip install pytest-mrt[ai]
     Requires: ANTHROPIC_API_KEY environment variable
     """
+    path = Path(migration_file)
+    if not path.exists():
+        console.print(f"[red]File not found: {migration_file}[/red]")
+        raise typer.Exit(1)
+
     try:
         import anthropic
     except ImportError:
@@ -48,11 +53,6 @@ def explain(
                 title="Missing dependency",
             )
         )
-        raise typer.Exit(1)
-
-    path = Path(migration_file)
-    if not path.exists():
-        console.print(f"[red]File not found: {migration_file}[/red]")
         raise typer.Exit(1)
 
     source = path.read_text()

@@ -1,4 +1,5 @@
 """Tests for MRTConfig."""
+
 from __future__ import annotations
 
 from pytest_mrt.config import MRTConfig
@@ -58,6 +59,7 @@ def test_custom_seeds_callable():
 
 def test_version_available():
     from pytest_mrt import __version__
+
     assert __version__ and __version__ != "0.0.0"
     parts = __version__.split(".")
     assert len(parts) >= 2
@@ -75,6 +77,7 @@ def test_version_fallback_on_import_error():
             # Directly exercise the except branch
             try:
                 from importlib.metadata import version
+
                 v = version("pytest-mrt-nonexistent-pkg-xyz")
             except Exception:
                 v = "0.0.0"
