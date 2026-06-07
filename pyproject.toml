@@ -13,6 +13,7 @@ authors = [{ name = "croc100" }]
 keywords = [
     "pytest", "alembic", "migrations", "database",
     "testing", "rollback", "sqlalchemy",
+    "django", "migration-safety", "data-safety",
 ]
 classifiers = [
     "Framework :: Pytest",
