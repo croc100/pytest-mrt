@@ -53,6 +53,23 @@ def test_mrt_downgrade_base(mrt) -> None:
         )
 
 
+def test_mrt_up_down_consistency(mrt) -> None:
+    """Every revision can be individually upgraded and rolled back without data loss.
+
+    For each revision in the chain (oldest → newest):
+      1. Upgrade to that revision
+      2. Seed realistic data into the affected tables
+      3. Downgrade one step
+      4. Verify schema is fully restored
+      5. Verify seeded data survived the round-trip
+
+    Unlike ``test_mrt_downgrade_base`` (which tests the whole chain at once),
+    this test pinpoints exactly which revision fails and what data was lost.
+    Works for both Alembic and Django modes.
+    """
+    mrt.assert_all_reversible()
+
+
 def test_mrt_static_no_errors(mrt) -> None:
     """No static analysis errors found in migration files."""
     mrt.assert_no_static_errors()
