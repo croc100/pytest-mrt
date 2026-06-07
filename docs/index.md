@@ -110,9 +110,9 @@ pytest tests/test_migrations.py -s
 
 | Database | Static analysis | Dynamic verification |
 |---|---|---|
-| PostgreSQL | ✅ | ✅ |
-| SQLite | ✅ | ✅ |
-| MySQL / MariaDB | ✅ | 🔜 planned |
+| PostgreSQL | Yes | Yes |
+| SQLite | Yes | Yes |
+| MySQL / MariaDB | Yes | planned |
 
 ---
 

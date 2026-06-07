@@ -7,9 +7,9 @@ name = "pytest-mrt"
 version = "1.2.0"
 description = "Catch database migration rollback failures before they reach production"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = { text = "MIT" }
 requires-python = ">=3.10"
-authors = [{ name = "croc100" }]
+authors = [{ name = "croc100", email = "croc100@crode.net" }]
 keywords = [
     "pytest", "alembic", "migrations", "database",
     "testing", "rollback", "sqlalchemy",

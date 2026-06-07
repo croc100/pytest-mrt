@@ -18,12 +18,12 @@ Each pattern shows:
 - What actually happens in production
 - How to fix it (when possible)
 
-**🔴 Error** — will cause data loss or a broken rollback. Always fails the check.  
-**🟡 Warning** — worth reviewing before deploying. Use `--strict` to fail on these too.
+**Error** — will cause data loss or a broken rollback. Always fails the check.  
+**Warning** — worth reviewing before deploying. Use `--strict` to fail on these too.
 
 ---
 
-## 🔴 Errors
+## Errors
 
 ### DROP COLUMN in upgrade
 
@@ -229,7 +229,7 @@ This creates a merge migration that resolves the conflict.
 
 ---
 
-## 🟡 Warnings
+## Warnings
 
 ### NOT NULL without server_default
 
