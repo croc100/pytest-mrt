@@ -523,6 +523,8 @@ def test_mrt_pytest_fixture_via_pytester(pytester, alembic_env):
         def test_fixture_has_config(mrt):
             assert mrt._config is not None
     """)
+    # Disable default test injection so this test focuses on fixture wiring only.
+    pytester.makeini("[pytest]\nmrt_default_tests = false\n")
     result = pytester.runpytest("-v")
     result.assert_outcomes(passed=2)
 

@@ -6,6 +6,7 @@ import pytest
 
 from .config import MRTConfig
 from .core.detector import RiskWarning, analyze_migrations
+from .core.drift import compare_schema, describe_diff, load_metadata
 from .core.runner import MigrationRunner
 from .core.schema import SchemaSnapshot
 from .core.seeder import SmartSeeder
@@ -226,12 +227,99 @@ class MRTFixture:
                 lines.append(r.failure_summary())
             pytest.fail("Some migrations are not safely reversible:\n" + "\n".join(lines))
 
+    # ── schema drift ──────────────────────────────────────────────────
+
+    def assert_schema_matches(
+        self,
+        target_metadata=None,
+        metadata_path: str | None = None,
+    ) -> None:
+        """Fail if the DB schema does not match the SQLAlchemy model definitions.
+
+        For Django mode, delegates to ``manage.py makemigrations --check``.
+
+        Args:
+            target_metadata: A SQLAlchemy ``MetaData`` instance (or declarative
+                ``Base``) to compare against.  When omitted, falls back to
+                ``MRTConfig.target_metadata`` (an import-path string).
+            metadata_path: Import path override, e.g. ``"myapp.models:Base"``.
+                Takes precedence over ``MRTConfig.target_metadata``.
+        """
+        if self._django_mode:
+            self._assert_django_no_drift()
+            return
+
+        if target_metadata is None:
+            path = metadata_path or self._config.target_metadata
+            if path is None:
+                raise ValueError(
+                    "assert_schema_matches() requires either a target_metadata argument "
+                    "or MRTConfig(target_metadata='myapp.models:Base')."
+                )
+            target_metadata = load_metadata(path)
+
+        diffs = compare_schema(self._runner.engine, target_metadata)
+        if diffs:
+            lines = [f"  {describe_diff(d)}" for d in diffs]
+            pytest.fail(
+                f"Schema drift detected ({len(diffs)} difference(s)):\n" + "\n".join(lines)
+            )
+
+    def _assert_django_no_drift(self) -> None:
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        try:
+            call_command("makemigrations", "--check", "--dry-run", stdout=out, stderr=out)
+        except SystemExit as exc:
+            if exc.code != 0:
+                pytest.fail(
+                    "Schema drift: model changes detected that don't have migrations.\n"
+                    "Run `python manage.py makemigrations` to generate them."
+                )
+
     def reset(self) -> None:
         self._seeder.reset()
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addini(
+        "mrt_default_tests",
+        help="Set to 'false' to disable auto-collected built-in MRT tests.",
+        default="true",
+    )
+
+
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "mrt: migration rollback test")
+
+
+def pytest_collection_modifyitems(
+    session: pytest.Session,
+    config: pytest.Config,
+    items: list[pytest.Item],
+) -> None:
+    """Prepend built-in default tests when MRTConfig is registered."""
+    if getattr(config, "_mrt_config", None) is None:
+        return
+    if config.getini("mrt_default_tests") == "false":
+        return
+
+    from pathlib import Path
+
+    try:
+        from _pytest.python import Module as _PytestModule
+
+        import pytest_mrt.default_tests as _dt
+
+        dt_path = Path(_dt.__file__)
+        module = _PytestModule.from_parent(session, path=dt_path)
+        new_items = list(module.collect())
+        items[:0] = new_items
+    except Exception:
+        pass  # never break user's test suite over our injection
 
 
 @pytest.fixture

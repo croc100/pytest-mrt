@@ -76,3 +76,9 @@ class MRTConfig:
     # Model used by `mrt explain`. Defaults to DEFAULT_EXPLAIN_MODEL.
     # Override to use a different Claude model, e.g. "claude-3-5-haiku-latest".
     explain_model: str = DEFAULT_EXPLAIN_MODEL
+
+    # Import path for the SQLAlchemy declarative Base (or MetaData) used by
+    # assert_schema_matches() and the built-in test_mrt_schema_matches_models test.
+    # Format: "myapp.models:Base" or "myapp.models:Base.metadata"
+    # Example: target_metadata="myproject.db.models:Base"
+    target_metadata: str | None = None
