@@ -561,9 +561,7 @@ def _django_migrations_since(migrations_dir: str, since: str) -> set[str]:
     return result
 
 
-def analyze_django_migrations(
-    migrations_dir: str, since: str | None = None
-) -> list[RiskWarning]:
+def analyze_django_migrations(migrations_dir: str, since: str | None = None) -> list[RiskWarning]:
     """Analyze Django migration files for rollback risk patterns.
 
     Args:
