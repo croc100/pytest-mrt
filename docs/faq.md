@@ -32,14 +32,15 @@ pytest-mrt auto-detects which framework you're using based on whether the migrat
 |---|---|---|
 | **Static analysis** | Yes | Yes |
 | **Dynamic rollback** | Yes | Yes (`DjangoMigrationRunner`) |
-| **`mrt fix`** | Yes | No (Django doesn't have a `downgrade()`) |
+| **`mrt fix`** | Yes | Yes (v1.3.0) |
 
 ### Django migrations don't have `downgrade()` — how does pytest-mrt help?
 
-For Django, pytest-mrt provides both **static analysis** and **dynamic rollback verification**:
+For Django, pytest-mrt provides **static analysis**, **dynamic rollback verification**, and (since v1.3.0) **auto-fix**:
 
 - **Static**: detects `RemoveField`, `DeleteModel`, `RunPython` without `reverse_code`, `RunSQL` without `reverse_sql`, unsafe `AddField` patterns, and more (10 Django-specific patterns).
 - **Dynamic**: `DjangoMigrationRunner` runs the full `migrate` / `migrate --backwards` cycle and verifies data integrity, just like Alembic mode.
+- **Fix** (`mrt fix --apply`): adds `reverse_sql`/`reverse_code` where missing and generates transactional backup/restore scaffolding for `RemoveField` and `DeleteModel`. The generated code is self-contained — no runtime dependency on pytest-mrt in your production migrations.
 
 ---
 

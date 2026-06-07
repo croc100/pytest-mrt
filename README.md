@@ -138,6 +138,47 @@ pip install pytest-mrt[oracle]   # python-oracledb
 pip install pytest-mrt[mssql]    # pymssql
 ```
 
+## Auto-fix missing reverse operations (v1.3.0)
+
+`mrt fix` generates missing reverse operations for both Alembic and Django migrations.
+
+**Alembic** — generates a missing or stub `downgrade()`:
+```bash
+mrt fix migrations/versions/0042_drop_phone.py --apply
+```
+
+**Django** — adds `reverse_sql`, `reverse_code`, and full backup/restore scaffolding for data-loss operations (`RemoveField`, `DeleteModel`):
+```bash
+mrt fix myapp/migrations/0042_remove_user_phone.py --apply
+```
+
+For `RemoveField` and `DeleteModel`, the generated code backs up data to a `_mrt_backups` table before the migration runs, and restores it on rollback. After deployment is confirmed stable, clean up the backup rows:
+
+```bash
+mrt clean-backups --db $DATABASE_URL
+mrt clean-backups --db $DATABASE_URL --label 0042_remove_user_phone --yes
+```
+
+## pre-commit integration (v1.3.0)
+
+Add to `.pre-commit-config.yaml` to run `mrt check` automatically before every push:
+
+```yaml
+- repo: https://github.com/croc100/pytest-mrt
+  rev: v1.3.0
+  hooks:
+    - id: mrt-check
+```
+
+## Incremental CI — `--since` (v1.3.0)
+
+Check only migrations added since a given revision. Keeps CI fast on large codebases:
+
+```bash
+mrt check migrations/versions/ --since main
+mrt check myapp/migrations/ --since v1.2.0
+```
+
 ## CI/CD integration
 
 Drop `mrt check` into any pipeline as a pre-deploy gate:
@@ -203,6 +244,13 @@ To suppress all MRT warnings on a line:
 ```
 
 Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
+
+## What's new in v1.3.0
+
+- **Django-aware `mrt fix`** — auto-generates reverse operations and data-safe backup/restore code for `RemoveField` and `DeleteModel`
+- **`mrt clean-backups`** — removes `_mrt_backups` rows after a deployment is confirmed stable
+- **`mrt check --since <revision>`** — incremental scan; only checks migrations added since a given git ref
+- **pre-commit hook** — add two lines to `.pre-commit-config.yaml` and `mrt check` runs automatically before every push
 
 ## Changelog
 

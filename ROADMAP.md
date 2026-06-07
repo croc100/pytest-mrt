@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current status: Production/Stable (v1.2.0)
+## Current status: Production/Stable (v1.3.0)
 
 pytest-mrt is production-ready. The core API (`MRTConfig`, `mrt` fixture, `mrt check`) is stable and
 breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the stability guarantee.
@@ -64,10 +64,24 @@ breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the sta
 - Test coverage: `default_tests.py` and `drift.py` at 100%
 - Documentation fully updated (pattern counts, version refs, suppression docs)
 
-## v1.3.0 — Incremental CI + pre-commit integration (planned)
+## v1.3.0 — Incremental CI + pre-commit + Django fix (shipped)
 
-- **`mrt check --since <revision>`** — check only migrations added since a given revision; eliminates the need to re-run the full history on every PR in large codebases
-- **pre-commit hook integration** — `.pre-commit-hooks.yaml` + registration on pre-commit.com; run `mrt check` automatically before every push without manual CI setup
+- **`mrt check --since <revision>`** — check only migrations added since a given revision; eliminates re-scanning full history on every PR
+- **pre-commit hook** — `.pre-commit-hooks.yaml` ships with the package; two-line setup
+- **Django-aware `mrt fix`** — auto-generates reverse operations for `RunSQL`, `RunPython`, `RemoveField`, `DeleteModel` with transactional DB backup/restore scaffolding
+- **`mrt clean-backups`** — CLI command to remove `_mrt_backups` data after deployment
+
+---
+
+## v1.4.0 — Under consideration
+
+- **`mrt check --watch`** — re-run on file change during development
+- **Django: `squashmigrations` detection** — squashed migrations with unresolved refs
+- **Per-pattern confidence scores** in JSON output
+- **HTML report: source line links** — click a finding to jump to the migration file
+- **Sentry integration** — report migration failures as Sentry events
+- **GitHub App** — automated PR comments with migration risk summary
+- **VS Code extension** — inline warnings in migration files
 
 ---
 
@@ -82,6 +96,7 @@ These are not committed to a specific version yet:
 - **Sentry integration** — report migration failures as Sentry events
 - **GitHub App** — automated PR comments with migration risk summary
 - **VS Code extension** — inline warnings in migration files
+- **`mrt fix --apply` batch mode** — fix all migration files in a directory at once
 
 ---
 
