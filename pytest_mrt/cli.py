@@ -110,7 +110,9 @@ def check(
     for w in warnings:
         c = _severity_color(w.severity)
         line_str = str(w.line) if w.line is not None else ""
-        table.add_row(w.revision, w.code, w.pattern, f"[{c}]{w.severity}[/{c}]", line_str, w.message)
+        table.add_row(
+            w.revision, w.code, w.pattern, f"[{c}]{w.severity}[/{c}]", line_str, w.message
+        )
 
     console.print(table)
     console.print()

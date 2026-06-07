@@ -70,7 +70,6 @@ def test_mrt_up_down_consistency(mrt) -> None:
     mrt.assert_all_reversible()
 
 
-
 def test_mrt_static_no_errors(mrt) -> None:
     """No static analysis errors found in migration files."""
     mrt.assert_no_static_errors()
