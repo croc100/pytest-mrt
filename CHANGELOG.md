@@ -7,6 +7,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.2.0] — 2026-06-07
+
+### Added
+- **Rule codes**: Every static analysis rule now has a stable `MRTxxx` code (e.g. `MRT201` for DROP COLUMN). Codes appear in the CLI table and JSON output.
+- **`# noqa: MRTxxx` suppression**: Silence specific warnings per-line using the ruff/flake8 convention that Python developers already know.
+  - `# noqa: MRT201` — suppress one rule on that line
+  - `# noqa: MRT201, MRT202` — suppress multiple rules
+  - `# noqa` — suppress all MRT warnings on that line
+  - `# mrt: ignore` — legacy alias, still supported for backwards compatibility
+
+---
+
+
 ## [1.1.0] — 2026-06-07
 
 ### Added
