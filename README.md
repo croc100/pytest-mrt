@@ -126,11 +126,11 @@ mrt check migrations/versions/
 
 | | Static analysis | Dynamic verification |
 |---|---|---|
-| PostgreSQL | ✅ | ✅ |
-| SQLite | ✅ | ✅ |
-| MySQL / MariaDB | ✅ | ✅ |
-| Oracle | ✅ | ✅ |
-| SQL Server | ✅ | ✅ |
+| PostgreSQL | Yes | Yes |
+| SQLite | Yes | Yes |
+| MySQL / MariaDB | Yes | Yes |
+| Oracle | Yes | Yes |
+| SQL Server | Yes | Yes |
 
 ```bash
 pip install pytest-mrt[mysql]    # PyMySQL
