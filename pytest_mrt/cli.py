@@ -1,12 +1,12 @@
+import typer
+from rich.console import Console
+
 from . import __version__
 from .commands.check import check
 from .commands.drift_cmd import drift
 from .commands.fix import fix
 from .commands.init import init
 from .commands.output import explain, report
-
-import typer
-from rich.console import Console
 
 app = typer.Typer(
     name="mrt",
