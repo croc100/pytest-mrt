@@ -1,4 +1,5 @@
 """Tests for the mrt CLI commands."""
+
 from __future__ import annotations
 
 import textwrap
@@ -20,7 +21,8 @@ def versions_dir(tmp_path):
 
 
 def _safe_migration(versions_dir: Path, name="001_safe.py"):
-    (versions_dir / name).write_text(textwrap.dedent("""
+    (versions_dir / name).write_text(
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -34,11 +36,13 @@ def _safe_migration(versions_dir: Path, name="001_safe.py"):
             )
         def downgrade():
             op.drop_table('users')
-    """))
+    """)
+    )
 
 
 def _risky_migration(versions_dir: Path, name="002_risky.py"):
-    (versions_dir / name).write_text(textwrap.dedent("""
+    (versions_dir / name).write_text(
+        textwrap.dedent("""
         revision = '002'
         down_revision = None
         branch_labels = None
@@ -48,10 +52,12 @@ def _risky_migration(versions_dir: Path, name="002_risky.py"):
             op.drop_column('users', 'email')
         def downgrade():
             pass
-    """))
+    """)
+    )
 
 
 # ── mrt version ─────────────────────────────────
+
 
 def test_version_command():
     result = runner.invoke(app, ["version"])
@@ -64,10 +70,12 @@ def test_version_shows_number():
     assert result.exit_code == 0
     # should contain a version number like 0.7.0
     import re
+
     assert re.search(r"\d+\.\d+", result.output)
 
 
 # ── mrt check ────────────────────────────────────
+
 
 def test_check_safe_migrations_exits_0(tmp_path, versions_dir):
     _safe_migration(versions_dir)
@@ -93,6 +101,7 @@ def test_check_shows_line_number(tmp_path, versions_dir):
     result = runner.invoke(app, ["check", str(versions_dir)])
     # line number column should appear for errors with line info
     import re
+
     assert re.search(r"\d+", result.output)
 
 
@@ -100,6 +109,7 @@ def test_check_json_format(tmp_path, versions_dir):
     _risky_migration(versions_dir)
     result = runner.invoke(app, ["check", str(versions_dir), "--format", "json"])
     import json
+
     data = json.loads(result.output)
     assert isinstance(data, list)
     assert len(data) > 0
@@ -116,7 +126,8 @@ def test_check_json_safe_exits_0(tmp_path, versions_dir):
 
 def test_check_json_warnings_only_exits_1(tmp_path, versions_dir):
     """--format json with warnings but no errors must exit 1."""
-    (versions_dir / "001.py").write_text(textwrap.dedent("""
+    (versions_dir / "001.py").write_text(
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -126,14 +137,16 @@ def test_check_json_warnings_only_exits_1(tmp_path, versions_dir):
             op.create_index('ix_name', 'users', ['name'])
         def downgrade():
             op.drop_index('ix_name', table_name='users')
-    """))
+    """)
+    )
     result = runner.invoke(app, ["check", str(versions_dir), "--format", "json"])
     assert result.exit_code == 1
 
 
 def test_check_strict_exits_1_on_warnings(tmp_path, versions_dir):
     # A migration with only warnings (not errors) exits 0 normally
-    (versions_dir / "001.py").write_text(textwrap.dedent("""
+    (versions_dir / "001.py").write_text(
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -144,7 +157,8 @@ def test_check_strict_exits_1_on_warnings(tmp_path, versions_dir):
             op.create_index('ix_users_name', 'users', ['name'])
         def downgrade():
             op.drop_index('ix_users_name', table_name='users')
-    """))
+    """)
+    )
     result_normal = runner.invoke(app, ["check", str(versions_dir)])
     result_strict = runner.invoke(app, ["check", str(versions_dir), "--strict"])
     # warnings only: exit 1 normally, exit 2 with --strict
@@ -155,7 +169,8 @@ def test_check_strict_exits_1_on_warnings(tmp_path, versions_dir):
 def test_check_detects_django_migrations(tmp_path):
     d = tmp_path / "migrations"
     d.mkdir()
-    (d / "0001_initial.py").write_text(textwrap.dedent("""
+    (d / "0001_initial.py").write_text(
+        textwrap.dedent("""
         from django.db import migrations, models
         class Migration(migrations.Migration):
             dependencies = []
@@ -164,7 +179,8 @@ def test_check_detects_django_migrations(tmp_path):
                     ('id', models.AutoField(primary_key=True)),
                 ]),
             ]
-    """))
+    """)
+    )
     result = runner.invoke(app, ["check", str(d)])
     assert "Django" in result.output or result.exit_code == 0
 
@@ -192,13 +208,15 @@ def test_check_file_instead_of_dir_exits_1(tmp_path):
 
 # ── mrt init Django detection ────────────────────
 
+
 def test_init_detects_django_via_manage_py(tmp_path, monkeypatch):
     """init switches to Django mode when manage.py exists and no alembic.ini."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "manage.py").write_text("# django manage")
     monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
     result = runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="\n\n",  # accept all defaults
         catch_exceptions=False,
     )
@@ -212,7 +230,8 @@ def test_init_django_creates_django_conftest(tmp_path, monkeypatch):
     (tmp_path / "manage.py").write_text("# django manage")
     monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
     runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="\n\n",
         catch_exceptions=False,
     )
@@ -229,7 +248,8 @@ def test_init_django_creates_test_migrations(tmp_path, monkeypatch):
     (tmp_path / "manage.py").write_text("# django manage")
     monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
     runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="\n\n",
         catch_exceptions=False,
     )
@@ -245,7 +265,8 @@ def test_init_alembic_mode_when_manage_py_and_alembic_ini_both_exist(tmp_path, m
     (tmp_path / "alembic.ini").write_text("[alembic]\n")
     monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")
     result = runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="\nsqlite:///test.db\n",
         catch_exceptions=False,
     )
@@ -257,16 +278,19 @@ def test_init_alembic_mode_when_manage_py_and_alembic_ini_both_exist(tmp_path, m
 
 # ── mrt fix ──────────────────────────────────────
 
+
 def test_fix_no_issues(tmp_path):
     f = tmp_path / "mig.py"
-    f.write_text(textwrap.dedent("""
+    f.write_text(
+        textwrap.dedent("""
         revision = '001'
         from alembic import op
         def upgrade():
             op.create_table('users')
         def downgrade():
             op.drop_table('users')
-    """))
+    """)
+    )
     result = runner.invoke(app, ["fix", str(f)])
     assert result.exit_code == 0
     assert "No fix needed" in result.output
@@ -274,7 +298,8 @@ def test_fix_no_issues(tmp_path):
 
 def test_fix_suggests_downgrade(tmp_path):
     f = tmp_path / "mig.py"
-    f.write_text(textwrap.dedent("""
+    f.write_text(
+        textwrap.dedent("""
         revision = '001'
         from alembic import op
         import sqlalchemy as sa
@@ -282,7 +307,8 @@ def test_fix_suggests_downgrade(tmp_path):
             op.create_table('events', sa.Column('id', sa.Integer, primary_key=True))
         def downgrade():
             pass
-    """))
+    """)
+    )
     result = runner.invoke(app, ["fix", str(f)])
     assert result.exit_code == 0
     assert "downgrade" in result.output.lower()
@@ -290,7 +316,8 @@ def test_fix_suggests_downgrade(tmp_path):
 
 def test_fix_apply_writes_file(tmp_path):
     f = tmp_path / "mig.py"
-    f.write_text(textwrap.dedent("""
+    f.write_text(
+        textwrap.dedent("""
         revision = '001'
         from alembic import op
         import sqlalchemy as sa
@@ -298,7 +325,8 @@ def test_fix_apply_writes_file(tmp_path):
             op.create_table('jobs', sa.Column('id', sa.Integer, primary_key=True))
         def downgrade():
             pass
-    """))
+    """)
+    )
     result = runner.invoke(app, ["fix", str(f), "--apply"])
     assert result.exit_code == 0
     content = f.read_text()
@@ -311,6 +339,7 @@ def test_fix_missing_file(tmp_path):
 
 
 # ── mrt report ───────────────────────────────────
+
 
 def test_report_generates_html(tmp_path, versions_dir):
     _safe_migration(versions_dir)
@@ -332,11 +361,13 @@ def test_report_default_output(tmp_path, versions_dir, monkeypatch):
 
 # ── mrt init ─────────────────────────────────────
 
+
 def test_init_creates_conftest_and_test_file(tmp_path, monkeypatch):
     """init with no alembic.ini prompts for path, creates both files."""
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="alembic.ini\nsqlite:///test.db\n",
         catch_exceptions=False,
     )
@@ -349,7 +380,8 @@ def test_init_finds_alembic_ini(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "alembic.ini").write_text("[alembic]\n")
     result = runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="sqlite:///test.db\n",
         catch_exceptions=False,
     )
@@ -361,7 +393,8 @@ def test_init_creates_conftest_file(tmp_path, monkeypatch):
     """init writes conftest.py when it doesn't exist."""
     monkeypatch.chdir(tmp_path)
     runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="alembic.ini\nsqlite:///test.db\n",
         catch_exceptions=False,
     )
@@ -376,7 +409,8 @@ def test_init_creates_test_migrations_file(tmp_path, monkeypatch):
     """init writes test_migrations.py when it doesn't exist."""
     monkeypatch.chdir(tmp_path)
     runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="alembic.ini\nsqlite:///test.db\n",
         catch_exceptions=False,
     )
@@ -390,7 +424,8 @@ def test_init_skips_existing_conftest_when_declined(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "conftest.py").write_text("# existing\n")
     result = runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="alembic.ini\nsqlite:///test.db\nn\n",
         catch_exceptions=False,
     )
@@ -403,7 +438,8 @@ def test_init_appends_to_existing_conftest_when_accepted(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "conftest.py").write_text("# existing\n")
     runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="alembic.ini\nsqlite:///test.db\ny\n",
         catch_exceptions=False,
     )
@@ -417,7 +453,8 @@ def test_init_skips_existing_test_migrations(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "test_migrations.py").write_text("# already here\n")
     runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="alembic.ini\nsqlite:///test.db\n",
         catch_exceptions=False,
     )
@@ -429,15 +466,18 @@ def test_init_uses_tests_dir_if_exists(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "tests").mkdir()
     runner.invoke(
-        app, ["init"],
+        app,
+        ["init"],
         input="alembic.ini\nsqlite:///test.db\n",
         catch_exceptions=False,
     )
-    assert (tmp_path / "tests" / "conftest.py").exists() or \
-           (tmp_path / "tests" / "test_migrations.py").exists()
+    assert (tmp_path / "tests" / "conftest.py").exists() or (
+        tmp_path / "tests" / "test_migrations.py"
+    ).exists()
 
 
 # ── mrt explain ──────────────────────────────────
+
 
 def test_explain_missing_anthropic(tmp_path):
     """explain exits 1 with helpful message when anthropic is not installed."""
@@ -464,10 +504,12 @@ def test_explain_missing_file(tmp_path):
 
 # ── mrt fix edge cases ───────────────────────────
 
+
 def test_fix_shows_confidence(tmp_path):
     """fix output contains confidence level."""
     f = tmp_path / "mig.py"
-    f.write_text(textwrap.dedent("""
+    f.write_text(
+        textwrap.dedent("""
         revision = '001'
         from alembic import op
         import sqlalchemy as sa
@@ -475,7 +517,8 @@ def test_fix_shows_confidence(tmp_path):
             op.create_table('widgets', sa.Column('id', sa.Integer, primary_key=True))
         def downgrade():
             pass
-    """))
+    """)
+    )
     result = runner.invoke(app, ["fix", str(f)])
     assert result.exit_code == 0
     assert any(level in result.output.lower() for level in ["high", "medium", "low"])
@@ -484,7 +527,8 @@ def test_fix_shows_confidence(tmp_path):
 def test_fix_shows_run_with_apply_hint(tmp_path):
     """fix without --apply tells user to run with --apply."""
     f = tmp_path / "mig.py"
-    f.write_text(textwrap.dedent("""
+    f.write_text(
+        textwrap.dedent("""
         revision = '001'
         from alembic import op
         import sqlalchemy as sa
@@ -492,6 +536,7 @@ def test_fix_shows_run_with_apply_hint(tmp_path):
             op.create_table('items', sa.Column('id', sa.Integer, primary_key=True))
         def downgrade():
             pass
-    """))
+    """)
+    )
     result = runner.invoke(app, ["fix", str(f)])
     assert "--apply" in result.output

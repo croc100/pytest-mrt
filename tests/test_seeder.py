@@ -1,4 +1,5 @@
 """Tests for SmartSeeder, _generate_value, _normalize_for_compare, _topological_order."""
+
 from __future__ import annotations
 
 from datetime import date, datetime, time
@@ -31,6 +32,7 @@ def _col(name: str, type_str: str, nullable: bool = False, pk: bool = False) -> 
 
 # ── _unique_seed ──────────────────────────────────────────────────────
 
+
 def test_unique_seed_is_positive():
     assert _unique_seed("col", 0) > 0
 
@@ -44,6 +46,7 @@ def test_unique_seed_differs_by_col():
 
 
 # ── _generate_value type coverage ────────────────────────────────────
+
 
 def test_generate_bigint():
     col = _col("val", "BIGINT")
@@ -202,8 +205,10 @@ def test_generate_unknown_type_returns_string():
 
 # ── _normalize_for_compare ────────────────────────────────────────────
 
+
 def test_normalize_datetime_strips_tz():
     from datetime import timezone
+
     dt = datetime(2024, 1, 1, 12, 0, 0, 999, tzinfo=timezone.utc)
     norm = _normalize_for_compare(dt)
     assert norm.tzinfo is None
@@ -237,6 +242,7 @@ def test_normalize_passthrough():
 
 
 # ── _topological_order ────────────────────────────────────────────────
+
 
 def test_topological_order_no_fk():
     tables = {
@@ -277,16 +283,20 @@ def test_topological_order_mutual_fk_no_infinite_loop():
 
 # ── SmartSeeder ───────────────────────────────────────────────────────
 
+
 def test_seeder_seed_table_basic(engine):
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL
             )
-        """))
+        """)
+        )
 
     from pytest_mrt.core.schema import SchemaSnapshot
+
     snap = SchemaSnapshot.capture(engine)
     seeder = SmartSeeder(engine)
     seeder.seed_table(snap.tables["users"])
@@ -298,14 +308,17 @@ def test_seeder_seed_table_basic(engine):
 
 def test_seeder_verify_passes_after_seed(engine):
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL
             )
-        """))
+        """)
+        )
 
     from pytest_mrt.core.schema import SchemaSnapshot
+
     snap = SchemaSnapshot.capture(engine)
     seeder = SmartSeeder(engine)
     seeder.seed_table(snap.tables["items"])
@@ -315,14 +328,17 @@ def test_seeder_verify_passes_after_seed(engine):
 
 def test_seeder_verify_detects_dropped_table(engine):
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 msg TEXT NOT NULL
             )
-        """))
+        """)
+        )
 
     from pytest_mrt.core.schema import SchemaSnapshot
+
     snap = SchemaSnapshot.capture(engine)
     seeder = SmartSeeder(engine)
     seeder.seed_table(snap.tables["logs"])
@@ -336,12 +352,14 @@ def test_seeder_verify_detects_dropped_table(engine):
 
 def test_seeder_verify_detects_missing_row(engine):
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE events (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL
             )
-        """))
+        """)
+        )
         conn.execute(text("INSERT INTO events VALUES (1, 'first')"))
 
     seeder = SmartSeeder(engine)
@@ -356,12 +374,14 @@ def test_seeder_verify_detects_missing_row(engine):
 
 def test_seeder_verify_detects_changed_value(engine):
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE settings (
                 id INTEGER PRIMARY KEY,
                 val TEXT NOT NULL
             )
-        """))
+        """)
+        )
         conn.execute(text("INSERT INTO settings VALUES (1, 'original')"))
 
     seeder = SmartSeeder(engine)
@@ -383,14 +403,17 @@ def test_seeder_reset_clears_rows(engine):
 
 def test_seeder_seed_all(engine):
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE cats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL
             )
-        """))
+        """)
+        )
 
     from pytest_mrt.core.schema import SchemaSnapshot
+
     snap = SchemaSnapshot.capture(engine)
     seeder = SmartSeeder(engine)
     seeder.seed_all(snap.tables, count=2)
@@ -402,11 +425,13 @@ def test_seeder_seed_all(engine):
 
 def test_seeder_table_without_pk_is_skipped(engine):
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE nopk (
                 name TEXT NOT NULL
             )
-        """))
+        """)
+        )
 
     seeder = SmartSeeder(engine)
     table = TableInfo(name="nopk")  # no pk_cols
@@ -416,14 +441,17 @@ def test_seeder_table_without_pk_is_skipped(engine):
 
 def test_seeder_skips_nullable_columns(engine):
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE notes (
                 id INTEGER NOT NULL PRIMARY KEY,
                 body TEXT
             )
-        """))
+        """)
+        )
 
     from pytest_mrt.core.schema import SchemaSnapshot
+
     snap = SchemaSnapshot.capture(engine)
     seeder = SmartSeeder(engine)
     seeder.seed_table(snap.tables["notes"])
@@ -436,6 +464,7 @@ def test_seeder_skips_nullable_columns(engine):
 
 
 # ── SmartSeeder._is_auto_pk ───────────────────────────────────────────
+
 
 def test_is_auto_pk_serial_type(engine):
     """SERIAL type string is recognised as auto-generated PK."""
@@ -454,8 +483,13 @@ def test_is_auto_pk_auto_increment_type(engine):
 def test_is_auto_pk_nextval_default(engine):
     """Sequence-backed PK detected via nextval() in the column default."""
     seeder = SmartSeeder(engine)
-    col = ColumnInfo(name="id", type_str="INTEGER", nullable=False, primary_key=True,
-                     default="nextval('items_id_seq'::regclass)")
+    col = ColumnInfo(
+        name="id",
+        type_str="INTEGER",
+        nullable=False,
+        primary_key=True,
+        default="nextval('items_id_seq'::regclass)",
+    )
     assert seeder._is_auto_pk(col) is True
 
 

@@ -174,8 +174,11 @@ Add to `.pre-commit-config.yaml` to run `mrt check` automatically before every p
 Check only migrations added since a given revision. Keeps CI fast on large codebases:
 
 ```bash
-mrt check migrations/versions/ --since main
-mrt check myapp/migrations/ --since v1.2.0
+# Alembic — pass a revision ID
+mrt check migrations/versions/ --since a1b2c3d4
+
+# Django — pass app_label.migration_name
+mrt check myapp/migrations/ --since myapp.0010_add_email
 ```
 
 ## CI/CD integration

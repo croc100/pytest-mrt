@@ -167,7 +167,9 @@ def test_pg_noop_downgrade_fails(pg_env):
         verifier = RollbackVerifier(runner)
         result = verifier.check_revision("001")
         assert not result.passed
-        assert any("still exists" in f.lower() or "incomplete" in f.lower() for f in result.failures)
+        assert any(
+            "still exists" in f.lower() or "incomplete" in f.lower() for f in result.failures
+        )
     finally:
         runner.downgrade_base()
         # Clean up table left behind by noop downgrade

@@ -2,6 +2,7 @@
 Integration tests using SQLite + a real Alembic env.
 Each test gets a fresh temp directory with its own DB and migration scripts.
 """
+
 from __future__ import annotations
 
 import textwrap
@@ -15,6 +16,7 @@ from pytest_mrt.core.verifier import RevisionResult, RollbackVerifier
 
 # ── helpers ───────────────────────────────────────────────────────────
 
+
 def _write(path: Path, content: str) -> None:
     path.write_text(textwrap.dedent(content).lstrip())
 
@@ -24,13 +26,18 @@ def _setup_alembic(tmp: Path, db_path: str) -> tuple[str, str]:
     versions = tmp / "versions"
     versions.mkdir()
 
-    _write(tmp / "alembic.ini", f"""
+    _write(
+        tmp / "alembic.ini",
+        f"""
         [alembic]
         script_location = {tmp}
         sqlalchemy.url = sqlite:///{db_path}
-    """)
+    """,
+    )
 
-    _write(tmp / "env.py", """
+    _write(
+        tmp / "env.py",
+        """
         from alembic import context
         from sqlalchemy import engine_from_config, pool
 
@@ -57,9 +64,12 @@ def _setup_alembic(tmp: Path, db_path: str) -> tuple[str, str]:
             run_migrations_offline()
         else:
             run_migrations_online()
-    """)
+    """,
+    )
 
-    _write(tmp / "script.py.mako", """
+    _write(
+        tmp / "script.py.mako",
+        """
         \"\"\"${message}\"\"\"
         revision = '${up_revision}'
         down_revision = ${repr(down_revision)}
@@ -68,16 +78,20 @@ def _setup_alembic(tmp: Path, db_path: str) -> tuple[str, str]:
 
         def upgrade(): ${upgrades if upgrades else "pass"}
         def downgrade(): ${downgrades if downgrades else "pass"}
-    """)
+    """,
+    )
 
     return str(tmp / "alembic.ini"), str(versions)
 
 
-def _add_migration(versions: str, filename: str, revision: str, down_revision: str | None, content: str) -> None:
+def _add_migration(
+    versions: str, filename: str, revision: str, down_revision: str | None, content: str
+) -> None:
     _write(Path(versions) / filename, content)
 
 
 # ── fixtures ──────────────────────────────────────────────────────────
+
 
 @pytest.fixture()
 def alembic_env(tmp_path):
@@ -88,6 +102,7 @@ def alembic_env(tmp_path):
     yield env
     # Dispose any engines created during the test to avoid ResourceWarning
     from pytest_mrt.core.runner import MigrationRunner
+
     try:
         r = MigrationRunner(ini, db_url)
         r.dispose()
@@ -97,9 +112,15 @@ def alembic_env(tmp_path):
 
 # ── tests ─────────────────────────────────────────────────────────────
 
+
 def test_safe_add_column_is_reversible(alembic_env):
     """ADD COLUMN nullable + drop in downgrade — must pass."""
-    _add_migration(alembic_env["versions"], "001_create_users.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create_users.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -116,9 +137,15 @@ def test_safe_add_column_is_reversible(alembic_env):
 
         def downgrade():
             op.drop_table('users')
-    """))
+    """),
+    )
 
-    _add_migration(alembic_env["versions"], "002_add_nickname.py", "002", "001", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "002_add_nickname.py",
+        "002",
+        "001",
+        textwrap.dedent("""
         revision = '002'
         down_revision = '001'
         branch_labels = None
@@ -132,19 +159,26 @@ def test_safe_add_column_is_reversible(alembic_env):
 
         def downgrade():
             op.drop_column('users', 'nickname')
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     verifier = RollbackVerifier(runner)
     results = verifier.check_all()
 
-    assert all(r.passed for r in results), \
-        "\n".join(r.failure_summary() for r in results if not r.passed)
+    assert all(r.passed for r in results), "\n".join(
+        r.failure_summary() for r in results if not r.passed
+    )
 
 
 def test_drop_column_detected_as_data_loss(alembic_env):
     """DROP COLUMN in upgrade must be caught — seeded rows lose the column data."""
-    _add_migration(alembic_env["versions"], "001_setup.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_setup.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -162,9 +196,15 @@ def test_drop_column_detected_as_data_loss(alembic_env):
 
         def downgrade():
             op.drop_table('users')
-    """))
+    """),
+    )
 
-    _add_migration(alembic_env["versions"], "002_drop_email.py", "002", "001", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "002_drop_email.py",
+        "002",
+        "001",
+        textwrap.dedent("""
         revision = '002'
         down_revision = '001'
         branch_labels = None
@@ -178,7 +218,8 @@ def test_drop_column_detected_as_data_loss(alembic_env):
 
         def downgrade():
             op.add_column('users', sa.Column('email', sa.String(128), nullable=True))
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     verifier = RollbackVerifier(runner)
@@ -197,7 +238,12 @@ def test_drop_column_detected_as_data_loss(alembic_env):
 
 def test_drop_table_fails_verification(alembic_env):
     """DROP TABLE in upgrade: after rollback table must be restored."""
-    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -214,9 +260,15 @@ def test_drop_table_fails_verification(alembic_env):
 
         def downgrade():
             op.drop_table('logs')
-    """))
+    """),
+    )
 
-    _add_migration(alembic_env["versions"], "002_drop_logs.py", "002", "001", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "002_drop_logs.py",
+        "002",
+        "001",
+        textwrap.dedent("""
         revision = '002'
         down_revision = '001'
         branch_labels = None
@@ -233,7 +285,8 @@ def test_drop_table_fails_verification(alembic_env):
                 sa.Column('id', sa.Integer, primary_key=True),
                 sa.Column('msg', sa.Text, nullable=True),
             )
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     verifier = RollbackVerifier(runner)
@@ -249,7 +302,12 @@ def test_drop_table_fails_verification(alembic_env):
 
 def test_noop_downgrade_fails(alembic_env):
     """downgrade() = pass means rollback does nothing — schema not restored."""
-    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -266,7 +324,8 @@ def test_noop_downgrade_fails(alembic_env):
 
         def downgrade():
             pass
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     verifier = RollbackVerifier(runner)
@@ -278,7 +337,12 @@ def test_noop_downgrade_fails(alembic_env):
 
 def test_schema_snapshot_captures_columns(alembic_env):
     """SchemaSnapshot must capture all columns and types."""
-    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -296,12 +360,14 @@ def test_schema_snapshot_captures_columns(alembic_env):
 
         def downgrade():
             op.drop_table('products')
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     runner.upgrade("001")
 
     from pytest_mrt.core.schema import SchemaSnapshot
+
     snap = SchemaSnapshot.capture(runner.engine)
 
     assert "products" in snap.tables
@@ -312,7 +378,12 @@ def test_schema_snapshot_captures_columns(alembic_env):
 
 def test_verifier_custom_seeds(alembic_env):
     """custom_seeds replaces auto-seeding for a table."""
-    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -329,9 +400,15 @@ def test_verifier_custom_seeds(alembic_env):
 
         def downgrade():
             op.drop_table('users')
-    """))
+    """),
+    )
 
-    _add_migration(alembic_env["versions"], "002_add_email.py", "002", "001", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "002_add_email.py",
+        "002",
+        "001",
+        textwrap.dedent("""
         revision = '002'
         down_revision = '001'
         branch_labels = None
@@ -345,7 +422,8 @@ def test_verifier_custom_seeds(alembic_env):
 
         def downgrade():
             op.drop_column('users', 'email')
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     # Advance to 001 so schema_before for revision 002 has the 'users' table
@@ -360,7 +438,12 @@ def test_verifier_custom_seeds(alembic_env):
 
 def test_verifier_skip(alembic_env):
     """Skipped revisions return passed=True with skipped=True."""
-    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -377,7 +460,8 @@ def test_verifier_skip(alembic_env):
 
         def downgrade():
             pass
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     verifier = RollbackVerifier(runner, skip={"001": "intentional data migration"})
@@ -389,7 +473,12 @@ def test_verifier_skip(alembic_env):
 
 def test_verifier_check_revision_upgrade_exception(alembic_env):
     """When upgrade raises, verifier records failure and recovers DB state."""
-    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -406,7 +495,8 @@ def test_verifier_check_revision_upgrade_exception(alembic_env):
 
         def downgrade():
             op.drop_table('users')
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     verifier = RollbackVerifier(runner)
@@ -430,7 +520,12 @@ def test_verifier_check_revision_upgrade_exception(alembic_env):
 
 def test_verifier_check_all_chain_advance_failure(alembic_env):
     """When chain-advance fails, check_all records failure and stops."""
-    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -447,9 +542,15 @@ def test_verifier_check_all_chain_advance_failure(alembic_env):
 
         def downgrade():
             op.drop_table('users')
-    """))
+    """),
+    )
 
-    _add_migration(alembic_env["versions"], "002_add_email.py", "002", "001", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "002_add_email.py",
+        "002",
+        "001",
+        textwrap.dedent("""
         revision = '002'
         down_revision = '001'
         branch_labels = None
@@ -463,7 +564,8 @@ def test_verifier_check_all_chain_advance_failure(alembic_env):
 
         def downgrade():
             op.drop_column('users', 'email')
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     verifier = RollbackVerifier(runner)
@@ -491,7 +593,12 @@ def test_migration_timeout_fires(alembic_env):
     """migration_timeout causes a failure when upgrade/downgrade hangs."""
     import time
 
-    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -507,7 +614,8 @@ def test_migration_timeout_fires(alembic_env):
 
         def downgrade():
             op.drop_table('things')
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     verifier = RollbackVerifier(runner, timeout=1)
@@ -527,7 +635,12 @@ def test_migration_timeout_fires(alembic_env):
 
 def test_migration_timeout_none_does_not_affect_fast_migrations(alembic_env):
     """timeout=None (default) runs normally with no timeout applied."""
-    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -543,7 +656,8 @@ def test_migration_timeout_none_does_not_affect_fast_migrations(alembic_env):
 
         def downgrade():
             op.drop_table('widgets')
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     verifier = RollbackVerifier(runner, timeout=None)
@@ -558,9 +672,11 @@ def test_runner_get_versions_dir(alembic_env):
     assert isinstance(versions_dir, str)
     assert len(versions_dir) > 0
     from pathlib import Path
+
     # The returned path should be a parent of or equal to the versions directory
-    assert Path(versions_dir) == Path(alembic_env["versions"]).parent or \
-           Path(versions_dir) == Path(alembic_env["versions"])
+    assert Path(versions_dir) == Path(alembic_env["versions"]).parent or Path(
+        versions_dir
+    ) == Path(alembic_env["versions"])
 
 
 def test_runner_mysql_uses_nullpool():
@@ -568,6 +684,7 @@ def test_runner_mysql_uses_nullpool():
     from unittest.mock import patch
 
     from sqlalchemy.pool import NullPool
+
     with patch("sqlalchemy.create_engine") as mock_create:
         mock_create.return_value = MagicMock()
         with patch("alembic.config.Config") as mock_cfg:
@@ -601,7 +718,8 @@ def test_revision_result_risk_score_empty():
 
 def test_revision_result_risk_score_max():
     result = RevisionResult(
-        revision="abc", passed=False,
+        revision="abc",
+        passed=False,
         failures=["a", "b", "c", "d", "e"],
     )
     assert result.risk_score == 100
@@ -609,7 +727,12 @@ def test_revision_result_risk_score_max():
 
 def test_verifier_check_all_multiple_revisions(alembic_env):
     """check_all covers a 3-revision chain."""
-    _add_migration(alembic_env["versions"], "001_create.py", "001", None, textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
         revision = '001'
         down_revision = None
         branch_labels = None
@@ -626,9 +749,15 @@ def test_verifier_check_all_multiple_revisions(alembic_env):
 
         def downgrade():
             op.drop_table('items')
-    """))
+    """),
+    )
 
-    _add_migration(alembic_env["versions"], "002_add_desc.py", "002", "001", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "002_add_desc.py",
+        "002",
+        "001",
+        textwrap.dedent("""
         revision = '002'
         down_revision = '001'
         branch_labels = None
@@ -642,9 +771,15 @@ def test_verifier_check_all_multiple_revisions(alembic_env):
 
         def downgrade():
             op.drop_column('items', 'description')
-    """))
+    """),
+    )
 
-    _add_migration(alembic_env["versions"], "003_add_price.py", "003", "002", textwrap.dedent("""
+    _add_migration(
+        alembic_env["versions"],
+        "003_add_price.py",
+        "003",
+        "002",
+        textwrap.dedent("""
         revision = '003'
         down_revision = '002'
         branch_labels = None
@@ -658,7 +793,8 @@ def test_verifier_check_all_multiple_revisions(alembic_env):
 
         def downgrade():
             op.drop_column('items', 'price')
-    """))
+    """),
+    )
 
     runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
     verifier = RollbackVerifier(runner)

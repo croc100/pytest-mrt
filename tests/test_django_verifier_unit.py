@@ -13,6 +13,7 @@ import pytest
 
 # ── helpers ───────────────────────────────────────────────────────────────
 
+
 def _make_migration(app_label="myapp", name="0001_initial"):
     from pytest_mrt.adapters.django_runner import DjangoMigration
 
@@ -35,6 +36,7 @@ def verifier(mock_runner):
 
 # ── check_migration — skip ────────────────────────────────────────────────
 
+
 def test_check_migration_skipped(verifier):
     m = _make_migration()
     verifier.skip = {"myapp/0001_initial": "not reversible by design"}
@@ -48,6 +50,7 @@ def test_check_migration_skipped(verifier):
 
 # ── check_migration — pass / fail ─────────────────────────────────────────
 
+
 def test_check_migration_passes(mock_runner):
     from pytest_mrt.adapters.django_verifier import DjangoRollbackVerifier
     from pytest_mrt.core.schema import SchemaSnapshot
@@ -58,8 +61,10 @@ def test_check_migration_passes(mock_runner):
     mock_snapshot = mock.MagicMock()
     mock_snapshot.tables = {}
 
-    with mock.patch.object(SchemaSnapshot, "capture", return_value=mock_snapshot), \
-         mock.patch.object(verifier, "_run_check", return_value=[]):
+    with (
+        mock.patch.object(SchemaSnapshot, "capture", return_value=mock_snapshot),
+        mock.patch.object(verifier, "_run_check", return_value=[]),
+    ):
         result = verifier.check_migration(m)
 
     assert result.passed
@@ -77,8 +82,10 @@ def test_check_migration_fails(mock_runner):
     mock_snapshot = mock.MagicMock()
     mock_snapshot.tables = {}
 
-    with mock.patch.object(SchemaSnapshot, "capture", return_value=mock_snapshot), \
-         mock.patch.object(verifier, "_run_check", return_value=["Column 'x' was dropped"]):
+    with (
+        mock.patch.object(SchemaSnapshot, "capture", return_value=mock_snapshot),
+        mock.patch.object(verifier, "_run_check", return_value=["Column 'x' was dropped"]),
+    ):
         result = verifier.check_migration(m)
 
     assert not result.passed
@@ -86,6 +93,7 @@ def test_check_migration_fails(mock_runner):
 
 
 # ── check_migration — exception / recovery ───────────────────────────────
+
 
 def test_check_migration_exception_triggers_recovery(mock_runner):
     """Exception in _run_check calls downgrade_app_zero for recovery."""
@@ -98,8 +106,10 @@ def test_check_migration_exception_triggers_recovery(mock_runner):
     mock_snapshot = mock.MagicMock()
     mock_snapshot.tables = {}
 
-    with mock.patch.object(SchemaSnapshot, "capture", return_value=mock_snapshot), \
-         mock.patch.object(verifier, "_run_check", side_effect=RuntimeError("boom")):
+    with (
+        mock.patch.object(SchemaSnapshot, "capture", return_value=mock_snapshot),
+        mock.patch.object(verifier, "_run_check", side_effect=RuntimeError("boom")),
+    ):
         result = verifier.check_migration(m)
 
     assert not result.passed
@@ -120,8 +130,10 @@ def test_check_migration_recovery_also_fails(mock_runner):
 
     mock_runner.downgrade_app_zero.side_effect = RuntimeError("recovery failed")
 
-    with mock.patch.object(SchemaSnapshot, "capture", return_value=mock_snapshot), \
-         mock.patch.object(verifier, "_run_check", side_effect=RuntimeError("original")):
+    with (
+        mock.patch.object(SchemaSnapshot, "capture", return_value=mock_snapshot),
+        mock.patch.object(verifier, "_run_check", side_effect=RuntimeError("original")),
+    ):
         result = verifier.check_migration(m)
 
     assert not result.passed
@@ -129,6 +141,7 @@ def test_check_migration_recovery_also_fails(mock_runner):
 
 
 # ── check_migration — timeout ─────────────────────────────────────────────
+
 
 def test_check_migration_timeout(mock_runner):
     """Timeout appends a descriptive message and the result is not passed."""
@@ -146,9 +159,11 @@ def test_check_migration_timeout(mock_runner):
     mock_future = mock.MagicMock()
     mock_future.result.side_effect = FuturesTimeout()
 
-    with mock.patch.object(SchemaSnapshot, "capture", return_value=mock_snapshot), \
-         mock.patch.object(verifier, "_build_seeder", return_value=mock.MagicMock()), \
-         mock.patch("pytest_mrt.adapters.django_verifier.ThreadPoolExecutor") as mock_pool:
+    with (
+        mock.patch.object(SchemaSnapshot, "capture", return_value=mock_snapshot),
+        mock.patch.object(verifier, "_build_seeder", return_value=mock.MagicMock()),
+        mock.patch("pytest_mrt.adapters.django_verifier.ThreadPoolExecutor") as mock_pool,
+    ):
         mock_pool.return_value.__enter__.return_value.submit.return_value = mock_future
         result = verifier.check_migration(m)
 
@@ -157,6 +172,7 @@ def test_check_migration_timeout(mock_runner):
 
 
 # ── _run_check ────────────────────────────────────────────────────────────
+
 
 def test_run_check_no_issues(mock_runner):
     """Returns empty list when schema is restored and data is intact."""
@@ -170,8 +186,10 @@ def test_run_check_no_issues(mock_runner):
     mock_seeder = mock.MagicMock()
     mock_seeder.verify.return_value = []
 
-    with mock.patch.object(SchemaSnapshot, "capture", return_value=mock_schema), \
-         mock.patch.object(SchemaDiff, "verify_restored", return_value=[]):
+    with (
+        mock.patch.object(SchemaSnapshot, "capture", return_value=mock_schema),
+        mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
+    ):
         failures = verifier._run_check(m, mock_schema, mock_seeder)
 
     assert failures == []
@@ -194,8 +212,10 @@ def test_run_check_schema_issue(mock_runner):
     mock_issue = mock.MagicMock()
     mock_issue.message = "Table 'users' was dropped"
 
-    with mock.patch.object(SchemaSnapshot, "capture", return_value=mock_schema), \
-         mock.patch.object(SchemaDiff, "verify_restored", return_value=[mock_issue]):
+    with (
+        mock.patch.object(SchemaSnapshot, "capture", return_value=mock_schema),
+        mock.patch.object(SchemaDiff, "verify_restored", return_value=[mock_issue]),
+    ):
         failures = verifier._run_check(m, mock_schema, mock_seeder)
 
     assert "Table 'users' was dropped" in failures
@@ -213,14 +233,17 @@ def test_run_check_data_issue(mock_runner):
     mock_seeder = mock.MagicMock()
     mock_seeder.verify.return_value = ["Row id=1 was deleted from 'users'"]
 
-    with mock.patch.object(SchemaSnapshot, "capture", return_value=mock_schema), \
-         mock.patch.object(SchemaDiff, "verify_restored", return_value=[]):
+    with (
+        mock.patch.object(SchemaSnapshot, "capture", return_value=mock_schema),
+        mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
+    ):
         failures = verifier._run_check(m, mock_schema, mock_seeder)
 
     assert "Row id=1 was deleted from 'users'" in failures
 
 
 # ── _build_seeder ─────────────────────────────────────────────────────────
+
 
 def test_build_seeder_auto_seeds_table(mock_runner):
     """seed_table is called for tables without a custom seed function."""
@@ -335,6 +358,7 @@ def test_build_seeder_custom_seed_insert_exception_is_swallowed(mock_runner):
 
 
 # ── check_all ─────────────────────────────────────────────────────────────
+
 
 def test_check_all_empty(mock_runner):
     """check_all() returns [] immediately when no migrations are found."""
