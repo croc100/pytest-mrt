@@ -52,12 +52,16 @@ def clean_backups(
             try:
                 if label:
                     result = conn.execute(
-                        text(f"SELECT migration_label, COUNT(*) FROM {_TABLE} WHERE migration_label = :label GROUP BY migration_label"),
+                        text(
+                            f"SELECT migration_label, COUNT(*) FROM {_TABLE} WHERE migration_label = :label GROUP BY migration_label"
+                        ),
                         {"label": label},
                     )
                 else:
                     result = conn.execute(
-                        text(f"SELECT migration_label, COUNT(*) FROM {_TABLE} GROUP BY migration_label ORDER BY migration_label")
+                        text(
+                            f"SELECT migration_label, COUNT(*) FROM {_TABLE} GROUP BY migration_label ORDER BY migration_label"
+                        )
                     )
                 rows = result.fetchall()
             except Exception:

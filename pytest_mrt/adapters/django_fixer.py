@@ -257,7 +257,9 @@ def _patch_run_python(source: str, op: ast.Call) -> DjangoOpPatch | None:
 # ─────────────────────────────────────────────────────────────
 
 
-def _build_run_python_insertion(original: str, op: ast.Call, backup_fn: str, restore_fn: str) -> str:
+def _build_run_python_insertion(
+    original: str, op: ast.Call, backup_fn: str, restore_fn: str
+) -> str:
     indent = " " * op.col_offset
     inner = " " * (op.col_offset + 4)
     return (

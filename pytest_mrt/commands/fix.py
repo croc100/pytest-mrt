@@ -52,9 +52,7 @@ def _fix_alembic(migration_file: str, apply: bool) -> None:
         raise typer.Exit(0)
 
     console.print()
-    console.print(
-        f"[bold]{fix_suggestion.file}[/bold]  [dim]{fix_suggestion.revision}[/dim]"
-    )
+    console.print(f"[bold]{fix_suggestion.file}[/bold]  [dim]{fix_suggestion.revision}[/dim]")
     console.print(f"[yellow]Issue:[/yellow] {fix_suggestion.issue}")
     console.print()
 
