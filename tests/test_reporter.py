@@ -1,10 +1,12 @@
 """Tests for the rich console reporter."""
 from __future__ import annotations
-import pytest
-from rich.console import Console
+
 from io import StringIO
+
+from rich.console import Console
+
 from pytest_mrt.core.verifier import RevisionResult
-from pytest_mrt.reporter import print_revision_result, print_check_all_summary
+from pytest_mrt.reporter import print_check_all_summary, print_revision_result
 
 
 def _capture(fn, *args) -> str:

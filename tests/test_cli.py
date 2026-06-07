@@ -1,9 +1,12 @@
 """Tests for the mrt CLI commands."""
 from __future__ import annotations
+
 import textwrap
 from pathlib import Path
+
 import pytest
 from typer.testing import CliRunner
+
 from pytest_mrt.cli import app
 
 runner = CliRunner()

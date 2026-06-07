@@ -1,13 +1,16 @@
 """Tests for cross-migration graph analysis."""
 from __future__ import annotations
+
 import textwrap
 from pathlib import Path
+
 import pytest
+
 from pytest_mrt.core.graph import (
-    analyze_migration_graph,
     _build_graph,
     _check_data_hole_chain,
     _check_orphaned_migrations,
+    analyze_migration_graph,
 )
 
 

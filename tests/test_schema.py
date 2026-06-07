@@ -1,8 +1,10 @@
 """Tests for SchemaSnapshot, SchemaDiff, and SchemaIssue."""
 from __future__ import annotations
+
 import pytest
 from sqlalchemy import create_engine, text
-from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff, SchemaIssue
+
+from pytest_mrt.core.schema import SchemaDiff, SchemaSnapshot
 
 
 @pytest.fixture()

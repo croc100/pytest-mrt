@@ -1,4 +1,3 @@
-import pytest
 from pytest_mrt import MRTConfig
 
 

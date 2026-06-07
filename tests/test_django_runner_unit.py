@@ -12,7 +12,6 @@ import unittest.mock as mock
 
 import pytest
 
-
 # ── DjangoMigration ──────────────────────────────────────────────────────
 
 def test_migration_revision():

@@ -60,7 +60,7 @@ def test_django_runner_get_migrations(django_runner):
 
 def test_django_runner_upgrade_downgrade(django_runner):
     """upgrade() then downgrade() leaves DB schema unchanged."""
-    from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff
+    from pytest_mrt.core.schema import SchemaDiff, SchemaSnapshot
 
     migrations = django_runner.get_migrations(apps=["django_app"])
     assert migrations, "No migrations found in django_app"

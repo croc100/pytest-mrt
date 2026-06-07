@@ -3,17 +3,15 @@ Integration tests using SQLite + a real Alembic env.
 Each test gets a fresh temp directory with its own DB and migration scripts.
 """
 from __future__ import annotations
-import os
+
 import textwrap
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy import create_engine, text
 
 from pytest_mrt.core.runner import MigrationRunner
-from pytest_mrt.core.verifier import RollbackVerifier, RevisionResult
-
+from pytest_mrt.core.verifier import RevisionResult, RollbackVerifier
 
 # ── helpers ───────────────────────────────────────────────────────────
 
@@ -567,8 +565,9 @@ def test_runner_get_versions_dir(alembic_env):
 
 def test_runner_mysql_uses_nullpool():
     """MigrationRunner uses NullPool for MySQL URLs."""
+    from unittest.mock import patch
+
     from sqlalchemy.pool import NullPool
-    from unittest.mock import patch, MagicMock
     with patch("sqlalchemy.create_engine") as mock_create:
         mock_create.return_value = MagicMock()
         with patch("alembic.config.Config") as mock_cfg:

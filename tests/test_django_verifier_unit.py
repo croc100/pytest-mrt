@@ -11,7 +11,6 @@ import unittest.mock as mock
 
 import pytest
 
-
 # ── helpers ───────────────────────────────────────────────────────────────
 
 def _make_migration(app_label="myapp", name="0001_initial"):
@@ -162,7 +161,7 @@ def test_check_migration_timeout(mock_runner):
 def test_run_check_no_issues(mock_runner):
     """Returns empty list when schema is restored and data is intact."""
     from pytest_mrt.adapters.django_verifier import DjangoRollbackVerifier
-    from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff
+    from pytest_mrt.core.schema import SchemaDiff, SchemaSnapshot
 
     verifier = DjangoRollbackVerifier(mock_runner)
     m = _make_migration()
@@ -183,7 +182,7 @@ def test_run_check_no_issues(mock_runner):
 def test_run_check_schema_issue(mock_runner):
     """Schema diff failures are included in the returned list."""
     from pytest_mrt.adapters.django_verifier import DjangoRollbackVerifier
-    from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff
+    from pytest_mrt.core.schema import SchemaDiff, SchemaSnapshot
 
     verifier = DjangoRollbackVerifier(mock_runner)
     m = _make_migration()
@@ -205,7 +204,7 @@ def test_run_check_schema_issue(mock_runner):
 def test_run_check_data_issue(mock_runner):
     """Seeder verification failures are included in the returned list."""
     from pytest_mrt.adapters.django_verifier import DjangoRollbackVerifier
-    from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff
+    from pytest_mrt.core.schema import SchemaDiff, SchemaSnapshot
 
     verifier = DjangoRollbackVerifier(mock_runner)
     m = _make_migration()

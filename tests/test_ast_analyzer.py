@@ -1,9 +1,9 @@
 """Tests for MigrationAST helper methods in ast_analyzer.py."""
 from __future__ import annotations
+
 import ast
 import textwrap
 
-import pytest
 from pytest_mrt.core.ast_analyzer import MigrationAST
 
 
