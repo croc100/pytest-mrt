@@ -2,13 +2,23 @@ from __future__ import annotations
 
 
 def load_metadata(metadata_path: str):
-    """Import SQLAlchemy metadata from a dotted path like 'myapp.models:Base'."""
+    """Import SQLAlchemy metadata from a dotted path like 'myapp.models:Base'.
+
+    The format is 'module.path:AttributeName'. Dotted attribute traversal after
+    the colon is not supported — use 'myapp.models:Base' (not 'myapp.models:Base.metadata').
+    Both a declarative Base class and a MetaData instance are accepted.
+    """
     if ":" not in metadata_path:
         raise ValueError(
             f"Invalid metadata path '{metadata_path}'. "
-            "Use the form 'myapp.models:Base' or 'myapp.models:Base.metadata'."
+            "Use the form 'myapp.models:Base'."
         )
     module_path, attr = metadata_path.rsplit(":", 1)
+    if "." in attr:
+        raise ValueError(
+            f"Dotted attribute '{attr}' is not supported after the colon. "
+            f"Use 'myapp.models:Base' instead of 'myapp.models:Base.metadata'."
+        )
     import importlib
 
     mod = importlib.import_module(module_path)

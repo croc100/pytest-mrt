@@ -43,7 +43,13 @@ def test_mrt_downgrade_base(mrt) -> None:
         pytest.skip("use test_mrt_all_reversible for Django mode")
     mrt.upgrade("head")
     mrt._runner.downgrade_base()
-    mrt.upgrade("head")  # restore to head so subsequent tests start clean
+    try:
+        mrt.upgrade("head")  # restore to head so subsequent tests start clean
+    except Exception as exc:
+        pytest.fail(
+            f"Migration chain failed to re-upgrade to head after downgrade_base: {exc}\n"
+            "DB state is now at 'base'. Fix the upgrade() failure before continuing."
+        )
 
 
 def test_mrt_static_no_errors(mrt) -> None:
@@ -62,4 +68,8 @@ def test_mrt_schema_matches_models(mrt) -> None:
             "target_metadata not configured — skipping schema drift check.\n"
             "Set MRTConfig(target_metadata='myapp.models:Base') to enable."
         )
+    # Ensure migrations are applied before comparing schema.
+    # This makes the test safe to run in isolation (e.g. pytest -k test_mrt_schema_matches_models).
+    if not mrt._django_mode:
+        mrt.upgrade("head")
     mrt.assert_schema_matches()

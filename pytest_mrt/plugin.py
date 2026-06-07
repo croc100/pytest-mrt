@@ -279,6 +279,11 @@ class MRTFixture:
                     "Schema drift: model changes detected that don't have migrations.\n"
                     "Run `python manage.py makemigrations` to generate them."
                 )
+        except Exception as exc:
+            pytest.fail(
+                f"assert_schema_matches() failed while checking Django migrations: {exc}\n"
+                "Check that DJANGO_SETTINGS_MODULE is set correctly and all models can be imported."
+            )
 
     def reset(self) -> None:
         self._seeder.reset()
@@ -318,8 +323,14 @@ def pytest_collection_modifyitems(
         module = _PytestModule.from_parent(session, path=dt_path)
         new_items = list(module.collect())
         items[:0] = new_items
-    except Exception:
-        pass  # never break user's test suite over our injection
+    except Exception as _exc:
+        import warnings
+
+        warnings.warn(
+            f"pytest-mrt: failed to inject built-in default tests: {_exc}\n"
+            "Set mrt_default_tests = 'false' in pytest.ini to suppress this warning.",
+            stacklevel=2,
+        )
 
 
 @pytest.fixture
