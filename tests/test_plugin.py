@@ -1,5 +1,6 @@
 """Integration tests for MRTFixture (plugin.py)."""
 from __future__ import annotations
+
 import textwrap
 from pathlib import Path
 
@@ -564,6 +565,7 @@ def test_mrt_fixture_risk_score(alembic_env):
 def test_auto_detect_django_switches_mode_when_env_set_and_no_ini(tmp_path, monkeypatch):
     """_auto_detect_django sets django_settings from env when alembic.ini is missing."""
     import unittest.mock as mock
+
     from pytest_mrt.plugin import _auto_detect_django
 
     monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myproject.settings_test")

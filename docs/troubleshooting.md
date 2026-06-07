@@ -251,6 +251,68 @@ This creates a merge migration that resolves the conflict.
 
 ---
 
+## `--since` not finding any migrations
+
+### `mrt check --since <revision>` returns "No rollback risks detected" immediately
+
+**Cause:** The revision ID was not found in the migration chain, so the filter returned nothing.
+
+**Fix:** Double-check the revision ID. For Alembic it must be the bare hex ID (e.g. `a1b2c3d4`), not the full filename. You can list all known revisions with:
+
+```bash
+alembic history --verbose | grep "Rev:"
+```
+
+For Django, the format is `app_label.migration_name` exactly as it appears in the filename:
+
+```bash
+# file: myapp/migrations/0010_add_email.py  →  --since myapp.0010_add_email
+```
+
+If the revision exists but is at the tip of the chain (no descendants), `--since` will return an empty set — which is correct; there is nothing to check.
+
+---
+
+## Seeding failures
+
+### `SeederError: could not generate unique value after N retries`
+
+**Cause:** A column has a `UNIQUE` constraint and the seeder exhausted its retry budget generating a non-colliding value.
+
+**Fix:** Provide a seed factory for the conflicting column:
+
+```python
+MRTConfig(
+    alembic_ini="alembic.ini",
+    db_url="...",
+    seed_overrides={"users": {"email": lambda i: f"user_{i}@example.com"}},
+)
+```
+
+---
+
+### `SeederError: circular foreign key detected`
+
+**Cause:** Two or more tables have FK references to each other (e.g. `users.manager_id → users.id`).
+
+**Fix:** Use `seed_overrides` to break the cycle by seeding the self-referential column as `None`:
+
+```python
+MRTConfig(
+    seed_overrides={"users": {"manager_id": None}},
+)
+```
+
+---
+
+## Multiple databases
+
+### Which database is tested when I have multiple `bind` targets in Alembic?
+
+pytest-mrt uses the `db_url` you pass to `MRTConfig`. If your Alembic config uses `bind_names` for multiple databases, you need a separate `MRTConfig` per database and run each in its own test session. There is no multi-bind support in a single `MRTConfig` today.
+
+---
+
 ## Getting help
 
 If you've hit something not covered here, [open an issue](https://github.com/croc100/pytest-mrt/issues) with:

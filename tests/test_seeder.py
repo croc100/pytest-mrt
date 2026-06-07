@@ -1,5 +1,6 @@
 """Tests for SmartSeeder, _generate_value, _normalize_for_compare, _topological_order."""
 from __future__ import annotations
+
 from datetime import date, datetime, time
 from decimal import Decimal
 
@@ -8,8 +9,8 @@ from sqlalchemy import create_engine, text
 
 from pytest_mrt.core.schema import ColumnInfo, TableInfo
 from pytest_mrt.core.seeder import (
-    SmartSeeder,
     SeededRow,
+    SmartSeeder,
     _generate_value,
     _normalize_for_compare,
     _topological_order,
@@ -389,7 +390,7 @@ def test_seeder_seed_all(engine):
             )
         """))
 
-    from pytest_mrt.core.schema import SchemaSnapshot, TableInfo
+    from pytest_mrt.core.schema import SchemaSnapshot
     snap = SchemaSnapshot.capture(engine)
     seeder = SmartSeeder(engine)
     seeder.seed_all(snap.tables, count=2)

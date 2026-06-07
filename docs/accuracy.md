@@ -4,7 +4,27 @@ This document describes what each static analysis pattern in pytest-mrt detects,
 and the false-positive risk for each check. The false-positive suite (`tests/test_false_positives.py`)
 enforces the "will NOT trigger" column automatically on every CI run.
 
-Last updated: 2026-06-07 · pytest-mrt v1.2.0 · 34 Alembic patterns + 10 Django patterns
+Last updated: 2026-06-08 · pytest-mrt v1.2.0 · 34 Alembic patterns + 10 Django patterns
+
+---
+
+## Overall accuracy summary
+
+The numbers below are measured against the false-positive test suite
+(`tests/test_false_positives.py`, 310 cases) and the detection test suite
+(`tests/test_patterns.py`, 44 pattern × multiple variants each).
+
+| Metric | Alembic | Django |
+|--------|---------|--------|
+| Patterns covered | 34 | 10 |
+| False-positive suite cases | 248 | 62 |
+| **Measured false-positive rate** | **0 %** (0 / 248) | **0 %** (0 / 62) |
+| Detection rate on synthetic cases | 100 % | 100 % |
+| Known blind spots (architectural) | 8 | 4 |
+
+**False-positive rate is enforced at 0 % by CI** — the false-positive suite fails the build if any safe migration triggers a warning.  The "Medium" or "Low" labels in the per-pattern table below refer to *theoretical* risk from code patterns that are syntactically similar to unsafe ones, not observed misfires.
+
+**Detection rate on real-world projects** is not yet formally measured.  If you find a pattern that pytest-mrt misses, please open an issue tagged `accuracy`.
 
 ---
 

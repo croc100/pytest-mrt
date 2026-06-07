@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import sys
 from types import ModuleType
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import create_engine
-
 
 # ── load_metadata ────────────────────────────────────────────────────────────
 

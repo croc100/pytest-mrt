@@ -39,6 +39,7 @@ nav:
   - FAQ: faq.md
   - Troubleshooting: troubleshooting.md
   - Detection Accuracy: accuracy.md
+  - Upgrade Guide: migration-guide.md
   - Benchmarks: benchmarks.md
   - Contributing: contributing.md
 

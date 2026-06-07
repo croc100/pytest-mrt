@@ -1,9 +1,10 @@
 """Tests for the automatic downgrade() fix generator."""
 from __future__ import annotations
+
 import textwrap
 from pathlib import Path
-import pytest
-from pytest_mrt.core.fixer import generate_fix, apply_fix, FixSuggestion
+
+from pytest_mrt.core.fixer import apply_fix, generate_fix
 
 
 def _write(tmp_path: Path, content: str) -> Path:

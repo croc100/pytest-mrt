@@ -1,7 +1,7 @@
 """Tests for Django migration static analyzer."""
 import textwrap
 from pathlib import Path
-import pytest
+
 from pytest_mrt.adapters.django_detector import analyze_django_migrations, is_django_migration
 
 

@@ -1,6 +1,6 @@
 import textwrap
 from pathlib import Path
-import pytest
+
 from pytest_mrt.core.detector import analyze_migrations
 
 

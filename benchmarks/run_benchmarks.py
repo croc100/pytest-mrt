@@ -9,6 +9,7 @@ Usage:
     python benchmarks/run_benchmarks.py --db-url postgresql://localhost/mrt_bench
 """
 from __future__ import annotations
+
 import argparse
 import statistics
 import tempfile

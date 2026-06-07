@@ -1,10 +1,10 @@
 """Tests for HTML report generation."""
 from __future__ import annotations
-import tempfile
-from pathlib import Path
+
 import pytest
+
 from pytest_mrt.core.detector import RiskWarning
-from pytest_mrt.core.html_report import generate_html_report, _risk_score, _score_color
+from pytest_mrt.core.html_report import _risk_score, _score_color, generate_html_report
 
 
 @pytest.fixture()

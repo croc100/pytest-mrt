@@ -840,15 +840,83 @@ def _check_multiple_heads(migrations: list[MigrationAST]) -> list[RiskWarning]:
 # ─────────────────────────────────────────────────────────────
 
 
-def analyze_migrations(versions_dir: str) -> list[RiskWarning]:
+def _revisions_since(versions_dir: str, since: str) -> set[str]:
+    """Return the set of Alembic revision IDs that come *after* ``since``.
+
+    "After" means the revision has ``since`` somewhere in its down_revision
+    ancestry chain — i.e. it was created on top of ``since``.  The ``since``
+    revision itself is excluded so that ``--since <rev>`` means "only the
+    migrations added after this point".
+
+    If ``since`` is not found in the chain the function returns an empty set
+    and the caller should warn the user rather than silently analysing nothing.
+    """
+    import re as _re
+
+    # Build two mappings from raw source:
+    #   rev_id  → down_revision (str | tuple[str] | None)
+    #   rev_id  → path
+    rev_to_down: dict[str, list[str]] = {}
+    rev_to_path: dict[str, Path] = {}
+
+    for path in sorted(Path(versions_dir).glob("*.py")):
+        source = path.read_text()
+        m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
+        if not m_rev:
+            continue
+        rev_id = m_rev.group(1)
+        rev_to_path[rev_id] = path
+
+        # down_revision may be a string, a tuple, or None
+        m_down = _re.search(r"down_revision\s*=\s*(.+)", source)
+        parents: list[str] = []
+        if m_down:
+            raw = m_down.group(1).strip().rstrip(",")
+            # collect all quoted revision ids in that expression
+            parents = _re.findall(r'["\']([0-9a-f]+)["\']', raw)
+        rev_to_down[rev_id] = parents
+
+    # Build children map: parent → [children]
+    children: dict[str, list[str]] = {r: [] for r in rev_to_down}
+    for rev_id, parents in rev_to_down.items():
+        for p in parents:
+            if p in children:
+                children[p].append(rev_id)
+
+    if since not in children:
+        return set()
+
+    # BFS from since → collect all descendants
+    result: set[str] = set()
+    queue = list(children[since])
+    while queue:
+        node = queue.pop()
+        if node in result:
+            continue
+        result.add(node)
+        queue.extend(children.get(node, []))
+    return result
+
+
+def analyze_migrations(versions_dir: str, since: str | None = None) -> list[RiskWarning]:
     """
     Analyze all Alembic migration files in a directory.
 
     Runs two passes:
     1. Per-file checks — patterns detectable within a single migration file.
     2. Graph checks — cross-migration chain analysis (data holes, orphans, etc.).
+
+    Args:
+        versions_dir: Path to the Alembic versions directory.
+        since: If given, only analyse migrations that come *after* this
+               revision ID in the migration chain.  Useful in CI to limit
+               analysis to the migrations introduced in a feature branch.
     """
     from .graph import analyze_migration_graph
+
+    since_set: set[str] | None = None
+    if since is not None:
+        since_set = _revisions_since(versions_dir, since)
 
     warnings: list[RiskWarning] = []
     migrations: list[MigrationAST] = []
@@ -859,6 +927,10 @@ def analyze_migrations(versions_dir: str) -> list[RiskWarning]:
 
         m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
         revision = m_rev.group(1) if m_rev else path.stem
+
+        if since_set is not None and revision not in since_set:
+            continue
+
         m = MigrationAST(source, revision, path.name)
         if m._parse_error:
             warnings.append(
@@ -885,5 +957,8 @@ def analyze_migrations(versions_dir: str) -> list[RiskWarning]:
                 warnings.append(w)
 
     warnings.extend(_check_multiple_heads(migrations))
-    warnings.extend(analyze_migration_graph(versions_dir))
+    if since is None:
+        # Graph checks require the full chain; skip when --since is active
+        # because orphan/data-hole checks would fire on incomplete history.
+        warnings.extend(analyze_migration_graph(versions_dir))
     return warnings
