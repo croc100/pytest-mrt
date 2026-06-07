@@ -30,9 +30,9 @@ pytest-mrt auto-detects which framework you're using based on whether the migrat
 
 | | Alembic | Django |
 |---|---|---|
-| **Static analysis** | ✅ Full | ✅ Full |
-| **Dynamic rollback** | ✅ Full | ✅ Full (`DjangoMigrationRunner`) |
-| **`mrt fix`** | ✅ | ❌ (Django doesn't have a `downgrade()`) |
+| **Static analysis** | Yes | Yes |
+| **Dynamic rollback** | Yes | Yes (`DjangoMigrationRunner`) |
+| **`mrt fix`** | Yes | No (Django doesn't have a `downgrade()`) |
 
 ### Django migrations don't have `downgrade()` — how does pytest-mrt help?
 
@@ -170,11 +170,11 @@ See the [performance guide](best-practices.md#performance) for strategies includ
 
 | Database | Static analysis | Dynamic verification |
 |----------|----------------|---------------------|
-| SQLite | ✅ | ✅ |
-| PostgreSQL | ✅ | ✅ (`pip install pytest-mrt[postgres]`) |
-| MySQL / MariaDB | ✅ | ✅ (`pip install pytest-mrt[mysql]`) |
-| Oracle | ✅ | ✅ (`pip install pytest-mrt[oracle]`) |
-| SQL Server | ✅ | ✅ (`pip install pytest-mrt[mssql]`) |
+| SQLite | Yes | Yes |
+| PostgreSQL | Yes | Yes (`pip install pytest-mrt[postgres]`) |
+| MySQL / MariaDB | Yes | Yes (`pip install pytest-mrt[mysql]`) |
+| Oracle | Yes | Yes (`pip install pytest-mrt[oracle]`) |
+| SQL Server | Yes | Yes (`pip install pytest-mrt[mssql]`) |
 
 ### Can I test against multiple databases in CI?
 
