@@ -505,7 +505,77 @@ def is_django_migration(path: Path) -> bool:
         return False
 
 
-def analyze_django_migrations(migrations_dir: str) -> list[RiskWarning]:
+def _django_migrations_since(migrations_dir: str, since: str) -> set[str]:
+    """Return ``app_label.migration_name`` keys for migrations added *after* ``since``.
+
+    ``since`` must be in ``"app_label.migration_name"`` format, e.g.
+    ``"myapp.0010_add_email"``.  The function parses ``dependencies`` lists to
+    build a reverse-dependency graph and returns all transitive dependents of
+    the given migration (excluding ``since`` itself).
+    """
+    import ast as _ast
+    import re as _re
+
+    root = Path(migrations_dir)
+
+    # key → list[parent_keys]
+    dep_map: dict[str, list[str]] = {}
+
+    for path in sorted(root.rglob("*.py")):
+        source = path.read_text()
+        if "class Migration" not in source or "django.db" not in source:
+            continue
+        app_label = path.parent.parent.name
+        key = f"{app_label}.{path.stem}"
+
+        parents: list[str] = []
+        # Extract dependencies list via regex on the raw source
+        m = _re.search(r"dependencies\s*=\s*(\[.*?\])", source, _re.DOTALL)
+        if m:
+            try:
+                raw_list = _ast.literal_eval(m.group(1))
+                for dep_app, dep_name in raw_list:
+                    parents.append(f"{dep_app}.{dep_name}")
+            except Exception:
+                pass
+        dep_map[key] = parents
+
+    # Build children map
+    children: dict[str, list[str]] = {k: [] for k in dep_map}
+    for key, parents in dep_map.items():
+        for p in parents:
+            if p in children:
+                children[p].append(key)
+
+    if since not in children:
+        return set()
+
+    result: set[str] = set()
+    queue = list(children[since])
+    while queue:
+        node = queue.pop()
+        if node in result:
+            continue
+        result.add(node)
+        queue.extend(children.get(node, []))
+    return result
+
+
+def analyze_django_migrations(
+    migrations_dir: str, since: str | None = None
+) -> list[RiskWarning]:
+    """Analyze Django migration files for rollback risk patterns.
+
+    Args:
+        migrations_dir: Path to the directory containing Django migration packages.
+        since: If given (format ``"app_label.migration_name"``), only analyse
+               migrations that transitively depend on this migration.  Use this
+               in CI to limit analysis to the migrations added in a branch.
+    """
+    since_set: set[str] | None = None
+    if since is not None:
+        since_set = _django_migrations_since(migrations_dir, since)
+
     warnings: list[RiskWarning] = []
     root = Path(migrations_dir)
 
@@ -513,6 +583,11 @@ def analyze_django_migrations(migrations_dir: str) -> list[RiskWarning]:
         if not is_django_migration(path):
             continue
         app_label = path.parent.parent.name
+        key = f"{app_label}.{path.stem}"
+
+        if since_set is not None and key not in since_set:
+            continue
+
         m = DjangoMigrationAST.from_file(path, app_label)
         if m._parse_error:
             warnings.append(

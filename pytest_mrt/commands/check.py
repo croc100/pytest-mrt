@@ -19,6 +19,16 @@ def check(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
     strict: bool = typer.Option(False, "--strict", help="Treat warnings as errors (exit 2)"),
     fmt: str = typer.Option("table", "--format", "-f", help="Output format: table | json"),
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help=(
+            "Only check migrations added after this revision. "
+            "Alembic: revision ID (e.g. 'a1b2c3d4'). "
+            "Django: app_label.migration_name (e.g. 'myapp.0010_add_email'). "
+            "Useful in CI to skip already-reviewed history."
+        ),
+    ),
 ) -> None:
     """Statically analyze migrations for rollback risk patterns (Alembic and Django)."""
     from pathlib import Path as _Path
@@ -34,11 +44,14 @@ def check(
     sample_files = list(_path.rglob("*.py"))[:5]
     is_django = any(is_django_migration(p) for p in sample_files)
 
+    if since:
+        console.print(f"[dim]--since {since}: checking only migrations after this point[/dim]")
+
     if is_django:
         console.print("[dim]Detected: Django migrations[/dim]")
-        warnings = analyze_django_migrations(versions_dir)
+        warnings = analyze_django_migrations(versions_dir, since=since)
     else:
-        warnings = analyze_migrations(versions_dir)
+        warnings = analyze_migrations(versions_dir, since=since)
 
     if fmt == "json":
         import json

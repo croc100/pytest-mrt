@@ -1,0 +1,9 @@
+- id: mrt-check
+  name: pytest-mrt static check
+  description: Detect unsafe migration patterns (missing downgrade, DROP COLUMN, etc.)
+  language: python
+  entry: mrt check
+  types: [python]
+  pass_filenames: false
+  always_run: false
+  stages: [pre-push]
