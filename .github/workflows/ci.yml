@@ -225,6 +225,23 @@ jobs:
           TEST_DATABASE_URL: oracle+oracledb://mrt:mrt@localhost:1521/?service_name=FREEPDB1
         run: coverage run -m pytest tests/test_oracle.py -v
 
+  # Always-green wrapper — the only job registered as a required status check.
+  # Succeeds when all conditional jobs either passed or were skipped (docs-only
+  # PRs skip everything, but this job still reports green so the PR can merge).
+  ci:
+    needs: [lint, test, test-django, test-postgres, test-mysql, test-oracle, test-mssql]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs passed or were skipped
+        run: |
+          results='${{ toJSON(needs.*.result) }}'
+          if echo "$results" | grep -qE '"failure"|"cancelled"'; then
+            echo "One or more required jobs failed or were cancelled."
+            exit 1
+          fi
+          echo "All jobs passed or were skipped."
+
   test-mssql:
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.mssql == 'true' || needs.changes.outputs.ci == 'true' }}
