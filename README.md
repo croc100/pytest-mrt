@@ -165,14 +165,14 @@ Add to `.pre-commit-config.yaml` to run `mrt check` automatically before every p
 ```yaml
 # Alembic
 - repo: https://github.com/croc100/pytest-mrt
-  rev: v1.2.0
+  rev: v1.3.1
   hooks:
     - id: mrt-check
       args: [alembic/versions/]
 
 # Django
 - repo: https://github.com/croc100/pytest-mrt
-  rev: v1.2.0
+  rev: v1.3.1
   hooks:
     - id: mrt-check
       args: [myapp/migrations/]
