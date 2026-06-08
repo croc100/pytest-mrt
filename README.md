@@ -137,7 +137,7 @@ pip install pytest-mrt[oracle]   # python-oracledb
 pip install pytest-mrt[mssql]    # pymssql
 ```
 
-## Auto-fix missing reverse operations (v1.3.0)
+## Auto-fix missing reverse operations
 
 `mrt fix` generates missing reverse operations for both Alembic and Django migrations.
 
@@ -158,18 +158,29 @@ mrt clean-backups --db $DATABASE_URL
 mrt clean-backups --db $DATABASE_URL --label 0042_remove_user_phone --yes
 ```
 
-## pre-commit integration (v1.3.0)
+## pre-commit integration
 
 Add to `.pre-commit-config.yaml` to run `mrt check` automatically before every push:
 
 ```yaml
+# Alembic
 - repo: https://github.com/croc100/pytest-mrt
-  rev: v1.3.0
+  rev: v1.2.0
   hooks:
     - id: mrt-check
+      args: [alembic/versions/]
+
+# Django
+- repo: https://github.com/croc100/pytest-mrt
+  rev: v1.2.0
+  hooks:
+    - id: mrt-check
+      args: [myapp/migrations/]
 ```
 
-## Incremental CI — `--since` (v1.3.0)
+Update `rev` to the latest release tag. Run `pre-commit autoupdate` to keep it current.
+
+## Incremental CI — `--since`
 
 Check only migrations added since a given revision. Keeps CI fast on large codebases:
 
@@ -247,12 +258,13 @@ To suppress all MRT warnings on a line:
 
 Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
 
-## What's new in v1.3.0
+## What's new in v1.2.0
 
-- **Django-aware `mrt fix`** — auto-generates reverse operations and data-safe backup/restore code for `RemoveField` and `DeleteModel`
-- **`mrt clean-backups`** — removes `_mrt_backups` rows after a deployment is confirmed stable
-- **`mrt check --since <revision>`** — incremental scan; only checks migrations added since a given git ref
-- **pre-commit hook** — add two lines to `.pre-commit-config.yaml` and `mrt check` runs automatically before every push
+- **MRT rule codes** (MRT101-MRT902) on all 44 patterns
+- **`# noqa: MRTxxx` suppression** — ruff/flake8-compatible per-line suppression syntax
+- **CLI refactored** into `commands/` subpackage
+- **`mrt check --since <revision>`** — incremental scan; only checks migrations added since a given revision
+- **pre-commit hook** — add to `.pre-commit-config.yaml` and `mrt check` runs automatically before every push
 
 ## Changelog
 
