@@ -171,7 +171,10 @@ class DjangoMigrationRunner:
         same_app_parents = [p.key for p in node.parents if p.key[0] == app_label]
 
         if same_app_parents:
-            target = [same_app_parents[0]]
+            # For merge migrations (multiple same-app parents), pass all parents
+            # as targets so Django rolls back only the merge node and lands at
+            # the state where all branch heads are still applied.
+            target = same_app_parents
         else:
             target = [(app_label, None)]
 

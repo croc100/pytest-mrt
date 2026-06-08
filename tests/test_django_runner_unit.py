@@ -226,7 +226,7 @@ def test_runner_upgrade(runner):
 
 
 def test_runner_downgrade_to_parent(runner):
-    """downgrade() targets the first same-app parent."""
+    """downgrade() targets the same-app parent."""
     mock_parent = mock.MagicMock()
     mock_parent.key = ("myapp", "0000_squashed")
 
@@ -235,6 +235,28 @@ def test_runner_downgrade_to_parent(runner):
 
     runner.downgrade("myapp", "0001_initial")
     mock_exec.migrate.assert_called_once_with([("myapp", "0000_squashed")])
+
+
+def test_runner_downgrade_merge_migration(runner):
+    """downgrade() passes all same-app parents for merge migrations.
+
+    Given: 0001 -> 0002a
+                -> 0002b -> 0003_merge
+    Calling downgrade("myapp", "0003_merge") must target both 0002a and 0002b
+    so Django only rolls back the merge node and leaves both branches applied.
+    """
+    mock_parent_a = mock.MagicMock()
+    mock_parent_a.key = ("myapp", "0002a")
+    mock_parent_b = mock.MagicMock()
+    mock_parent_b.key = ("myapp", "0002b")
+
+    mock_exec = _attach_executor(runner)
+    mock_exec.loader.graph.node_map.get.return_value.parents = [mock_parent_a, mock_parent_b]
+
+    runner.downgrade("myapp", "0003_merge")
+    mock_exec.migrate.assert_called_once_with(
+        [("myapp", "0002a"), ("myapp", "0002b")]
+    )
 
 
 def test_runner_downgrade_to_zero_when_no_same_app_parent(runner):
