@@ -258,13 +258,13 @@ To suppress all MRT warnings on a line:
 
 Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
 
-## What's new in v1.2.0
+## What's new in v1.3.1
 
-- **MRT rule codes** (MRT101-MRT902) on all 44 patterns
-- **`# noqa: MRTxxx` suppression** — ruff/flake8-compatible per-line suppression syntax
-- **CLI refactored** into `commands/` subpackage
-- **`mrt check --since <revision>`** — incremental scan; only checks migrations added since a given revision
-- **pre-commit hook** — add to `.pre-commit-config.yaml` and `mrt check` runs automatically before every push
+- **Error message quality** — config errors show once at session start instead of repeating for every test
+- **`mrt init` fix** — generated `conftest.py` now has correctly quoted `db_url`
+- **`mrt check --since` validation** — warns and exits when the revision matches no migrations
+- **Django `mrt fix`** — unsupported operations (`AddField` NOT NULL, `RenameField`, etc.) now show a clear manual-fix guide instead of silent no-op
+- **Django downgrade fix** — rollback with branch migrations no longer touches unrelated sibling branches
 
 ## Changelog
 

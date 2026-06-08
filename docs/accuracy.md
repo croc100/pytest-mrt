@@ -4,7 +4,7 @@ This document describes what each static analysis pattern in pytest-mrt detects,
 and the false-positive risk for each check. The false-positive suite (`tests/test_false_positives.py`)
 enforces the "will NOT trigger" column automatically on every CI run.
 
-Last updated: 2026-06-08 · pytest-mrt v1.2.0 · 34 Alembic patterns + 10 Django patterns
+Last updated: 2026-06-08 · pytest-mrt v1.3.1 · 34 Alembic patterns + 10 Django patterns
 
 ---
 
