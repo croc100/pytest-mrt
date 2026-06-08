@@ -225,37 +225,100 @@ def test_runner_upgrade(runner):
     mock_exec.migrate.assert_called_once_with([("myapp", "0001_initial")])
 
 
-def test_runner_downgrade_to_parent(runner):
-    """downgrade() targets the first same-app parent."""
-    mock_parent = mock.MagicMock()
-    mock_parent.key = ("myapp", "0000_squashed")
+def _setup_downgrade_mock(runner, *, backwards_plan_keys, applied_keys):
+    """
+    Wire up a mock executor for downgrade() tests.
 
-    mock_exec = _attach_executor(runner, node_parent=mock_parent)
-    mock_exec.loader.graph.node_map.get.return_value.parents = [mock_parent]
+    backwards_plan_keys: list of (app, name) tuples returned by graph.backwards_plan()
+    applied_keys:        set of (app, name) tuples in loader.applied_migrations
+    Returns the mock executor.
+    """
+    mock_exec = mock.MagicMock()
+    mock_exec.loader.applied_migrations = {k: mock.MagicMock() for k in applied_keys}
 
-    runner.downgrade("myapp", "0001_initial")
-    mock_exec.migrate.assert_called_once_with([("myapp", "0000_squashed")])
+    # graph.node_map.get returns a non-None sentinel so KeyError is not raised
+    mock_exec.loader.graph.node_map.get.return_value = mock.MagicMock()
+
+    # graph.nodes[key] returns a distinct mock per key
+    node_mocks = {k: mock.MagicMock() for k in backwards_plan_keys}
+    mock_exec.loader.graph.nodes.__getitem__ = lambda _, k: node_mocks[k]
+    mock_exec.loader.graph.backwards_plan.return_value = backwards_plan_keys
+
+    runner._executor = mock.MagicMock(return_value=mock_exec)
+    return mock_exec, node_mocks
 
 
-def test_runner_downgrade_to_zero_when_no_same_app_parent(runner):
-    """downgrade() targets (app, None) when parent is from a different app."""
-    mock_parent = mock.MagicMock()
-    mock_parent.key = ("otherapp", "0001_dep")
+def test_runner_downgrade_single_migration(runner):
+    """downgrade() rolls back only the target when it has no dependents."""
+    key = ("myapp", "0002_add_field")
+    mock_exec, node_mocks = _setup_downgrade_mock(
+        runner,
+        backwards_plan_keys=[key],
+        applied_keys={("myapp", "0001_initial"), key},
+    )
 
-    mock_exec = _attach_executor(runner, node_parent=mock_parent)
-    mock_exec.loader.graph.node_map.get.return_value.parents = [mock_parent]
+    runner.downgrade("myapp", "0002_add_field")
 
-    runner.downgrade("myapp", "0001_initial")
-    mock_exec.migrate.assert_called_once_with([("myapp", None)])
+    mock_exec.migrate.assert_called_once_with([], plan=[(node_mocks[key], True)])
 
 
-def test_runner_downgrade_no_parents_at_all(runner):
-    """downgrade() targets (app, None) when the migration has no parents."""
-    mock_exec = _attach_executor(runner)  # node_parent=None → parents=[]
-    mock_exec.loader.graph.node_map.get.return_value.parents = []
+def test_runner_downgrade_branch_with_merge_child(runner):
+    """downgrade() rolls back the merge child before the branch migration.
 
-    runner.downgrade("myapp", "0001_initial")
-    mock_exec.migrate.assert_called_once_with([("myapp", None)])
+    Graph: 0001 -> 0002a -> 0003_merge
+                -> 0002b /
+
+    downgrade("myapp", "0002b") must roll back 0003_merge first, then 0002b,
+    leaving 0002a untouched.
+    """
+    key_0002b = ("myapp", "0002b")
+    key_0003 = ("myapp", "0003_merge")
+    applied = {("myapp", "0001_initial"), ("myapp", "0002a"), key_0002b, key_0003}
+
+    mock_exec, node_mocks = _setup_downgrade_mock(
+        runner,
+        backwards_plan_keys=[key_0003, key_0002b],  # Django order: dependents first
+        applied_keys=applied,
+    )
+
+    runner.downgrade("myapp", "0002b")
+
+    mock_exec.migrate.assert_called_once_with(
+        [], plan=[(node_mocks[key_0003], True), (node_mocks[key_0002b], True)]
+    )
+
+
+def test_runner_downgrade_skips_already_unapplied(runner):
+    """downgrade() omits migrations not in applied_migrations from the plan."""
+    key = ("myapp", "0002_add_field")
+    # 0002 is NOT in applied_keys — already rolled back
+    mock_exec, _ = _setup_downgrade_mock(
+        runner,
+        backwards_plan_keys=[key],
+        applied_keys={("myapp", "0001_initial")},
+    )
+
+    runner.downgrade("myapp", "0002_add_field")
+
+    mock_exec.migrate.assert_not_called()
+
+
+def test_runner_downgrade_merge_migration(runner):
+    """downgrade() on a merge migration rolls back only the merge node."""
+    key_0002a = ("myapp", "0002a")
+    key_0002b = ("myapp", "0002b")
+    key_0003 = ("myapp", "0003_merge")
+    applied = {("myapp", "0001_initial"), key_0002a, key_0002b, key_0003}
+
+    mock_exec, node_mocks = _setup_downgrade_mock(
+        runner,
+        backwards_plan_keys=[key_0003],
+        applied_keys=applied,
+    )
+
+    runner.downgrade("myapp", "0003_merge")
+
+    mock_exec.migrate.assert_called_once_with([], plan=[(node_mocks[key_0003], True)])
 
 
 def test_runner_downgrade_migration_not_found(runner):

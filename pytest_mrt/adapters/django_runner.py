@@ -157,25 +157,33 @@ class DjangoMigrationRunner:
         executor.migrate([(app_label, migration_name)])
 
     def downgrade(self, app_label: str, migration_name: str) -> None:
-        """Roll back to just before migration_name within app_label."""
+        """Roll back to just before migration_name within app_label.
+
+        Uses backwards_plan() to build an exact rollback plan so that only
+        the target migration and its dependents are unapplied. This correctly
+        handles branch migrations in a merge-migration graph: sibling branches
+        that do not depend on the target are left untouched.
+        """
         executor = self._executor()
         loader = executor.loader
         key = (app_label, migration_name)
         graph = loader.graph
 
-        # node_map holds MigrationNode objects which have .parents/.children
-        node = graph.node_map.get(key)
-        if node is None:
+        if graph.node_map.get(key) is None:
             raise KeyError(f"Migration not found: {app_label}/{migration_name}")
 
-        same_app_parents = [p.key for p in node.parents if p.key[0] == app_label]
+        # backwards_plan(key) returns [key] + all migrations that depend on it,
+        # in the order they must be unapplied. Filter to only those currently
+        # applied so we never try to unapply something that was already rolled back.
+        applied = set(loader.applied_migrations.keys())
+        plan = [
+            (loader.graph.nodes[m], True)
+            for m in graph.backwards_plan(key)
+            if m in applied
+        ]
 
-        if same_app_parents:
-            target = [same_app_parents[0]]
-        else:
-            target = [(app_label, None)]
-
-        executor.migrate(target)
+        if plan:
+            executor.migrate([], plan=plan)
 
     def downgrade_app_zero(self, app_label: str) -> None:
         executor = self._executor()
