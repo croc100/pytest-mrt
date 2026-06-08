@@ -7,7 +7,42 @@ on:
     branches: [main]
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      src:      ${{ steps.filter.outputs.src }}
+      django:   ${{ steps.filter.outputs.django }}
+      postgres: ${{ steps.filter.outputs.postgres }}
+      mysql:    ${{ steps.filter.outputs.mysql }}
+      oracle:   ${{ steps.filter.outputs.oracle }}
+      mssql:    ${{ steps.filter.outputs.mssql }}
+      ci:       ${{ steps.filter.outputs.ci }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            src:
+              - 'pytest_mrt/**'
+              - 'pyproject.toml'
+            django:
+              - 'pytest_mrt/adapters/django*.py'
+              - 'tests/test_django*.py'
+            postgres:
+              - 'tests/test_postgres.py'
+            mysql:
+              - 'tests/test_mysql.py'
+            oracle:
+              - 'tests/test_oracle.py'
+            mssql:
+              - 'tests/test_mssql.py'
+            ci:
+              - '.github/workflows/ci.yml'
+
   lint:
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.ci == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -29,6 +64,8 @@ jobs:
         run: mypy pytest_mrt/ --ignore-missing-imports --no-strict-optional
 
   test:
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.ci == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -61,6 +98,8 @@ jobs:
           fail_ci_if_error: false
 
   test-postgres:
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.postgres == 'true' || needs.changes.outputs.ci == 'true' }}
     runs-on: ubuntu-latest
 
     services:
@@ -94,6 +133,8 @@ jobs:
         run: coverage run -m pytest tests/test_postgres.py -v
 
   test-mysql:
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.mysql == 'true' || needs.changes.outputs.ci == 'true' }}
     runs-on: ubuntu-latest
 
     services:
@@ -128,6 +169,8 @@ jobs:
         run: coverage run -m pytest tests/test_mysql.py -v
 
   test-django:
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.django == 'true' || needs.changes.outputs.ci == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -148,6 +191,8 @@ jobs:
         run: pytest tests/test_django_dynamic.py -v
 
   test-oracle:
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.oracle == 'true' || needs.changes.outputs.ci == 'true' }}
     runs-on: ubuntu-latest
 
     services:
@@ -181,6 +226,8 @@ jobs:
         run: coverage run -m pytest tests/test_oracle.py -v
 
   test-mssql:
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.mssql == 'true' || needs.changes.outputs.ci == 'true' }}
     runs-on: ubuntu-latest
 
     services:
