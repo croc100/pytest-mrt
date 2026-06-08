@@ -176,11 +176,7 @@ class DjangoMigrationRunner:
         # in the order they must be unapplied. Filter to only those currently
         # applied so we never try to unapply something that was already rolled back.
         applied = set(loader.applied_migrations.keys())
-        plan = [
-            (loader.graph.nodes[m], True)
-            for m in graph.backwards_plan(key)
-            if m in applied
-        ]
+        plan = [(loader.graph.nodes[m], True) for m in graph.backwards_plan(key) if m in applied]
 
         if plan:
             executor.migrate([], plan=plan)
