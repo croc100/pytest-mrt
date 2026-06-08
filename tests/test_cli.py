@@ -206,6 +206,56 @@ def test_check_file_instead_of_dir_exits_1(tmp_path):
     assert "not a directory" in result.output
 
 
+# ── mrt check --since ────────────────────────────
+
+
+def test_check_since_unknown_revision_exits_1(tmp_path, versions_dir):
+    """--since with an unknown revision exits 1 with a clear warning."""
+    _safe_migration(versions_dir)
+    result = runner.invoke(app, ["check", str(versions_dir), "--since", "deadbeef"])
+    assert result.exit_code == 1
+    assert "matched no migrations" in result.output
+
+
+def test_check_since_valid_revision_shows_note(tmp_path, versions_dir):
+    """--since with a valid revision prints the graph-checks-skipped note."""
+    # migration 001 (down_revision=None), migration 002 (down_revision=001)
+    _safe_migration(versions_dir, name="001_safe.py")
+    (versions_dir / "002_after.py").write_text(
+        textwrap.dedent("""
+        revision = '002'
+        down_revision = '001'
+        from alembic import op
+        def upgrade():
+            op.create_table('posts', )
+        def downgrade():
+            op.drop_table('posts')
+        """)
+    )
+    result = runner.invoke(app, ["check", str(versions_dir), "--since", "001"])
+    assert result.exit_code == 0
+    assert "graph checks" in result.output
+    assert "skipped" in result.output
+
+
+def test_check_since_valid_revision_shows_count(tmp_path, versions_dir):
+    """--since prints how many migrations are being checked."""
+    _safe_migration(versions_dir, name="001_safe.py")
+    (versions_dir / "002_after.py").write_text(
+        textwrap.dedent("""
+        revision = '002'
+        down_revision = '001'
+        from alembic import op
+        def upgrade():
+            pass
+        def downgrade():
+            pass
+        """)
+    )
+    result = runner.invoke(app, ["check", str(versions_dir), "--since", "001"])
+    assert "1 migration" in result.output
+
+
 # ── mrt init Django detection ────────────────────
 
 
