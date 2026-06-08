@@ -400,6 +400,7 @@ def test_issue_multiple(tmp_path):
 
 
 def test_fix_command_routes_to_django(tmp_path):
+    """mrt fix on a Django migration with AddField NOT NULL shows a clear error."""
     from typer.testing import CliRunner
 
     from pytest_mrt.cli import app
@@ -408,6 +409,25 @@ def test_fix_command_routes_to_django(tmp_path):
         tmp_path,
         HEADER
         + "        migrations.AddField(model_name='u', name='x', field=models.IntegerField()),\n"
+        + FOOTER,
+    )
+    runner = CliRunner()
+    result = runner.invoke(app, ["fix", p])
+    assert result.exit_code == 1
+    assert "cannot auto-fix" in result.output
+    assert "AddField" in result.output
+
+
+def test_fix_command_routes_to_django_nullable(tmp_path):
+    """mrt fix on AddField(null=True) reports no fix needed — it is reversible."""
+    from typer.testing import CliRunner
+
+    from pytest_mrt.cli import app
+
+    p = _write(
+        tmp_path,
+        HEADER
+        + "        migrations.AddField(model_name='u', name='x', field=models.TextField(null=True)),\n"
         + FOOTER,
     )
     runner = CliRunner()

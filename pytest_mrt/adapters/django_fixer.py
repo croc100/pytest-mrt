@@ -158,6 +158,9 @@ class DjangoFixSuggestion:
     patched_source: str
     confidence: str
     warning: str | None = None
+    # Operations detected by mrt check but not auto-fixable (e.g. AddField NOT NULL,
+    # AlterField). Non-empty means the migration has issues mrt fix cannot resolve.
+    unsupported_ops: list[str] | None = None
 
     @property
     def issue(self) -> str:
@@ -195,6 +198,25 @@ def _op_name(op: ast.expr) -> str:
 
 def _has_kwarg(op: ast.Call, name: str) -> bool:
     return any(kw.arg == name for kw in op.keywords)
+
+
+def _add_field_is_problematic(op: ast.Call) -> bool:
+    """Return True if AddField is NOT NULL with no default (MRT411 condition)."""
+    for kw in op.keywords:
+        if kw.arg == "field" and isinstance(kw.value, ast.Call):
+            field_call = kw.value
+            # null=True means it's safe
+            for fkw in field_call.keywords:
+                if fkw.arg == "null":
+                    if isinstance(fkw.value, ast.Constant) and fkw.value.value is True:
+                        return False
+            # has default= or server_default= -> safe
+            field_kwarg_names = {fkw.arg for fkw in field_call.keywords}
+            if "default" in field_kwarg_names or "server_default" in field_kwarg_names:
+                return False
+            # No null=True and no default -> problematic
+            return True
+    return False
 
 
 def _has_positional_arg(op: ast.Call, index: int) -> bool:
@@ -536,7 +558,15 @@ def generate_django_fix(migration_path: str) -> DjangoFixSuggestion | None:
     migration_name = f"{app_label}.{path.stem}"
     migration_stem = path.stem
 
+    # Operations that mrt check may flag but mrt fix cannot auto-resolve.
+    # Only truly irreversible variants are listed — e.g. AddField(null=True) is
+    # fine, but AddField NOT NULL without a default is flagged by mrt check and
+    # cannot be auto-fixed. We detect these by name only (the detector handles
+    # the nuance); here we just surface them to the user.
+    _UNSUPPORTED_OPS = {"AlterField", "RenameField", "RenameModel"}
+
     patches: list[DjangoOpPatch] = []
+    unsupported: list[str] = []
 
     for op in ops_list:
         if not isinstance(op, ast.Call):
@@ -552,11 +582,29 @@ def generate_django_fix(migration_path: str) -> DjangoFixSuggestion | None:
             patch = _patch_remove_field(source, op, app_label, migration_stem)
         elif name == "DeleteModel":
             patch = _patch_delete_model(source, op, app_label, migration_stem)
+        elif name == "AddField":
+            # Only flag AddField that is NOT NULL with no default — same condition
+            # that mrt check (MRT411) flags. null=True or a default= means it's safe.
+            if _add_field_is_problematic(op):
+                unsupported.append("AddField NOT NULL without default")
+        elif name in _UNSUPPORTED_OPS:
+            unsupported.append(name)
 
         if patch is not None:
             patches.append(patch)
 
     if not patches:
+        # Return a suggestion with no patches but unsupported ops listed,
+        # so the caller can show a meaningful message instead of "no fix needed".
+        if unsupported:
+            return DjangoFixSuggestion(
+                file=path.name,
+                migration_name=migration_name,
+                patches=[],
+                patched_source=source,
+                confidence="none",
+                unsupported_ops=unsupported,
+            )
         return None
 
     patched_source = _apply_patches_to_source(source, patches)
