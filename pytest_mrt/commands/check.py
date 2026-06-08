@@ -45,7 +45,30 @@ def check(
     is_django = any(is_django_migration(p) for p in sample_files)
 
     if since:
-        console.print(f"[dim]--since {since}: checking only migrations after this point[/dim]")
+        # Validate that --since actually matches something before running analysis.
+        if is_django:
+            from ..adapters.django_detector import _django_migrations_since
+
+            since_set = _django_migrations_since(versions_dir, since)
+        else:
+            from ..core.detector import _revisions_since
+
+            since_set = _revisions_since(versions_dir, since)
+
+        if not since_set:
+            console.print(
+                f"[yellow]Warning: --since {since} matched no migrations. "
+                "Check the revision ID and try again.[/yellow]"
+            )
+            raise typer.Exit(1)
+
+        console.print(
+            f"[dim]--since {since}: checking {len(since_set)} migration(s) after this point[/dim]"
+        )
+        console.print(
+            "[dim]Note: graph checks (orphan, data-hole detection) skipped — "
+            "run without --since for full analysis.[/dim]"
+        )
 
     if is_django:
         console.print("[dim]Detected: Django migrations[/dim]")
