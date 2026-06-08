@@ -83,13 +83,9 @@ class MRTFixture:
 
             if not _Path(config.alembic_ini).exists():
                 raise MRTConfigError(
-                    f"\n\n  alembic.ini not found: '{config.alembic_ini}'\n\n"
-                    "  If you are using Django migrations (not Alembic), use:\n\n"
-                    "    config._mrt_config = MRTConfig(\n"
-                    "        db_url=os.environ['TEST_DATABASE_URL'],\n"
-                    "        django_settings='myproject.settings_test',\n"
-                    "    )\n\n"
-                    "  See: https://croc100.github.io/pytest-mrt/quickstart/#django"
+                    f"alembic.ini not found: '{config.alembic_ini}'\n\n"
+                    "Check the path and update MRTConfig(alembic_ini=...) in your conftest.py.\n"
+                    "See: https://croc100.github.io/pytest-mrt/quickstart/"
                 )
 
             self._runner = MigrationRunner(config.alembic_ini, config.db_url)
@@ -301,6 +297,39 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "mrt: migration rollback test")
 
 
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Validate MRTConfig once at session start.
+
+    Catches obvious setup errors (missing alembic.ini, etc.) before any test
+    runs, so the user sees one clear error instead of the same message repeated
+    for every collected test.
+    """
+    cfg: MRTConfig | None = getattr(session.config, "_mrt_config", None)
+    if cfg is None:
+        return
+
+    cfg = _auto_detect_django(cfg)
+
+    # Django mode — no alembic.ini needed
+    if cfg.django_settings is not None:
+        return
+
+    from pathlib import Path
+
+    if not Path(cfg.alembic_ini).exists():
+        msg = (
+            f"alembic.ini not found: '{cfg.alembic_ini}'\n\n"
+            "Check the path and update MRTConfig(alembic_ini=...) in your conftest.py.\n\n"
+            "If you are using Django migrations (not Alembic), set django_settings instead:\n\n"
+            "    config._mrt_config = MRTConfig(\n"
+            "        db_url=os.environ['TEST_DATABASE_URL'],\n"
+            "        django_settings='myproject.settings_test',\n"
+            "    )\n\n"
+            "See: https://croc100.github.io/pytest-mrt/quickstart/"
+        )
+        pytest.exit(msg, returncode=4)
+
+
 def pytest_collection_modifyitems(
     session: pytest.Session,
     config: pytest.Config,
@@ -336,9 +365,15 @@ def pytest_collection_modifyitems(
 @pytest.fixture
 def mrt(request: pytest.FixtureRequest) -> Iterator[MRTFixture]:
     cfg: MRTConfig = getattr(request.config, "_mrt_config", None) or MRTConfig()
+    # Capture error outside the except block to avoid "During handling of the
+    # above exception, another exception occurred" in the traceback output.
+    config_error: str | None = None
     try:
         fixture = MRTFixture(cfg)
     except MRTConfigError as e:
-        pytest.fail(str(e), pytrace=False)
+        config_error = str(e)
+    if config_error is not None:
+        pytest.fail(config_error, pytrace=False)
+        return  # unreachable; keeps type checkers happy
     yield fixture
     fixture.reset()
