@@ -99,6 +99,18 @@ def _fix_django(migration_file: str, apply: bool) -> None:
         )
         raise typer.Exit(0)
 
+    if fix_suggestion.unsupported_ops and not fix_suggestion.patches:
+        ops = ", ".join(sorted(set(fix_suggestion.unsupported_ops)))
+        console.print(
+            f"[yellow]mrt fix cannot auto-fix this migration.[/yellow]\n"
+            f"Operation(s) found: [bold]{ops}[/bold]\n\n"
+            "These operations must be fixed manually:\n"
+            "  - AddField / AlterField: add server_default or handle nullable migration\n"
+            "  - RenameField / RenameModel: verify old_name is correct and reversible\n\n"
+            "Run [bold]mrt check[/bold] to see the specific warnings."
+        )
+        raise typer.Exit(1)
+
     console.print()
     console.print(
         f"[bold]{fix_suggestion.file}[/bold]  [dim]{fix_suggestion.migration_name}[/dim]"
