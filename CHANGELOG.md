@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.3.1] — 2026-06-08
+
+### Fixed
+- **Error message quality** — when `alembic.ini` is missing, pytest-mrt now reports the error once at session start and exits cleanly instead of printing the same message for every collected test (typically 7 times with duplicate tracebacks). Fixes the "During handling of the above exception" noise in test output. (#55)
+- **`mrt init` db_url quoting bug** — the generated `conftest.py` previously wrote `db_url=sqlite:///test.db` (invalid Python). Now correctly writes `db_url="sqlite:///test.db"`. Python expressions such as `os.environ['TEST_DATABASE_URL']` are passed through as-is. Prompts and next-steps output also improved. (#54)
+- **`mrt check --since` empty-match warning** — `--since <ref>` that matched no migrations previously ran silently on the full set. Now exits with a clear warning and exit code 1. Also notes that graph checks (orphan / data-hole detection) are skipped in `--since` mode. (#52)
+- **Django `mrt fix` unsupported operations** — `mrt fix` on Django migrations containing `AddField` (NOT NULL without default), `AlterField`, `RenameField`, or `RenameModel` now exits with code 1 and explains what must be fixed manually instead of silently producing no output. (#51)
+- **Django migration downgrade with branch merges** — `downgrade(app, migration)` previously used the first parent as the rollback target, which caused sibling branch migrations to be incorrectly rolled back when a merge migration was applied. Fixed by building the rollback plan directly from `MigrationGraph.backwards_plan()`. (#50)
+
+---
+
 ## [1.3.0] — 2026-06-08
 
 ### Added
