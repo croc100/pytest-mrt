@@ -61,7 +61,7 @@ pip install pytest-mrt
 
 ## Setup (2 minutes)
 
-**1.** Create `conftest.py` in your project root:
+Add this to `conftest.py`:
 
 ```python
 # conftest.py
@@ -71,28 +71,28 @@ from pytest_mrt import MRTConfig
 
 def pytest_configure(config):
     config._mrt_config = MRTConfig(
-        alembic_ini="alembic.ini",                               # path to your alembic.ini
-        db_url=os.environ.get("TEST_DATABASE_URL", "sqlite:///test.db"),  # test database
+        alembic_ini="alembic.ini",
+        db_url=os.environ.get("TEST_DATABASE_URL", "sqlite:///test.db"),
     )
 ```
 
-**2.** Write a test:
+That's it. Run `pytest` and 6 safety tests appear automatically — no test files needed:
 
-```python
-# tests/test_migrations.py
-
-
-def test_migrations_are_safe(mrt):
-    mrt.assert_all_reversible()
+```
+PASSED test_mrt_single_head          - Migration history has exactly one head
+PASSED test_mrt_upgrade              - alembic upgrade head completes without error
+PASSED test_mrt_downgrade_base       - alembic downgrade base then re-upgrade completes cleanly
+PASSED test_mrt_up_down_consistency  - Every migration is safely reversible
+PASSED test_mrt_static_no_errors     - Zero static analysis errors in all migration files
+PASSED test_mrt_schema_matches_models- Database schema matches ORM models after upgrade
 ```
 
-**3.** Run:
-
-```bash
-pytest tests/test_migrations.py -s
-```
-
-> `mrt` is a pytest fixture — just add it as a parameter and it works. No import needed in test files.
+> Want to write custom rollback tests? Use the `mrt` fixture — just add it as a parameter to any test function, no import needed:
+>
+> ```python
+> def test_migration_003(mrt):
+>     mrt.assert_reversible("abc1234")
+> ```
 
 ## Static analysis (no database needed)
 
@@ -252,20 +252,6 @@ Safe to run `mrt check` on every commit. Dynamic suite fits comfortably for proj
 For larger codebases, use `MRTConfig(skip={...})` to exclude already-reviewed revisions.
 See [benchmarks](docs/benchmarks.md) for methodology and PostgreSQL/MySQL numbers.
 
-## Built-in default tests (v1.1.0)
-
-pytest-mrt automatically injects 6 safety tests into your suite when the `mrt` fixture is configured — no test files needed:
-
-| Test | What it checks |
-|---|---|
-| `test_mrt_single_head` | Migration history has exactly one head |
-| `test_mrt_upgrade` | `alembic upgrade head` completes without error |
-| `test_mrt_downgrade_base` | `alembic downgrade base` then re-upgrade completes cleanly |
-| `test_mrt_up_down_consistency` | Every migration is safely reversible (per-revision rollback) |
-| `test_mrt_static_no_errors` | Zero static analysis errors in all migration files |
-| `test_mrt_schema_matches_models` | Database schema matches ORM models after upgrade (requires `target_metadata`) |
-
-To opt out of specific tests, use `MRTConfig(skip_default_tests={...})`.
 
 ## Suppress known risks (v1.2.0)
 
