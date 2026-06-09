@@ -4,11 +4,9 @@ Unit tests for MRTTestCase — mocked runner and verifier, no real DB required.
 
 from __future__ import annotations
 
-import unittest
 import unittest.mock as mock
 
 import pytest
-
 
 # ── helpers ───────────────────────────────────────────────────────────────
 
@@ -103,7 +101,6 @@ def test_assert_rollback_safe_fails_with_message():
 
 
 def test_assert_rollback_safe_uses_migrate_to():
-    from pytest_mrt.adapters.django_runner import DjangoMigration
 
     Cls = _make_testcase_class(
         migrate_from=("accounts", "0001_initial"),
@@ -124,8 +121,7 @@ def test_assert_rollback_safe_uses_migrate_to():
 
 
 def test_assert_data_intact_passes():
-    from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff
-    from pytest_mrt.core.seeder import SmartSeeder
+    from pytest_mrt.core.schema import SchemaDiff, SchemaSnapshot
 
     Cls = _make_testcase_class()
     runner, verifier = _setup_testcase_with_mocks(Cls)
@@ -143,8 +139,7 @@ def test_assert_data_intact_passes():
 
 
 def test_assert_data_intact_fails_on_data_loss():
-    from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff
-    from pytest_mrt.core.seeder import SmartSeeder
+    from pytest_mrt.core.schema import SchemaDiff, SchemaSnapshot
 
     Cls = _make_testcase_class()
     runner, verifier = _setup_testcase_with_mocks(Cls)
@@ -164,8 +159,7 @@ def test_assert_data_intact_fails_on_data_loss():
 
 def test_assert_data_intact_recovery_on_downgrade_failure():
     """If downgrade raises, downgrade_app_zero is called for recovery."""
-    from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff
-    from pytest_mrt.core.seeder import SmartSeeder
+    from pytest_mrt.core.schema import SchemaDiff, SchemaSnapshot
 
     Cls = _make_testcase_class()
     runner, verifier = _setup_testcase_with_mocks(Cls)
@@ -186,8 +180,7 @@ def test_assert_data_intact_recovery_on_downgrade_failure():
 
 def test_assert_data_intact_detects_user_row_loss():
     """Pre-existing rows that disappear after rollback are reported as failures."""
-    from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff
-    from pytest_mrt.core.seeder import SmartSeeder
+    from pytest_mrt.core.schema import SchemaDiff, SchemaSnapshot
 
     Cls = _make_testcase_class()
     runner, verifier = _setup_testcase_with_mocks(Cls)
@@ -200,8 +193,6 @@ def test_assert_data_intact_detects_user_row_loss():
     # engine.connect() is called twice:
     #   1st call: PK snapshot before seeder  → rows 1, 2, 3
     #   2nd call: verification after rollback → rows 1, 2 only (row 3 lost)
-    connect_calls = []
-
     def make_mock_conn(pk_values):
         conn = mock.MagicMock()
         conn.__enter__ = mock.Mock(return_value=conn)

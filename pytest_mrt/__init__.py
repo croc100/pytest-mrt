@@ -1,7 +1,7 @@
-from .config import MRTConfig
+from .config import MRTConfig as MRTConfig
 
 try:
-    from .django_testcase import MRTTestCase
+    from .django_testcase import MRTTestCase as MRTTestCase
 
     _TESTCASE_AVAILABLE = True
 except ImportError:

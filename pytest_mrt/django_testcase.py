@@ -146,9 +146,10 @@ class MRTTestCase(unittest.TestCase):
                 User.objects.create(name="Alice")
                 self.assertDataIntact()   # Alice must still exist after rollback
         """
+        from sqlalchemy import text
+
         from .core.schema import SchemaDiff, SchemaSnapshot
         from .core.seeder import SmartSeeder
-        from sqlalchemy import text
 
         engine = self._runner.engine
         schema_before = SchemaSnapshot.capture(engine)
