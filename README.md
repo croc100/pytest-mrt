@@ -15,6 +15,10 @@
   A pytest plugin that catches database migration rollback failures before they reach production.
 </p>
 
+<p align="center">
+  <img src="docs/demo.gif" alt="mrt check catching DROP COLUMN data loss" width="100%" />
+</p>
+
 ---
 
 `alembic downgrade -1` ran clean. No errors. Your monitoring went green.

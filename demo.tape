@@ -1,30 +1,28 @@
-# pytest-mrt demo GIF
-# Run with: vhs demo.tape
-
 Output docs/demo.gif
-
-Require mrt
 
 Set Shell "bash"
 Set FontSize 14
-Set Width 900
-Set Height 420
+Set Width 1000
+Set Height 680
 Set Theme "Dracula"
-Set Padding 20
-Set TypingSpeed 60ms
-Set PlaybackSpeed 0.8
+Set Padding 24
+Set TypingSpeed 55ms
+Set PlaybackSpeed 0.85
+Set CursorBlink false
 
 Hide
-Type "cd /Users/croc/brain/project/pytest-mrt"
+Type "cd /Users/croc/brain/project/pytest-mrt && source .venv/bin/activate"
 Enter
-Type "source .venv/bin/activate"
+Sleep 300ms
+Type "export PS1='$ ' && export FORCE_COLOR=1 && export COLUMNS=110"
 Enter
+Sleep 200ms
+Type "clear"
+Enter
+Sleep 400ms
 Show
-
-Sleep 500ms
 
 Type "mrt check examples/blog/alembic/versions/"
 Sleep 500ms
 Enter
-
-Sleep 3s
+Sleep 8s
