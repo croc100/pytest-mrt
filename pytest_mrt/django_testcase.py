@@ -162,9 +162,13 @@ class MRTTestCase(unittest.TestCase):
             for tname, tinfo in schema_before.tables.items():
                 if tinfo.pk_cols:
                     pk_col = tinfo.pk_cols[0]
-                    rows = conn.execute(
-                        text(f"SELECT {pk_col} FROM {tname}")  # noqa: S608
-                    ).scalars().all()
+                    rows = (
+                        conn.execute(
+                            text(f"SELECT {pk_col} FROM {tname}")  # noqa: S608
+                        )
+                        .scalars()
+                        .all()
+                    )
                     if rows:
                         existing_pks[tname] = set(rows)
 
@@ -205,7 +209,9 @@ class MRTTestCase(unittest.TestCase):
                     after_pks = set(
                         conn.execute(
                             text(f"SELECT {pk_col} FROM {tname}")  # noqa: S608
-                        ).scalars().all()
+                        )
+                        .scalars()
+                        .all()
                     )
                     lost = before_pks - after_pks
                     if lost:
