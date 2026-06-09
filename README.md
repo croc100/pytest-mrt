@@ -188,9 +188,13 @@ Check only migrations added since a given revision. Keeps CI fast on large codeb
 # Alembic — pass a revision ID
 mrt check migrations/versions/ --since a1b2c3d4
 
-# Django — pass app_label.migration_name
+# Django — pass app_label.migration_name (filename without .py)
 mrt check myapp/migrations/ --since myapp.0010_add_email
 ```
+
+Pass the last migration on the base branch; only PR-new migrations are scanned.
+
+> When `--since` is active, graph-level checks (orphan detection, data-hole analysis) are skipped. Run without `--since` periodically for full coverage. See the [CLI reference](docs/cli.md#--since--incremental-scanning) for the full format specification.
 
 ## CI/CD integration
 

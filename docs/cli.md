@@ -10,7 +10,7 @@ pytest-mrt has two interfaces:
 | Command | What it does | Needs DB? |
 |---|---|---|
 | `mrt check <dir>` | Static analysis — 44 risk patterns | No |
-| `mrt check <dir> --since <ref>` | Incremental scan — only migrations since a git ref | No |
+| `mrt check <dir> --since <ref>` | Incremental scan — only migrations after a given revision (Alembic ID or Django `app.migration`) | No |
 | `mrt fix <file>` | Auto-generate reverse operations (Alembic + Django) | No |
 | `mrt clean-backups` | Remove `_mrt_backups` rows after stable deployment | Yes |
 | `mrt drift` | Compare live DB schema against ORM models | Yes |
@@ -57,25 +57,59 @@ mrt check migrations/versions/
 | Option | Description | Default |
 |---|---|---|
 | `--strict` | Also fail on warnings, not just errors | Off |
-| `--since <ref>` | Only check migrations added since this git revision / tag | Off |
+| `--since <ref>` | Only check migrations after this revision. Alembic: revision ID. Django: `app_label.migration_name`. | Off |
 
 #### `--since` — incremental scanning
 
-In large codebases, scanning the full migration history on every PR is wasteful. `--since` limits the scan to migrations that come *after* the given revision in the migration dependency chain.
+In large codebases, scanning the full migration history on every PR is wasteful. `--since` limits the scan to migrations that come *after* the given revision in the migration dependency chain. The revision itself is excluded.
 
 **Alembic** — pass a revision ID:
+
 ```bash
 mrt check migrations/versions/ --since a1b2c3d4
 ```
-Only revisions whose `down_revision` ancestry includes `a1b2c3d4` are checked.
+
+Only revisions whose `down_revision` ancestry includes `a1b2c3d4` are scanned.
 
 **Django** — pass `app_label.migration_name`:
+
 ```bash
 mrt check myapp/migrations/ --since myapp.0010_add_email
 ```
-Only migrations that depend on `0010_add_email` (directly or transitively) are checked.
+
+`app_label` is the name of the Django app directory. `migration_name` is the migration filename **without** the `.py` extension:
+
+```
+your-project/
+├── myapp/                          ← app_label: myapp
+│   └── migrations/
+│       ├── 0001_initial.py
+│       ├── 0010_add_email.py       ← migration_name: 0010_add_email
+│       └── 0011_add_phone.py       ← will be scanned (depends on 0010)
+└── accounts/                       ← app_label: accounts
+    └── migrations/
+        └── 0001_initial.py
+```
+
+Only migrations that depend on `myapp.0010_add_email` (directly or transitively, across all apps) are scanned.
 
 This is the recommended CI pattern: pass the last migration on the base branch so only the PR's new migrations are scanned.
+
+> **Note:** When `--since` is active, graph-level checks (orphan detection, data-hole analysis) are skipped because they require the full migration history. Run without `--since` periodically or in a nightly job to catch graph-level issues.
+
+#### Behavior when `--since` matches nothing
+
+If the revision or migration name is not found in the target directory, `mrt check` prints a warning and exits with code `1`:
+
+```
+Warning: --since myapp.0010_add_email matched no migrations. Check the revision ID and try again.
+```
+
+Common causes:
+
+- Typo in the app label or migration name (format must be `app_label.migration_name`, dot-separated)
+- Wrong directory passed — for Django, pass `myapp/migrations/`, not the project root
+- The migration has been squashed or renamed
 
 ### Exit codes
 
@@ -183,7 +217,7 @@ mrt clean-backups --db $DATABASE_URL --yes         # skip confirmation prompt
 
 ```bash
 mrt version
-# pytest-mrt 1.3.0
+# pytest-mrt 1.3.1
 ```
 
 ---
