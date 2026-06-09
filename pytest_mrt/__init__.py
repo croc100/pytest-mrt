@@ -1,4 +1,5 @@
 from .config import MRTConfig
+from .django_testcase import MRTTestCase
 
 try:
     from importlib.metadata import version
@@ -7,4 +8,4 @@ try:
 except Exception:
     __version__ = "0.0.0"
 
-__all__ = ["MRTConfig"]
+__all__ = ["MRTConfig", "MRTTestCase"]
