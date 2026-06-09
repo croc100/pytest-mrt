@@ -21,6 +21,24 @@
 
 But the users' phone numbers are gone. The column came back. The data didn't.
 
+pytest-mrt would have caught this before it reached production:
+
+```
+$ mrt check migrations/versions/
+
+                         Rollback Risk Analysis
+╭──────────┬────────┬───────────────────────────┬───────┬──────┬─────────────────────────────────────╮
+│ Revision │ Code   │ Pattern                   │ Sev   │ Line │ Message                             │
+├──────────┼────────┼───────────────────────────┼───────┼──────┼─────────────────────────────────────┤
+│ 042      │ MRT201 │ DROP COLUMN in upgrade    │ error │   18 │ op.drop_column('users', 'phone') —  │
+│          │        │                           │       │      │ column data is permanently lost     │
+│          │        │                           │       │      │ even if downgrade re-adds the column│
+╰──────────┴────────┴───────────────────────────┴───────┴──────┴─────────────────────────────────────╯
+1 error(s), 0 warning(s)
+```
+
+Non-invasive — installs in 2 minutes, zero changes to your existing tests.
+
 ---
 
 ## What it does
@@ -261,6 +279,20 @@ To suppress all MRT warnings on a line:
 ```
 
 Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
+
+## How it compares
+
+| | pytest-mrt | [pytest-alembic](https://github.com/schireson/pytest-alembic) | [alembic check](https://alembic.sqlalchemy.org/en/latest/ops.html#alembic.operations.Operations.check) | [django-test-migrations](https://github.com/wemake-services/django-test-migrations) |
+|---|:---:|:---:|:---:|:---:|
+| Static analysis (no DB required) | ✅ 44 patterns | ❌ | ❌ | ❌ |
+| Dynamic rollback testing | ✅ | ✅ | ❌ | ✅ |
+| **Data survival check** (seeds rows, verifies after rollback) | ✅ | ❌ schema only | ❌ | ❌ |
+| Django support | ✅ | ❌ | ❌ | ✅ |
+| Auto-fix (`mrt fix`) | ✅ | ❌ | ❌ | ❌ |
+| Pre-commit hook | ✅ | ❌ | ❌ | ❌ |
+| Inline suppression (`# noqa: MRTxxx`) | ✅ | ❌ | ❌ | ❌ |
+
+The key difference from pytest-alembic: pytest-mrt seeds actual rows before each rollback and verifies they survive. A migration that reverses the schema cleanly but silently destroys data will pass pytest-alembic and fail pytest-mrt.
 
 ## What's new in v1.3.1
 
