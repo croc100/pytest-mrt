@@ -23,7 +23,11 @@ from __future__ import annotations
 
 import os
 import unittest
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .adapters.django_runner import DjangoMigrationRunner
+    from .adapters.django_verifier import DjangoRollbackVerifier
 
 
 class MRTTestCase(unittest.TestCase):
@@ -43,6 +47,10 @@ class MRTTestCase(unittest.TestCase):
     db_alias: str = "default"  # Django DB alias configured by DjangoMigrationRunner
     migrate_from: tuple[str, str]
     migrate_to: tuple[str, str]
+
+    # Set by setUpClass; declared here so mypy knows they exist on the class.
+    _runner: DjangoMigrationRunner
+    _verifier: DjangoRollbackVerifier
 
     # ── class-level setup ─────────────────────────────────────────────
 
