@@ -31,14 +31,16 @@ class MRTTestCase(unittest.TestCase):
     Base class for Django migration rollback tests without pytest.
 
     Subclass and set:
-      - ``db_url``      — SQLAlchemy-style DB URL (or set DATABASE_URL env var)
+      - ``db_url``       — SQLAlchemy-style DB URL (or set DATABASE_URL env var)
       - ``migrate_from`` — (app_label, migration_name) — starting state
       - ``migrate_to``   — (app_label, migration_name) — migration under test
+      - ``db_alias``     — Django database alias used by the runner (default: ``"default"``)
 
     Then call ``assertRollbackSafe()`` or ``assertDataIntact()`` in test methods.
     """
 
     db_url: str = ""
+    db_alias: str = "default"  # Django DB alias configured by DjangoMigrationRunner
     migrate_from: tuple[str, str]
     migrate_to: tuple[str, str]
 
@@ -133,35 +135,85 @@ class MRTTestCase(unittest.TestCase):
     def assertDataIntact(self) -> None:
         """Assert that data created before the migration survives rollback.
 
-        Call this after seeding your own data in the test::
+        Snapshots all pre-existing rows (user-created in setUp or the test
+        body), seeds additional rows via SmartSeeder, runs upgrade+downgrade,
+        then verifies that BOTH sets of rows are fully restored.
+
+        Call this after seeding your own data::
 
             def test_user_survives(self):
                 User = self.old_apps.get_model("myapp", "User")
                 User.objects.create(name="Alice")
                 self.assertDataIntact()   # Alice must still exist after rollback
-
-        Upgrades to migrate_to, then downgrades back to migrate_from, and
-        verifies the seeded rows are still present.
         """
         from .core.schema import SchemaDiff, SchemaSnapshot
         from .core.seeder import SmartSeeder
+        from sqlalchemy import text
 
         engine = self._runner.engine
         schema_before = SchemaSnapshot.capture(engine)
 
-        # Seed rows for tables that the user hasn't already populated
+        # --- 1. Snapshot PKs of all rows that ALREADY EXIST (user-created via setUp /
+        #        test body).  Must happen before SmartSeeder inserts its own rows so we
+        #        can distinguish user data from synthetic seed data.
+        existing_pks: dict[str, set] = {}
+        with engine.connect() as conn:
+            for tname, tinfo in schema_before.tables.items():
+                if tinfo.pk_cols:
+                    pk_col = tinfo.pk_cols[0]
+                    rows = conn.execute(
+                        text(f"SELECT {pk_col} FROM {tname}")  # noqa: S608
+                    ).scalars().all()
+                    if rows:
+                        existing_pks[tname] = set(rows)
+
+        # --- 2. Seed additional rows so the round-trip runs against non-trivial data ---
         seeder = SmartSeeder(engine)
         for tname, table_info in schema_before.tables.items():
             seeder.seed_table(table_info)
 
-        self._runner.upgrade(*self.migrate_to)
-        self._runner.downgrade(*self.migrate_to)
+        # --- 3. Migration round-trip with error recovery ---
+        try:
+            self._runner.upgrade(*self.migrate_to)
+            self._runner.downgrade(*self.migrate_to)
+        except Exception:
+            # Best-effort recovery: roll back to zero so the next test doesn't
+            # start from an inconsistent migration state.
+            try:
+                self._runner.downgrade_app_zero(self.migrate_to[0])
+            except Exception:
+                pass
+            raise
 
+        # --- 4. Verify schema was fully restored ---
         schema_after = SchemaSnapshot.capture(engine)
         schema_issues = list(SchemaDiff().verify_restored(schema_before, schema_after))
-        data_issues = seeder.verify()
 
-        failures = [i.message for i in schema_issues] + list(data_issues)
+        # --- 5. Verify SmartSeeder rows survived ---
+        data_issues = list(seeder.verify())
+
+        # --- 6. Verify user-created rows survived ---
+        user_row_failures: list[str] = []
+        if existing_pks:
+            with engine.connect() as conn:
+                for tname, before_pks in existing_pks.items():
+                    if tname not in schema_after.tables:
+                        continue  # already reported as a schema-level issue
+                    tinfo = schema_before.tables[tname]
+                    pk_col = tinfo.pk_cols[0]
+                    after_pks = set(
+                        conn.execute(
+                            text(f"SELECT {pk_col} FROM {tname}")  # noqa: S608
+                        ).scalars().all()
+                    )
+                    lost = before_pks - after_pks
+                    if lost:
+                        user_row_failures.append(
+                            f"Table '{tname}': {len(lost)}/{len(before_pks)}"
+                            f" pre-existing row(s) lost after rollback"
+                        )
+
+        failures = [i.message for i in schema_issues] + data_issues + user_row_failures
         self.assertFalse(
             failures,
             msg="Data or schema was not fully restored after rollback:\n"
@@ -170,12 +222,18 @@ class MRTTestCase(unittest.TestCase):
 
     # ── internals ─────────────────────────────────────────────────────
 
-    @staticmethod
-    def _historical_apps(target: tuple[str, str]) -> Any:
+    @classmethod
+    def _historical_apps(cls, target: tuple[str, str]) -> Any:
+        """Return the historical Django app registry at the given migration state.
+
+        Uses ``cls.db_alias`` (default: ``"default"``).  Override ``db_alias``
+        on the subclass when ``DjangoMigrationRunner`` was configured to use a
+        non-default connection alias.
+        """
         from django.db import connections
         from django.db.migrations.executor import MigrationExecutor
 
-        conn = connections["default"]
+        conn = connections[cls.db_alias]
         executor = MigrationExecutor(conn)
         state = executor.loader.project_state(target, at_end=True)
         return state.apps

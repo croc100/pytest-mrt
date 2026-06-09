@@ -162,6 +162,68 @@ def test_assert_data_intact_fails_on_data_loss():
             instance.assertDataIntact()
 
 
+def test_assert_data_intact_recovery_on_downgrade_failure():
+    """If downgrade raises, downgrade_app_zero is called for recovery."""
+    from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff
+    from pytest_mrt.core.seeder import SmartSeeder
+
+    Cls = _make_testcase_class()
+    runner, verifier = _setup_testcase_with_mocks(Cls)
+    runner.downgrade.side_effect = RuntimeError("Migration state corrupted")
+
+    with (
+        mock.patch.object(SchemaSnapshot, "capture", return_value=mock.MagicMock(tables={})),
+        mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
+        mock.patch("pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])),
+    ):
+        instance = Cls()
+        with pytest.raises(RuntimeError, match="Migration state corrupted"):
+            instance.assertDataIntact()
+
+    # Recovery path must have been attempted
+    runner.downgrade_app_zero.assert_called_once_with(Cls.migrate_to[0])
+
+
+def test_assert_data_intact_detects_user_row_loss():
+    """Pre-existing rows that disappear after rollback are reported as failures."""
+    from pytest_mrt.core.schema import SchemaSnapshot, SchemaDiff
+    from pytest_mrt.core.seeder import SmartSeeder
+
+    Cls = _make_testcase_class()
+    runner, verifier = _setup_testcase_with_mocks(Cls)
+
+    # Table 'users' with pk_col 'id'; existing rows = {1, 2, 3}
+    mock_tinfo = mock.MagicMock()
+    mock_tinfo.pk_cols = ["id"]
+    schema_mock = mock.MagicMock(tables={"users": mock_tinfo})
+
+    # engine.connect() is called twice:
+    #   1st call: PK snapshot before seeder  → rows 1, 2, 3
+    #   2nd call: verification after rollback → rows 1, 2 only (row 3 lost)
+    connect_calls = []
+
+    def make_mock_conn(pk_values):
+        conn = mock.MagicMock()
+        conn.__enter__ = mock.Mock(return_value=conn)
+        conn.__exit__ = mock.Mock(return_value=False)
+        conn.execute.return_value.scalars.return_value.all.return_value = pk_values
+        return conn
+
+    runner.engine.connect.side_effect = [
+        make_mock_conn([1, 2, 3]),  # before seeder
+        make_mock_conn([1, 2]),     # after rollback — row 3 missing
+    ]
+
+    with (
+        mock.patch.object(SchemaSnapshot, "capture", return_value=schema_mock),
+        mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
+        mock.patch("pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])),
+    ):
+        instance = Cls()
+        with pytest.raises(AssertionError, match="pre-existing row"):
+            instance.assertDataIntact()
+
+
 # ── setUp restores migrate_from state ─────────────────────────────────────
 
 
