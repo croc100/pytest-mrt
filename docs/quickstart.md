@@ -182,9 +182,10 @@ This is fast (no DB needed) and catches things like:
 | Code | Meaning |
 |---|---|
 | `0` | Clean — no issues |
-| `1` | Errors found (will cause data loss or broken rollback) |
+| `1` | Warnings found (without `--strict`) |
+| `2` | Errors found, or warnings with `--strict` |
 
-Add `--strict` to also fail on warnings:
+Add `--strict` to also exit `2` on warnings:
 
 ```bash
 mrt check migrations/versions/ --strict

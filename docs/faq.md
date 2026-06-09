@@ -122,7 +122,7 @@ MRTConfig(
 
 ## Test failures
 
-### `mrt check` exits 1 — what do I do?
+### `mrt check` exits non-zero — what do I do?
 
 Run with `--format json` to get machine-readable output, then check the `severity` and `pattern` fields:
 

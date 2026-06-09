@@ -20,11 +20,6 @@ pytest-mrt has two interfaces:
 
 ---
 
-- **`mrt` CLI** — static analysis, runs without a database
-- **`mrt` pytest fixture** — dynamic verification, runs migrations against a real database
-
----
-
 ## CLI: `mrt check`
 
 Scans migration files for dangerous patterns. Fast, no database needed.
@@ -116,9 +111,16 @@ Common causes:
 | Code | Meaning |
 |---|---|
 | `0` | No problems found |
-| `1` | One or more errors (or warnings with `--strict`) |
+| `1` | Warnings found (without `--strict`), or `--since` matched no migrations |
+| `2` | Errors found, or warnings found with `--strict` |
 
-Use the exit code in CI to fail the pipeline automatically.
+Use exit code `2` to fail the pipeline on actionable findings:
+
+```bash
+mrt check migrations/versions/ --strict
+# exits 0 (clean) or 2 (errors or warnings)
+# exits 1 only if warnings exist but --strict is not set
+```
 
 ### Example output
 
