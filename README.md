@@ -15,11 +15,33 @@
   A pytest plugin that catches database migration rollback failures before they reach production.
 </p>
 
+<p align="center">
+  <img src="docs/demo.gif" alt="mrt check catching DROP COLUMN data loss" width="100%" />
+</p>
+
 ---
 
 `alembic downgrade -1` ran clean. No errors. Your monitoring went green.
 
 But the users' phone numbers are gone. The column came back. The data didn't.
+
+pytest-mrt would have caught this before it reached production:
+
+```
+$ mrt check migrations/versions/
+
+                         Rollback Risk Analysis
+╭──────────┬────────┬───────────────────────────┬───────┬──────┬─────────────────────────────────────╮
+│ Revision │ Code   │ Pattern                   │ Sev   │ Line │ Message                             │
+├──────────┼────────┼───────────────────────────┼───────┼──────┼─────────────────────────────────────┤
+│ 042      │ MRT201 │ DROP COLUMN in upgrade    │ error │   18 │ op.drop_column('users', 'phone') —  │
+│          │        │                           │       │      │ column data is permanently lost     │
+│          │        │                           │       │      │ even if downgrade re-adds the column│
+╰──────────┴────────┴───────────────────────────┴───────┴──────┴─────────────────────────────────────╯
+1 error(s), 0 warning(s)
+```
+
+Non-invasive — installs in 2 minutes, zero changes to your existing tests.
 
 ---
 
@@ -188,9 +210,13 @@ Check only migrations added since a given revision. Keeps CI fast on large codeb
 # Alembic — pass a revision ID
 mrt check migrations/versions/ --since a1b2c3d4
 
-# Django — pass app_label.migration_name
+# Django — pass app_label.migration_name (filename without .py)
 mrt check myapp/migrations/ --since myapp.0010_add_email
 ```
+
+Pass the last migration on the base branch; only PR-new migrations are scanned.
+
+> When `--since` is active, graph-level checks (orphan detection, data-hole analysis) are skipped. Run without `--since` periodically for full coverage. See the [CLI reference](docs/cli.md#--since--incremental-scanning) for the full format specification.
 
 ## CI/CD integration
 
@@ -257,6 +283,20 @@ To suppress all MRT warnings on a line:
 ```
 
 Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
+
+## How it compares
+
+| | pytest-mrt | [pytest-alembic](https://github.com/schireson/pytest-alembic) | [alembic check](https://alembic.sqlalchemy.org/en/latest/ops.html#alembic.operations.Operations.check) | [django-test-migrations](https://github.com/wemake-services/django-test-migrations) |
+|---|:---:|:---:|:---:|:---:|
+| Static analysis (no DB required) | ✅ 44 patterns | ❌ | ❌ | ❌ |
+| Dynamic rollback testing | ✅ | ✅ | ❌ | ✅ |
+| **Data survival check** (seeds rows, verifies after rollback) | ✅ | ❌ schema only | ❌ | ❌ |
+| Django support | ✅ | ❌ | ❌ | ✅ |
+| Auto-fix (`mrt fix`) | ✅ | ❌ | ❌ | ❌ |
+| Pre-commit hook | ✅ | ❌ | ❌ | ❌ |
+| Inline suppression (`# noqa: MRTxxx`) | ✅ | ❌ | ❌ | ❌ |
+
+The key difference from pytest-alembic: pytest-mrt seeds actual rows before each rollback and verifies they survive. A migration that reverses the schema cleanly but silently destroys data will pass pytest-alembic and fail pytest-mrt.
 
 ## What's new in v1.3.1
 

@@ -21,7 +21,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ## [1.3.0] — 2026-06-08
 
 ### Added
-- **`mrt check --since <revision>`** — scan only migrations added since a given git revision or tag. Eliminates re-scanning the full history on every PR in large codebases. Works with any git ref: `--since main`, `--since v1.2.0`, `--since HEAD~3`.
+- **`mrt check --since <revision>`** — scan only migrations added after a given migration revision. Eliminates re-scanning the full history on every PR in large codebases. Alembic: pass a revision ID (`--since a1b2c3d4`). Django: pass `app_label.migration_name` (`--since myapp.0010_add_email`).
 - **pre-commit hook integration** — `.pre-commit-hooks.yaml` ships with pytest-mrt. Add `mrt check` to your pre-commit pipeline with two lines:
   ```yaml
   - repo: https://github.com/croc100/pytest-mrt
