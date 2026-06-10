@@ -281,3 +281,26 @@ skip={
     )
 }
 ```
+
+---
+
+## Setting a permanent rollback floor
+
+Once a project has a long migration history, testing every migration from the beginning can be slow and unnecessary. Use `minimum_downgrade_revision` to skip everything at or before a known-safe baseline:
+
+```python
+# conftest.py
+config._mrt_config = MRTConfig(
+    db_url=os.environ["TEST_DATABASE_URL"],
+    minimum_downgrade_revision="a1b2c3d4",  # Alembic: revision ID
+    # minimum_downgrade_revision="myapp.0050_baseline",  # Django: app_label.migration_name
+)
+```
+
+Migrations at or before the floor are advanced through (to keep the DB state consistent) but not tested. Migrations after the floor are tested as normal.
+
+This is different from `skip`:
+- `skip` exempts specific migrations from testing (use for genuinely irreversible data migrations)
+- `minimum_downgrade_revision` sets a floor — everything below it is treated as "already validated, no need to re-test"
+
+The same floor applies to both `mrt check` (static analysis) and `check_all()` (dynamic rollback tests). The CLI equivalent is `mrt check --min-revision <rev>`.

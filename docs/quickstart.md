@@ -285,10 +285,36 @@ All options for `MRTConfig`:
 from pytest_mrt import MRTConfig
 
 MRTConfig(
-    alembic_ini="alembic.ini",   # Required. Path to your alembic.ini file.
-    db_url="postgresql://...",   # Required. Test database URL. Never use production.
-    seed_rows=3,                 # Optional. Rows inserted per table (default: 3).
-                                 #   Increase if you want more thorough data checks.
+    # Alembic
+    alembic_ini="alembic.ini",          # Path to alembic.ini (default: "alembic.ini")
+    db_url="postgresql://...",          # Test DB URL. Never use production.
+    seed_rows=3,                        # Rows inserted per table before each rollback check
+
+    # Django (use instead of alembic_ini)
+    django_settings="myapp.settings",  # Django settings module
+    django_apps=["users", "orders"],   # Limit to specific app labels (None = all)
+    django_project_dir="/path/to/app", # Project root if conftest is elsewhere
+
+    # Rollback floor — skip old migrations already tested historically
+    minimum_downgrade_revision="abc123def456",  # Alembic: revision ID
+    # minimum_downgrade_revision="myapp.0050_baseline",  # Django: app_label.migration_name
+
+    # Skip specific migrations
+    skip={
+        "abc123": "Intentional data migration. Reviewed 2024-01-15. See ADR-007.",
+    },
+
+    # Override severity for a specific pattern
+    severity_overrides={"INDEX without CONCURRENTLY": "error"},
+
+    # Custom seed data per table
+    custom_seeds={"users": lambda: [{"id": 1, "name": "Alice"}]},
+
+    # Schema drift check
+    target_metadata="myapp.models:Base",
+
+    # Timeout per migration check in seconds
+    migration_timeout=60,
 )
 ```
 

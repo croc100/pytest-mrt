@@ -26,6 +26,11 @@ All constructor parameters are stable:
 | `custom_seeds` | `dict[str, Callable]` | v0.6 |
 | `custom_checks` | `list[Callable]` | v0.7 |
 | `migration_timeout` | `int \| None` | v0.8 |
+| `django_settings` | `str \| None` | v1.0 |
+| `django_apps` | `list[str] \| None` | v1.0 |
+| `django_project_dir` | `str \| None` | v1.0 |
+| `minimum_downgrade_revision` | `str \| None` | v1.4 |
+| `target_metadata` | `str \| None` | v1.2 |
 
 ### `MRTFixture` methods (via `mrt` fixture)
 
@@ -44,10 +49,12 @@ def test_example(mrt):
 | `check_static(versions_dir)` | v0.7 |
 | `assert_no_static_errors(versions_dir)` | v0.7 |
 | `check_revision(revision)` | v0.5 |
-| `check_all()` | v0.5 |
+| `check_migration(app_label, name)` | v1.0 |
+| `check_all(apps)` | v0.5 |
 | `assert_reversible(revision)` | v0.5 |
-| `assert_all_reversible()` | v0.4 |
+| `assert_all_reversible(apps)` | v0.4 |
 | `assert_data_intact()` | v0.5 |
+| `assert_schema_matches(target_metadata, metadata_path)` | v1.2 |
 | `reset()` | v0.5 |
 
 ### `RevisionResult` attributes
@@ -129,6 +136,7 @@ mrt check <versions_dir>
 | `1` | Warnings found (review before next release) |
 | `2` | Errors found — migrations have rollback risks |
 | `2` | Warnings found with `--strict` |
+| `4` | Config error — e.g. `alembic.ini` not found (pytest session exit) |
 
 These exit codes are stable and will not change.
 
