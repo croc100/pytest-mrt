@@ -111,10 +111,17 @@ def test_check_json_format(tmp_path, versions_dir):
     import json
 
     data = json.loads(result.output)
-    assert isinstance(data, list)
-    assert len(data) > 0
-    assert "pattern" in data[0]
-    assert "severity" in data[0]
+    assert isinstance(data, dict)
+    assert "version" in data
+    assert "checked_at" in data
+    assert "summary" in data
+    assert "findings" in data
+    assert data["summary"]["total_issues"] > 0
+    assert data["summary"]["errors"] > 0
+    finding = data["findings"][0]
+    assert "rule" in finding
+    assert "severity" in finding
+    assert "fixable" in finding
     assert result.exit_code == 2  # errors → exit 2
 
 

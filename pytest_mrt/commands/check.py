@@ -79,22 +79,43 @@ def check(
     if fmt == "json":
         import json
         import sys
+        from datetime import datetime, timezone
+        from importlib.metadata import version as pkg_version
 
-        output = [
-            {
-                "revision": w.revision,
-                "file": w.file,
-                "code": w.code,
-                "pattern": w.pattern,
-                "severity": w.severity,
-                "message": w.message,
-                "line": w.line,
-            }
-            for w in warnings
-        ]
+        _FIXABLE_CODES = {"MRT101", "MRT102"}
+
+        try:
+            _ver = pkg_version("pytest-mrt")
+        except Exception:
+            _ver = "unknown"
+
+        errors = [w for w in warnings if w.severity == "error"]
+        warns = [w for w in warnings if w.severity == "warning"]
+
+        output = {
+            "version": _ver,
+            "checked_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "summary": {
+                "total_issues": len(warnings),
+                "errors": len(errors),
+                "warnings": len(warns),
+            },
+            "findings": [
+                {
+                    "file": w.file,
+                    "line": w.line,
+                    "rule": w.code,
+                    "severity": w.severity,
+                    "pattern": w.pattern,
+                    "message": w.message,
+                    "fixable": w.code in _FIXABLE_CODES,
+                }
+                for w in warnings
+            ],
+        }
         sys.stdout.write(json.dumps(output, indent=2) + "\n")
-        has_errors = any(w.severity == "error" for w in warnings)
-        has_warns = any(w.severity == "warning" for w in warnings)
+        has_errors = bool(errors)
+        has_warns = bool(warns)
         if has_errors or (strict and has_warns):
             raise typer.Exit(2)
         if has_warns:
