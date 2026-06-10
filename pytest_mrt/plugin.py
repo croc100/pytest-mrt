@@ -127,7 +127,10 @@ class MRTFixture:
         if versions_dir is None:
             versions_dir = self._runner.get_versions_dir()
 
-        warnings = analyze_migrations(versions_dir)
+        warnings = analyze_migrations(
+            versions_dir,
+            min_revision=self._config.minimum_downgrade_revision,
+        )
 
         # Apply custom checks
         if self._config.custom_checks:

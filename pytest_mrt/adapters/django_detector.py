@@ -478,6 +478,84 @@ def _check_missing_atomic_false(m: DjangoMigrationAST) -> list[RiskWarning]:
 # Registry
 # ─────────────────────────────────────────────────────────────
 
+
+def _check_squash_run_python_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
+    """Squashed migrations with RunPython lacking reverse_code are unrecoverable on rollback."""
+    # Detect squashed migration: has a `replaces` class attribute
+    klass = DjangoMigrationAST._find_migration_class(m.tree)
+    if not klass:
+        return []
+
+    has_replaces = any(
+        isinstance(item, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "replaces" for t in item.targets)
+        for item in klass.body
+    )
+    if not has_replaces:
+        return []
+
+    warnings = []
+    for op in m.operations:
+        if not isinstance(op, ast.Call):
+            continue
+        func = op.func
+        name = (
+            func.attr
+            if isinstance(func, ast.Attribute)
+            else func.id
+            if isinstance(func, ast.Name)
+            else None
+        )
+        if name != "RunPython":
+            continue
+        # reverse_code may be passed as the second positional arg or as a keyword
+        has_reverse = "reverse_code" in {kw.arg for kw in op.keywords} or len(op.args) >= 2
+        if has_reverse:
+            continue
+        warnings.append(
+            RiskWarning(
+                f"{m.app_label}.{m.migration_name}",
+                m.filename,
+                "Squashed migration: RunPython without reverse_code",
+                "Squashed migration contains RunPython with no reverse_code — rollback will silently do nothing",
+                "error",
+                line=op.lineno,
+                code="MRT601",
+            )
+        )
+    return warnings
+
+
+def _check_squash_missing_replaces(m: DjangoMigrationAST) -> list[RiskWarning]:
+    """Squashed migrations must declare replaces to avoid double-apply risk."""
+    # A migration with a name containing 'squash' but no replaces attribute is suspicious.
+    if "squash" not in m.migration_name.lower():
+        return []
+
+    klass = DjangoMigrationAST._find_migration_class(m.tree)
+    if not klass:
+        return []
+
+    has_replaces = any(
+        isinstance(item, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "replaces" for t in item.targets)
+        for item in klass.body
+    )
+    if has_replaces:
+        return []
+
+    return [
+        RiskWarning(
+            f"{m.app_label}.{m.migration_name}",
+            m.filename,
+            "Squashed migration: missing replaces list",
+            "Migration name contains 'squash' but has no replaces attribute — Django may apply it on top of the original migrations",
+            "warning",
+            code="MRT602",
+        )
+    ]
+
+
 _DJANGO_CHECKS = [
     _check_remove_field,
     _check_delete_model,
@@ -489,6 +567,8 @@ _DJANGO_CHECKS = [
     _check_rename_model_no_reverse,
     _check_add_index_no_concurrently,
     _check_missing_atomic_false,
+    _check_squash_run_python_no_reverse,
+    _check_squash_missing_replaces,
 ]
 
 
@@ -561,7 +641,11 @@ def _django_migrations_since(migrations_dir: str, since: str) -> set[str]:
     return result
 
 
-def analyze_django_migrations(migrations_dir: str, since: str | None = None) -> list[RiskWarning]:
+def analyze_django_migrations(
+    migrations_dir: str,
+    since: str | None = None,
+    min_revision: str | None = None,
+) -> list[RiskWarning]:
     """Analyze Django migration files for rollback risk patterns.
 
     Args:
@@ -569,10 +653,16 @@ def analyze_django_migrations(migrations_dir: str, since: str | None = None) -> 
         since: If given (format ``"app_label.migration_name"``), only analyse
                migrations that transitively depend on this migration.  Use this
                in CI to limit analysis to the migrations added in a branch.
+        min_revision: If given, skip migrations at or older than this point.
+               The two sets are intersected when both are provided.
     """
     since_set: set[str] | None = None
     if since is not None:
         since_set = _django_migrations_since(migrations_dir, since)
+
+    if min_revision is not None:
+        min_set = _django_migrations_since(migrations_dir, min_revision)
+        since_set = min_set if since_set is None else since_set & min_set
 
     warnings: list[RiskWarning] = []
     root = Path(migrations_dir)

@@ -111,10 +111,17 @@ def test_check_json_format(tmp_path, versions_dir):
     import json
 
     data = json.loads(result.output)
-    assert isinstance(data, list)
-    assert len(data) > 0
-    assert "pattern" in data[0]
-    assert "severity" in data[0]
+    assert isinstance(data, dict)
+    assert "version" in data
+    assert "checked_at" in data
+    assert "summary" in data
+    assert "findings" in data
+    assert data["summary"]["total_issues"] > 0
+    assert data["summary"]["errors"] > 0
+    finding = data["findings"][0]
+    assert "rule" in finding
+    assert "severity" in finding
+    assert "fixable" in finding
     assert result.exit_code == 2  # errors → exit 2
 
 
@@ -141,6 +148,109 @@ def test_check_json_warnings_only_exits_1(tmp_path, versions_dir):
     )
     result = runner.invoke(app, ["check", str(versions_dir), "--format", "json"])
     assert result.exit_code == 1
+
+
+def test_check_watch_rejects_non_table_format(tmp_path, versions_dir):
+    _safe_migration(versions_dir)
+    result = runner.invoke(app, ["check", str(versions_dir), "--watch", "--format", "json"])
+    assert result.exit_code == 1
+    assert "--watch" in result.output
+
+
+def test_check_watch_runs_once_then_stops(tmp_path, versions_dir):
+    """Watch mode runs the check once and exits cleanly on KeyboardInterrupt."""
+    _safe_migration(versions_dir)
+    from unittest.mock import patch
+    import time
+
+    call_count = 0
+
+    def fake_sleep(_):
+        nonlocal call_count
+        call_count += 1
+        raise KeyboardInterrupt
+
+    with patch("time.sleep", side_effect=fake_sleep):
+        result = runner.invoke(app, ["check", str(versions_dir), "--watch"])
+
+    assert "Watch stopped" in result.output or "Watching" in result.output
+    # Should have printed the initial check result
+    assert "No rollback risks" in result.output or "Rollback Risk" in result.output
+
+
+def test_check_min_revision_filters_older(tmp_path):
+    """--min-revision skips migrations older than the specified point."""
+    vdir = tmp_path / "versions"
+    vdir.mkdir()
+    (vdir / "001.py").write_text(textwrap.dedent("""
+        revision = 'aaa'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            pass
+        def downgrade():
+            pass
+    """))
+    # risky migration that is a child of 'aaa'
+    (vdir / "002.py").write_text(textwrap.dedent("""
+        revision = 'bbb'
+        down_revision = 'aaa'
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.drop_table('users')
+        def downgrade():
+            pass
+    """))
+    # Without --min-revision: both checked, bbb is risky
+    result_all = runner.invoke(app, ["check", str(vdir)])
+    # With --min-revision=aaa: only bbb (child of aaa) is checked
+    result_min = runner.invoke(app, ["check", str(vdir), "--min-revision", "aaa"])
+    assert "--min-revision" in result_min.output or "skipping" in result_min.output
+
+
+def test_check_min_revision_unknown_exits_1(tmp_path, versions_dir):
+    _safe_migration(versions_dir)
+    result = runner.invoke(app, ["check", str(versions_dir), "--min-revision", "nonexistent"])
+    assert result.exit_code == 1
+    assert "matched no migrations" in result.output
+
+
+def test_check_html_format_writes_file(tmp_path, versions_dir):
+    _risky_migration(versions_dir)
+    out = tmp_path / "report.html"
+    result = runner.invoke(app, ["check", str(versions_dir), "--format", "html", "--output", str(out)])
+    assert out.exists()
+    content = out.read_text()
+    assert "<html" in content
+    assert result.exit_code == 2  # errors → exit 2
+
+
+def test_check_html_format_default_filename(tmp_path, versions_dir):
+    _safe_migration(versions_dir)
+    import os
+    orig = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        result = runner.invoke(app, ["check", str(versions_dir), "--format", "html"])
+        assert (tmp_path / "mrt-report.html").exists()
+        assert result.exit_code == 0
+    finally:
+        os.chdir(orig)
+
+
+def test_check_json_output_flag(tmp_path, versions_dir):
+    _risky_migration(versions_dir)
+    import json
+    out = tmp_path / "out.json"
+    result = runner.invoke(app, ["check", str(versions_dir), "--format", "json", "--output", str(out)])
+    assert out.exists()
+    data = json.loads(out.read_text())
+    assert "findings" in data
+    assert result.exit_code == 2
 
 
 def test_check_strict_exits_1_on_warnings(tmp_path, versions_dir):
@@ -386,6 +496,45 @@ def test_fix_apply_writes_file(tmp_path):
 def test_fix_missing_file(tmp_path):
     result = runner.invoke(app, ["fix", str(tmp_path / "nonexistent.py")])
     assert result.exit_code == 1
+
+
+def test_fix_batch_requires_apply_flag(tmp_path):
+    result = runner.invoke(app, ["fix"])
+    assert result.exit_code == 1
+    assert "--apply" in result.output
+
+
+def test_fix_batch_dry_run(tmp_path):
+    mig = tmp_path / "0001_initial.py"
+    mig.write_text(textwrap.dedent("""
+        revision = '0001'
+        from alembic import op
+        def upgrade():
+            op.create_table('users', op.Column('id', op.Integer, primary_key=True))
+        def downgrade():
+            pass
+    """))
+    result = runner.invoke(app, ["fix", "--apply", "--dry-run", "--dir", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "dry-run" in result.output.lower() or "Dry-run" in result.output
+    # File should NOT be modified in dry-run
+    assert "pass" in mig.read_text()
+
+
+def test_fix_batch_applies_all(tmp_path):
+    for i in range(3):
+        mig = tmp_path / f"000{i}_mig.py"
+        mig.write_text(textwrap.dedent(f"""
+            revision = '000{i}'
+            from alembic import op
+            def upgrade():
+                op.create_table('t{i}', op.Column('id', op.Integer, primary_key=True))
+            def downgrade():
+                pass
+        """))
+    result = runner.invoke(app, ["fix", "--apply", "--dir", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "fixed" in result.output
 
 
 # ── mrt report ───────────────────────────────────

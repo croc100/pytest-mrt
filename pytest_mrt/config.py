@@ -73,6 +73,12 @@ class MRTConfig:
     # Required if the project is not on the Python path already.
     django_project_dir: str | None = None
 
+    # Rollback testing floor — skip revisions at or older than this point.
+    # Alembic: revision ID (e.g. "abc123def456").
+    # Django: app_label.migration_name (e.g. "myapp.0050_baseline").
+    # None = test all revisions (default).
+    minimum_downgrade_revision: str | None = None
+
     # Model used by `mrt explain`. Defaults to DEFAULT_EXPLAIN_MODEL.
     # Override to use a different Claude model, e.g. "claude-3-5-haiku-latest".
     explain_model: str = DEFAULT_EXPLAIN_MODEL

@@ -12,8 +12,18 @@ console = Console()
 
 
 def fix(
-    migration_file: str = typer.Argument(help="Path to the migration .py file"),
-    apply: bool = typer.Option(False, "--apply", help="Write the fix to the file"),
+    migration_file: str | None = typer.Argument(
+        default=None, help="Path to a migration .py file. Omit to batch-fix all migrations."
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Write fixes to file(s). Required for batch mode."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview batch fixes without writing (use with --apply)."
+    ),
+    directory: str | None = typer.Option(
+        None, "--dir", "-d", help="Directory to scan in batch mode (auto-detected if omitted)."
+    ),
 ) -> None:
     """
     Auto-generate missing reverse operations for an Alembic or Django migration.
@@ -22,8 +32,17 @@ def fix(
     For Django migrations: adds reverse_sql / reverse_code to operations that
     lack them (RunSQL, RunPython).
 
-    Shows the suggested changes. Use --apply to write them to the file.
+    Single-file mode: mrt fix <file> [--apply]
+    Batch mode:       mrt fix --apply [--dry-run] [--dir <path>]
     """
+    if migration_file is None:
+        if not apply:
+            console.print("[red]Error: batch mode requires --apply. Use: mrt fix --apply[/red]")
+            console.print("[dim]To preview without writing: mrt fix --apply --dry-run[/dim]")
+            raise typer.Exit(1)
+        _fix_batch(directory, dry_run=dry_run)
+        return
+
     path = Path(migration_file)
     if not path.exists():
         console.print(f"[red]File not found: {migration_file}[/red]")
@@ -160,3 +179,97 @@ def _fix_django(migration_file: str, apply: bool) -> None:
 
     apply_django_fix(migration_file, fix_suggestion)
     console.print(f"[green]✓ Fix applied to {migration_file}[/green]")
+
+
+# ─────────────────────────────────────────────────────────────
+# Batch mode
+# ─────────────────────────────────────────────────────────────
+
+
+def _find_migration_dir(base: Path) -> Path | None:
+    candidates = [
+        base / "migrations",
+        base / "alembic" / "versions",
+        base / "versions",
+    ]
+    for c in candidates:
+        if c.is_dir() and list(c.glob("*.py")):
+            return c
+    return None
+
+
+def _fix_batch(directory: str | None, *, dry_run: bool) -> None:
+    from ..adapters.django_fixer import (
+        apply_django_fix,
+        generate_django_fix,
+        is_django_migration,
+    )
+    from ..core.fixer import apply_fix, generate_fix
+
+    if directory:
+        scan_dir = Path(directory)
+    else:
+        scan_dir = _find_migration_dir(Path.cwd())
+
+    if scan_dir is None or not scan_dir.is_dir():
+        console.print(
+            "[red]Error: could not find a migrations directory. Use --dir to specify.[/red]"
+        )
+        raise typer.Exit(1)
+
+    files = sorted(scan_dir.rglob("*.py"))
+    if not files:
+        console.print(f"[yellow]No .py files found in {scan_dir}[/yellow]")
+        raise typer.Exit(0)
+
+    label = "[dim](dry-run)[/dim] " if dry_run else ""
+    console.print(f"[dim]Scanning {len(files)} file(s) in {scan_dir} …[/dim]")
+
+    fixed = 0
+    skipped = 0
+    failed = 0
+
+    for f in files:
+        if f.name.startswith("__"):
+            continue
+        try:
+            if is_django_migration(f):
+                django_suggestion = generate_django_fix(str(f))
+                if django_suggestion is None or (
+                    django_suggestion.unsupported_ops and not django_suggestion.patches
+                ):
+                    skipped += 1
+                    continue
+                console.print(f"  {label}[cyan]{f.name}[/cyan] — {django_suggestion.issue}")
+                if not dry_run:
+                    apply_django_fix(str(f), django_suggestion)
+                fixed += 1
+            else:
+                alembic_suggestion = generate_fix(str(f))
+                if alembic_suggestion is None:
+                    skipped += 1
+                    continue
+                console.print(
+                    f"  {label}[cyan]{f.name}[/cyan] — {alembic_suggestion.issue}"
+                    f" (confidence: {alembic_suggestion.confidence})"
+                )
+                if not dry_run:
+                    apply_fix(str(f), alembic_suggestion)
+                fixed += 1
+        except Exception as e:
+            console.print(f"  [red]✗ {f.name}: {e}[/red]")
+            failed += 1
+
+    console.print()
+    if dry_run:
+        console.print(
+            f"[dim]Dry-run complete: {fixed} fixable, {skipped} clean, {failed} error(s).[/dim]"
+        )
+        console.print("[dim]Run without --dry-run to apply.[/dim]")
+    else:
+        console.print(
+            f"[green]✓ Done: {fixed} fixed, {skipped} already clean, {failed} error(s).[/green]"
+        )
+
+    if failed:
+        raise typer.Exit(1)
