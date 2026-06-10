@@ -18,7 +18,8 @@ def _severity_color(s: str) -> str:
 def check(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
     strict: bool = typer.Option(False, "--strict", help="Treat warnings as errors (exit 2)"),
-    fmt: str = typer.Option("table", "--format", "-f", help="Output format: table | json"),
+    fmt: str = typer.Option("table", "--format", "-f", help="Output format: table | json | html"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Write output to file (for --format html/json)"),
     since: str | None = typer.Option(
         None,
         "--since",
@@ -92,7 +93,7 @@ def check(
         errors = [w for w in warnings if w.severity == "error"]
         warns = [w for w in warnings if w.severity == "warning"]
 
-        output = {
+        payload = {
             "version": _ver,
             "checked_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "summary": {
@@ -113,12 +114,38 @@ def check(
                 for w in warnings
             ],
         }
-        sys.stdout.write(json.dumps(output, indent=2) + "\n")
+        json_text = json.dumps(payload, indent=2) + "\n"
+        if output:
+            from pathlib import Path as _Path
+            _Path(output).write_text(json_text)
+            console.print(f"[green]✓ JSON report saved to [bold]{output}[/bold][/green]")
+        else:
+            sys.stdout.write(json_text)
         has_errors = bool(errors)
         has_warns = bool(warns)
         if has_errors or (strict and has_warns):
             raise typer.Exit(2)
         if has_warns:
+            raise typer.Exit(1)
+        raise typer.Exit(0)
+
+    if fmt == "html":
+        from pathlib import Path as _Path
+
+        from ..core.html_report import generate_html_report
+
+        html = generate_html_report(versions_dir, warnings)
+        out_path = output or "mrt-report.html"
+        _Path(out_path).write_text(html)
+        console.print(f"[green]✓ HTML report saved to [bold]{out_path}[/bold][/green]")
+        console.print(
+            f"  Open: [link=file://{_Path(out_path).absolute()}]{_Path(out_path).absolute()}[/link]"
+        )
+        errors = [w for w in warnings if w.severity == "error"]
+        warns = [w for w in warnings if w.severity == "warning"]
+        if errors or (strict and warns):
+            raise typer.Exit(2)
+        if warns:
             raise typer.Exit(1)
         raise typer.Exit(0)
 

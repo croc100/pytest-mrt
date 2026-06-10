@@ -150,6 +150,40 @@ def test_check_json_warnings_only_exits_1(tmp_path, versions_dir):
     assert result.exit_code == 1
 
 
+def test_check_html_format_writes_file(tmp_path, versions_dir):
+    _risky_migration(versions_dir)
+    out = tmp_path / "report.html"
+    result = runner.invoke(app, ["check", str(versions_dir), "--format", "html", "--output", str(out)])
+    assert out.exists()
+    content = out.read_text()
+    assert "<html" in content
+    assert result.exit_code == 2  # errors → exit 2
+
+
+def test_check_html_format_default_filename(tmp_path, versions_dir):
+    _safe_migration(versions_dir)
+    import os
+    orig = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        result = runner.invoke(app, ["check", str(versions_dir), "--format", "html"])
+        assert (tmp_path / "mrt-report.html").exists()
+        assert result.exit_code == 0
+    finally:
+        os.chdir(orig)
+
+
+def test_check_json_output_flag(tmp_path, versions_dir):
+    _risky_migration(versions_dir)
+    import json
+    out = tmp_path / "out.json"
+    result = runner.invoke(app, ["check", str(versions_dir), "--format", "json", "--output", str(out)])
+    assert out.exists()
+    data = json.loads(out.read_text())
+    assert "findings" in data
+    assert result.exit_code == 2
+
+
 def test_check_strict_exits_1_on_warnings(tmp_path, versions_dir):
     # A migration with only warnings (not errors) exits 0 normally
     (versions_dir / "001.py").write_text(
