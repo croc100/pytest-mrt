@@ -187,14 +187,14 @@ Add to `.pre-commit-config.yaml` to run `mrt check` automatically before every p
 ```yaml
 # Alembic
 - repo: https://github.com/croc100/pytest-mrt
-  rev: v1.3.1
+  rev: v1.4.0
   hooks:
     - id: mrt-check
       args: [alembic/versions/]
 
 # Django
 - repo: https://github.com/croc100/pytest-mrt
-  rev: v1.3.1
+  rev: v1.4.0
   hooks:
     - id: mrt-check
       args: [myapp/migrations/]
@@ -284,13 +284,14 @@ Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
 
 The key difference from pytest-alembic: pytest-mrt seeds actual rows before each rollback and verifies they survive. A migration that reverses the schema cleanly but silently destroys data will pass pytest-alembic and fail pytest-mrt.
 
-## What's new in v1.3.1
+## What's new in v1.4.0
 
-- **Error message quality** — config errors show once at session start instead of repeating for every test
-- **`mrt init` fix** — generated `conftest.py` now has correctly quoted `db_url`
-- **`mrt check --since` validation** — warns and exits when the revision matches no migrations
-- **Django `mrt fix`** — unsupported operations (`AddField` NOT NULL, `RenameField`, etc.) now show a clear manual-fix guide instead of silent no-op
-- **Django downgrade fix** — rollback with branch migrations no longer touches unrelated sibling branches
+- **`mrt check --format json/html`** — structured JSON output for CI tooling; self-contained HTML safety report
+- **`mrt check --watch`** — re-runs automatically whenever a migration file changes
+- **`mrt check --min-revision`** — skip revisions older than a configured floor (mirrors `MRTConfig.minimum_downgrade_revision`)
+- **`mrt fix --apply` batch mode** — fix all auto-fixable migrations at once; `--dry-run` previews without writing
+- **Django squashmigrations detection** — MRT601/MRT602 catch unsafe `RunPython` in squashed migrations
+- **`minimum_downgrade_revision` in dynamic tests** — floor now respected by the `mrt` fixture `check_all()`, not just static analysis
 
 ## Changelog
 
