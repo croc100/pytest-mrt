@@ -5,7 +5,7 @@ import re
 import uuid
 import warnings
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -123,18 +123,20 @@ def _generate_value(
     if any(x in t for x in ("BYTEA", "VARBINARY", "BLOB", "BINARY")):
         return f"mrt_{row_index}".encode()
     if "TIMESTAMP" in t or "DATETIME" in t:
-        return datetime(2024, 1, row_index % 28 + 1, row_index % 24, 0, 0)
+        return datetime(2020, 1, 1) + timedelta(seconds=seed % (10 * 365 * 86400))
     if "DATE" in t:
-        return date(2024, 1, row_index % 28 + 1)
+        return date(2020, 1, 1) + timedelta(days=seed % (10 * 365))
     if "TIME" in t:
-        return time(row_index % 24, 0, 0)
+        return time((seed // 3600) % 24, (seed // 60) % 60, seed % 60)
     if any(x in t for x in ("VARCHAR", "TEXT", "CHAR", "STRING", "CLOB")):
         m = re.search(r"\((\d+)\)", t)
         limit = int(m.group(1)) if m else 255
-        val = f"mrt_{col.name[:8]}_{row_index:04d}"
-        return val[:limit]
+        # UUID guarantees uniqueness regardless of column length or row_index magnitude,
+        # avoiding UNIQUE collisions when the same table is seeded across multiple
+        # check_revision() calls (prior rows survive downgrade and remain in the DB).
+        return uuid.uuid4().hex[:limit]
 
-    return f"mrt_{row_index}"
+    return uuid.uuid4().hex
 
 
 def _normalize_for_compare(val: Any) -> Any:
