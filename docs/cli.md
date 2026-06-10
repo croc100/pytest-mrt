@@ -5,6 +5,8 @@ pytest-mrt has two interfaces:
 - **`mrt` CLI** — analysis, fixing, and reporting without a database
 - **`mrt` pytest fixture** — dynamic verification against a real database
 
+For GitHub Actions integration, see [croc100/pytest-mrt-action](https://github.com/croc100/pytest-mrt-action) — posts findings as a job summary, no boilerplate required.
+
 ## Command overview
 
 | Command | What it does | Needs DB? |
