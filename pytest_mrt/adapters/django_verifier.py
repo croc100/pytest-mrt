@@ -178,8 +178,7 @@ class DjangoRollbackVerifier:
                         passed=True,
                         skipped=True,
                         skip_reason=(
-                            f"At or before minimum_downgrade_revision "
-                            f"floor ({self.min_revision})"
+                            f"At or before minimum_downgrade_revision floor ({self.min_revision})"
                         ),
                     )
                 )
