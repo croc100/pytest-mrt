@@ -37,11 +37,13 @@ class DjangoRollbackVerifier:
         skip: dict[str, str] | None = None,
         custom_seeds: dict[str, Callable[[], list[dict]]] | None = None,
         timeout: int | None = None,
+        min_revision: str | None = None,
     ):
         self.runner = runner
         self.skip = skip or {}
         self.custom_seeds = custom_seeds or {}
         self.timeout = timeout
+        self.min_revision = min_revision
 
     def _build_seeder(self, schema: SchemaSnapshot) -> SmartSeeder:
         seeder = SmartSeeder(self.runner.engine)
@@ -144,6 +146,9 @@ class DjangoRollbackVerifier:
         Test every Django migration in topological order.
 
         apps: limit to specific app labels. None = all discovered apps.
+
+        Migrations at or before min_revision are skipped (advanced but not tested).
+        min_revision format: "app_label.migration_name" (e.g. "myapp.0050_baseline").
         """
         migrations = self.runner.get_migrations(apps=apps)
         if not migrations:
@@ -154,9 +159,47 @@ class DjangoRollbackVerifier:
         for app in app_labels:
             self.runner.downgrade_app_zero(app)
 
+        # Find the floor index for min_revision
+        floor_idx: int | None = None
+        if self.min_revision is not None:
+            for i, m in enumerate(migrations):
+                if m.revision == self.min_revision:
+                    floor_idx = i
+                    break
+
         results: list[RevisionResult] = []
 
-        for migration in migrations:
+        for i, migration in enumerate(migrations):
+            if floor_idx is not None and i <= floor_idx:
+                # Below the floor — just advance, don't test
+                results.append(
+                    RevisionResult(
+                        revision=migration.revision,
+                        passed=True,
+                        skipped=True,
+                        skip_reason=(
+                            f"At or before minimum_downgrade_revision "
+                            f"floor ({self.min_revision})"
+                        ),
+                    )
+                )
+                try:
+                    self.runner.upgrade(migration.app_label, migration.name)
+                except Exception as exc:
+                    results.append(
+                        RevisionResult(
+                            revision=f"chain-advance-{migration.revision}",
+                            passed=False,
+                            failures=[
+                                f"Could not advance past floor revision "
+                                f"{migration.revision}: {exc}. "
+                                "Remaining migrations were not tested."
+                            ],
+                        )
+                    )
+                    break
+                continue
+
             result = self.check_migration(migration)
             results.append(result)
 

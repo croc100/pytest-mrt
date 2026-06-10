@@ -429,3 +429,56 @@ def test_check_all_chain_advance_failure_stops_early(mock_runner):
     assert not results[1].passed
     assert "chain-advance" in results[1].revision
     assert "advance failed" in results[1].failures[0]
+
+
+def test_check_all_min_revision_skips_floor_and_below(mock_runner):
+    """Migrations at or before min_revision are skipped, not tested."""
+    from pytest_mrt.adapters.django_verifier import DjangoRollbackVerifier
+
+    m1 = _make_migration(name="0001_initial")
+    m2 = _make_migration(name="0002_baseline")
+    m3 = _make_migration(name="0003_add_field")
+    mock_runner.get_migrations.return_value = [m1, m2, m3]
+
+    verifier = DjangoRollbackVerifier(mock_runner, min_revision="myapp/0002_baseline")
+    tested = []
+
+    original = verifier.check_migration
+
+    def track(m):
+        tested.append(m.revision)
+        return original(m)
+
+    with mock.patch.object(verifier, "check_migration", side_effect=track):
+        results = verifier.check_all()
+
+    # 0001 and 0002 skipped, only 0003 tested
+    assert results[0].skipped
+    assert results[1].skipped
+    assert "floor" in results[0].skip_reason
+    assert not results[2].skipped
+    assert "myapp/0001_initial" not in tested
+    assert "myapp/0002_baseline" not in tested
+    assert "myapp/0003_add_field" in tested
+
+
+def test_check_all_min_revision_not_found_tests_all(mock_runner):
+    """If min_revision doesn't match any migration, all are tested normally."""
+    from pytest_mrt.adapters.django_verifier import DjangoRollbackVerifier
+
+    m1 = _make_migration(name="0001_initial")
+    m2 = _make_migration(name="0002_add_field")
+    mock_runner.get_migrations.return_value = [m1, m2]
+
+    verifier = DjangoRollbackVerifier(mock_runner, min_revision="myapp/9999_nonexistent")
+    tested = []
+
+    with mock.patch.object(
+        verifier, "check_migration",
+        side_effect=lambda m: tested.append(m.revision) or __import__("pytest_mrt.core.verifier", fromlist=["RevisionResult"]).RevisionResult(revision=m.revision, passed=True)
+    ):
+        results = verifier.check_all()
+
+    assert not results[0].skipped
+    assert not results[1].skipped
+    assert len(tested) == 2
