@@ -234,24 +234,27 @@ def _fix_batch(directory: str | None, *, dry_run: bool) -> None:
             continue
         try:
             if is_django_migration(f):
-                suggestion = generate_django_fix(str(f))
-                if suggestion is None or (suggestion.unsupported_ops and not suggestion.patches):
+                django_suggestion = generate_django_fix(str(f))
+                if django_suggestion is None or (
+                    django_suggestion.unsupported_ops and not django_suggestion.patches
+                ):
                     skipped += 1
                     continue
-                console.print(f"  {label}[cyan]{f.name}[/cyan] — {suggestion.issue}")
+                console.print(f"  {label}[cyan]{f.name}[/cyan] — {django_suggestion.issue}")
                 if not dry_run:
-                    apply_django_fix(str(f), suggestion)
+                    apply_django_fix(str(f), django_suggestion)
                 fixed += 1
             else:
-                suggestion = generate_fix(str(f))
-                if suggestion is None:
+                alembic_suggestion = generate_fix(str(f))
+                if alembic_suggestion is None:
                     skipped += 1
                     continue
                 console.print(
-                    f"  {label}[cyan]{f.name}[/cyan] — {suggestion.issue} (confidence: {suggestion.confidence})"
+                    f"  {label}[cyan]{f.name}[/cyan] — {alembic_suggestion.issue}"
+                    f" (confidence: {alembic_suggestion.confidence})"
                 )
                 if not dry_run:
-                    apply_fix(str(f), suggestion)
+                    apply_fix(str(f), alembic_suggestion)
                 fixed += 1
         except Exception as e:
             console.print(f"  [red]✗ {f.name}: {e}[/red]")
