@@ -178,6 +178,47 @@ def test_check_watch_runs_once_then_stops(tmp_path, versions_dir):
     assert "No rollback risks" in result.output or "Rollback Risk" in result.output
 
 
+def test_check_min_revision_filters_older(tmp_path):
+    """--min-revision skips migrations older than the specified point."""
+    vdir = tmp_path / "versions"
+    vdir.mkdir()
+    (vdir / "001.py").write_text(textwrap.dedent("""
+        revision = 'aaa'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            pass
+        def downgrade():
+            pass
+    """))
+    # risky migration that is a child of 'aaa'
+    (vdir / "002.py").write_text(textwrap.dedent("""
+        revision = 'bbb'
+        down_revision = 'aaa'
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.drop_table('users')
+        def downgrade():
+            pass
+    """))
+    # Without --min-revision: both checked, bbb is risky
+    result_all = runner.invoke(app, ["check", str(vdir)])
+    # With --min-revision=aaa: only bbb (child of aaa) is checked
+    result_min = runner.invoke(app, ["check", str(vdir), "--min-revision", "aaa"])
+    assert "--min-revision" in result_min.output or "skipping" in result_min.output
+
+
+def test_check_min_revision_unknown_exits_1(tmp_path, versions_dir):
+    _safe_migration(versions_dir)
+    result = runner.invoke(app, ["check", str(versions_dir), "--min-revision", "nonexistent"])
+    assert result.exit_code == 1
+    assert "matched no migrations" in result.output
+
+
 def test_check_html_format_writes_file(tmp_path, versions_dir):
     _risky_migration(versions_dir)
     out = tmp_path / "report.html"

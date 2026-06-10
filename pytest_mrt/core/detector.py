@@ -898,7 +898,11 @@ def _revisions_since(versions_dir: str, since: str) -> set[str]:
     return result
 
 
-def analyze_migrations(versions_dir: str, since: str | None = None) -> list[RiskWarning]:
+def analyze_migrations(
+    versions_dir: str,
+    since: str | None = None,
+    min_revision: str | None = None,
+) -> list[RiskWarning]:
     """
     Analyze all Alembic migration files in a directory.
 
@@ -911,12 +915,18 @@ def analyze_migrations(versions_dir: str, since: str | None = None) -> list[Risk
         since: If given, only analyse migrations that come *after* this
                revision ID in the migration chain.  Useful in CI to limit
                analysis to the migrations introduced in a feature branch.
+        min_revision: If given, skip revisions at or older than this point.
+               The two sets are intersected when both are provided.
     """
     from .graph import analyze_migration_graph
 
     since_set: set[str] | None = None
     if since is not None:
         since_set = _revisions_since(versions_dir, since)
+
+    if min_revision is not None:
+        min_set = _revisions_since(versions_dir, min_revision)
+        since_set = min_set if since_set is None else since_set & min_set
 
     warnings: list[RiskWarning] = []
     migrations: list[MigrationAST] = []

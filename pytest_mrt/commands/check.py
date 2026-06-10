@@ -15,10 +15,15 @@ def _severity_color(s: str) -> str:
     return "red" if s == "error" else "yellow"
 
 
-def _collect_warnings(versions_dir: str, since: str | None, is_django: bool) -> list:
+def _collect_warnings(
+    versions_dir: str,
+    since: str | None,
+    is_django: bool,
+    min_revision: str | None = None,
+) -> list:
     if is_django:
-        return analyze_django_migrations(versions_dir, since=since)
-    return analyze_migrations(versions_dir, since=since)
+        return analyze_django_migrations(versions_dir, since=since, min_revision=min_revision)
+    return analyze_migrations(versions_dir, since=since, min_revision=min_revision)
 
 
 def _print_table(warnings: list, strict: bool) -> int:
@@ -82,6 +87,15 @@ def check(
         "-w",
         help="Re-run check automatically when migration files change. Ctrl+C to stop.",
     ),
+    min_revision: str | None = typer.Option(
+        None,
+        "--min-revision",
+        help=(
+            "Skip revisions at or older than this point. "
+            "Alembic: revision ID. Django: app_label.migration_name. "
+            "Mirrors mrt_minimum_downgrade_revision in MRTConfig."
+        ),
+    ),
 ) -> None:
     """Statically analyze migrations for rollback risk patterns (Alembic and Django)."""
     from pathlib import Path as _Path
@@ -126,14 +140,32 @@ def check(
     if is_django:
         console.print("[dim]Detected: Django migrations[/dim]")
 
+    if min_revision:
+        if is_django:
+            from ..adapters.django_detector import _django_migrations_since
+            min_set = _django_migrations_since(versions_dir, min_revision)
+        else:
+            from ..core.detector import _revisions_since
+            min_set = _revisions_since(versions_dir, min_revision)
+
+        if not min_set:
+            console.print(
+                f"[yellow]Warning: --min-revision {min_revision} matched no migrations. "
+                "Check the revision ID and try again.[/yellow]"
+            )
+            raise typer.Exit(1)
+        console.print(
+            f"[dim]--min-revision {min_revision}: skipping {len(min_set)} older migration(s)[/dim]"
+        )
+
     if watch:
         if fmt != "table":
             console.print("[red]Error: --watch is only supported with --format table[/red]")
             raise typer.Exit(1)
-        _watch_loop(versions_dir, since=since, strict=strict, is_django=is_django)
+        _watch_loop(versions_dir, since=since, strict=strict, is_django=is_django, min_revision=min_revision)
         return
 
-    warnings = _collect_warnings(versions_dir, since, is_django)
+    warnings = _collect_warnings(versions_dir, since, is_django, min_revision=min_revision)
 
     if fmt == "json":
         import json
@@ -219,7 +251,7 @@ def _file_mtimes(versions_dir: str) -> dict:
     }
 
 
-def _watch_loop(versions_dir: str, *, since: str | None, strict: bool, is_django: bool) -> None:
+def _watch_loop(versions_dir: str, *, since: str | None, strict: bool, is_django: bool, min_revision: str | None = None) -> None:
     import time
 
     console.print(f"[dim]Watching {versions_dir} for changes. Ctrl+C to stop.[/dim]")
@@ -228,7 +260,7 @@ def _watch_loop(versions_dir: str, *, since: str | None, strict: bool, is_django
     last_mtimes = _file_mtimes(versions_dir)
 
     # Run once immediately
-    warnings = _collect_warnings(versions_dir, since, is_django)
+    warnings = _collect_warnings(versions_dir, since, is_django, min_revision=min_revision)
     _print_table(warnings, strict)
 
     try:
@@ -238,7 +270,7 @@ def _watch_loop(versions_dir: str, *, since: str | None, strict: bool, is_django
             if current_mtimes != last_mtimes:
                 last_mtimes = current_mtimes
                 console.rule("[dim]files changed — re-running[/dim]")
-                warnings = _collect_warnings(versions_dir, since, is_django)
+                warnings = _collect_warnings(versions_dir, since, is_django, min_revision=min_revision)
                 _print_table(warnings, strict)
     except KeyboardInterrupt:
         console.print("\n[dim]Watch stopped.[/dim]")

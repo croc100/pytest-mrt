@@ -561,7 +561,11 @@ def _django_migrations_since(migrations_dir: str, since: str) -> set[str]:
     return result
 
 
-def analyze_django_migrations(migrations_dir: str, since: str | None = None) -> list[RiskWarning]:
+def analyze_django_migrations(
+    migrations_dir: str,
+    since: str | None = None,
+    min_revision: str | None = None,
+) -> list[RiskWarning]:
     """Analyze Django migration files for rollback risk patterns.
 
     Args:
@@ -569,10 +573,16 @@ def analyze_django_migrations(migrations_dir: str, since: str | None = None) -> 
         since: If given (format ``"app_label.migration_name"``), only analyse
                migrations that transitively depend on this migration.  Use this
                in CI to limit analysis to the migrations added in a branch.
+        min_revision: If given, skip migrations at or older than this point.
+               The two sets are intersected when both are provided.
     """
     since_set: set[str] | None = None
     if since is not None:
         since_set = _django_migrations_since(migrations_dir, since)
+
+    if min_revision is not None:
+        min_set = _django_migrations_since(migrations_dir, min_revision)
+        since_set = min_set if since_set is None else since_set & min_set
 
     warnings: list[RiskWarning] = []
     root = Path(migrations_dir)
