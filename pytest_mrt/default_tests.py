@@ -18,9 +18,29 @@ import pytest
 
 
 def test_mrt_single_head(mrt) -> None:
-    """Exactly one head revision exists in the migration chain."""
+    """Exactly one head revision exists in the migration chain.
+
+    Multiple heads indicate an unresolved branch — usually a merge conflict
+    that was committed without running ``alembic merge heads`` (Alembic) or
+    ``manage.py makemigrations --merge`` (Django).
+    """
     if mrt._django_mode:
-        pytest.skip("single-head check not applicable to Django mode")
+        executor = mrt._django_verifier.runner._executor()
+        leaves = executor.loader.graph.leaf_nodes()
+        # Group by app so the error message is actionable
+        from collections import defaultdict
+
+        by_app: dict[str, list[str]] = defaultdict(list)
+        for app_label, name in leaves:
+            by_app[app_label].append(name)
+        branched = {app: names for app, names in by_app.items() if len(names) > 1}
+        assert not branched, (
+            f"Migration graph has multiple leaf nodes in {len(branched)} app(s):\n"
+            + "\n".join(f"  {app}: {names}" for app, names in branched.items())
+            + "\nRun `python manage.py makemigrations --merge` to create a merge migration."
+        )
+        return
+
     from alembic.script import ScriptDirectory
 
     script = ScriptDirectory.from_config(mrt._runner.alembic_cfg)
