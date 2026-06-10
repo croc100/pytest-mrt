@@ -73,6 +73,7 @@ class MRTFixture:
                 skip=config.skip,
                 custom_seeds=config.custom_seeds,
                 timeout=config.migration_timeout,
+                min_revision=config.minimum_downgrade_revision,
             )
             # Expose engine for seeder compatibility
             self._runner = None  # type: ignore[assignment]
@@ -95,6 +96,7 @@ class MRTFixture:
                 skip=config.skip,
                 custom_seeds=config.custom_seeds,
                 timeout=config.migration_timeout,
+                min_revision=config.minimum_downgrade_revision,
             )
             self._django_runner = None  # type: ignore[assignment]
             self._django_verifier = None  # type: ignore[assignment]

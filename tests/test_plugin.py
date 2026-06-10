@@ -250,6 +250,55 @@ def test_mrt_fixture_check_all(alembic_env):
     fixture.reset()
 
 
+def test_mrt_fixture_check_all_min_revision_skips_floor(alembic_env):
+    v = alembic_env["versions"]
+    _add_migration(
+        v,
+        "001_first.py",
+        textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute("SELECT 1")
+        def downgrade():
+            op.execute("SELECT 1")
+        """),
+    )
+    _add_migration(
+        v,
+        "002_second.py",
+        textwrap.dedent("""
+        revision = '002'
+        down_revision = '001'
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute("SELECT 1")
+        def downgrade():
+            op.execute("SELECT 1")
+        """),
+    )
+
+    cfg = MRTConfig(
+        alembic_ini=alembic_env["ini"],
+        db_url=alembic_env["db_url"],
+        minimum_downgrade_revision="001",
+    )
+    fixture = MRTFixture(cfg)
+    results = fixture.check_all()
+    fixture.reset()
+
+    assert len(results) == 2
+    assert results[0].skipped
+    assert "floor" in results[0].skip_reason
+    assert not results[1].skipped
+    assert results[1].passed
+
+
 def test_mrt_fixture_check_static(alembic_env):
     _add_migration(
         alembic_env["versions"],

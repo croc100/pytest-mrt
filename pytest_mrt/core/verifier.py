@@ -49,11 +49,13 @@ class RollbackVerifier:
         skip: dict[str, str] | None = None,
         custom_seeds: dict[str, Callable[[], list[dict]]] | None = None,
         timeout: int | None = None,
+        min_revision: str | None = None,
     ):
         self.runner = runner
         self.skip = skip or {}
         self.custom_seeds = custom_seeds or {}
         self.timeout = timeout
+        self.min_revision = min_revision
 
     def _build_seeder(self, schema: SchemaSnapshot) -> SmartSeeder:
         seeder = SmartSeeder(self.runner.engine)
@@ -171,11 +173,50 @@ class RollbackVerifier:
           - Start from base
           - For each revision: check (up+down), then advance (up again)
           Rather than the naive pattern of downgrade_base before every check.
+
+        Revisions at or before min_revision are skipped (advanced but not tested).
         """
         results: list[RevisionResult] = []
         self.runner.downgrade_base()
 
-        for rev in self.runner.get_revisions():
+        # Build ordered list and find the floor index for min_revision
+        revisions = self.runner.get_revisions()
+        floor_idx: int | None = None
+        if self.min_revision is not None:
+            for i, rev in enumerate(revisions):
+                if rev.revision == self.min_revision:
+                    floor_idx = i
+                    break
+
+        for i, rev in enumerate(revisions):
+            if floor_idx is not None and i <= floor_idx:
+                # Below the floor — just advance, don't test
+                results.append(
+                    RevisionResult(
+                        revision=rev.revision,
+                        passed=True,
+                        skipped=True,
+                        skip_reason=(
+                            f"At or before minimum_downgrade_revision floor ({self.min_revision})"
+                        ),
+                    )
+                )
+                try:
+                    self.runner.upgrade(rev.revision)
+                except Exception as exc:
+                    results.append(
+                        RevisionResult(
+                            revision=f"chain-advance-{rev.revision}",
+                            passed=False,
+                            failures=[
+                                f"Could not advance past floor revision {rev.revision}: {exc}. "
+                                "Remaining migrations were not tested."
+                            ],
+                        )
+                    )
+                    break
+                continue
+
             # DB is at the revision just before rev.revision
             result = self.check_revision(rev.revision)
             results.append(result)

@@ -1,6 +1,6 @@
 # Risk Patterns
 
-pytest-mrt detects **44 patterns** across two categories.
+pytest-mrt detects **46 patterns** across two categories.
 
 Run static analysis instantly — no database needed:
 
@@ -430,3 +430,52 @@ def downgrade():
 ```
 
 Constraint dropped inside SQLite's batch mode — downgrade must recreate it.
+
+---
+
+## Django: Squashed migration patterns
+
+### MRT601 — Squashed migration: RunPython without reverse_code (error)
+
+A squashed migration (one that has a `replaces` attribute) contains a `RunPython` operation with no `reverse_code`. Rolling back the squashed migration will silently do nothing — the data transformation from `RunPython` is not undone.
+
+```python
+class Migration(migrations.Migration):
+    replaces = [('myapp', '0005_a'), ('myapp', '0006_b')]
+    operations = [
+        migrations.RunPython(populate_data),  # ✗ no reverse_code
+    ]
+```
+
+**Fix:** always supply a `reverse_code`:
+
+```python
+migrations.RunPython(populate_data, reverse_code=undo_populate_data)
+# or, if rollback is intentionally a no-op:
+migrations.RunPython(populate_data, reverse_code=migrations.RunPython.noop)
+```
+
+**Note:** `reverse_code` can be the second positional argument — `RunPython(forward, backward)` is correctly detected as having a reverse.
+
+---
+
+### MRT602 — Squashed migration: missing replaces list (warning)
+
+A migration filename contains "squash" but declares no `replaces` attribute. Django uses `replaces` to know which original migrations this squash supersedes. Without it, Django may apply both the original migrations and the squashed one, leading to duplicate operations.
+
+```python
+# filename: 0010_squashed_0001_0005.py
+class Migration(migrations.Migration):
+    dependencies = []
+    operations = [...]
+    # ✗ no replaces = [...]
+```
+
+**Fix:** add `replaces` listing the migrations this squash covers:
+
+```python
+class Migration(migrations.Migration):
+    replaces = [('myapp', '0001_initial'), ..., ('myapp', '0005_add_field')]
+    dependencies = []
+    operations = [...]
+```
