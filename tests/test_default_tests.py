@@ -24,12 +24,20 @@ def _mrt(django_mode=False):
     return m
 
 
+def _django_mrt_with_leaves(leaves: list[tuple[str, str]]):
+    """Build a mock mrt in Django mode with a given leaf_nodes() list."""
+    mrt = _mrt(django_mode=True)
+    fake_graph = MagicMock()
+    fake_graph.leaf_nodes.return_value = leaves
+    fake_loader = MagicMock()
+    fake_loader.graph = fake_graph
+    fake_executor = MagicMock()
+    fake_executor.loader = fake_loader
+    mrt._django_verifier.runner._executor.return_value = fake_executor
+    return mrt
+
+
 # ── test_mrt_single_head ─────────────────────────────────────────────────────
-
-
-def test_single_head_skips_django_mode():
-    with pytest.raises(pytest.skip.Exception):
-        _single_head(_mrt(django_mode=True))
 
 
 def test_single_head_passes_one_head():
@@ -49,6 +57,19 @@ def test_single_head_fails_multiple_heads():
         mock_sd.from_config.return_value = fake_script
         with pytest.raises(AssertionError, match="single head"):
             _single_head(mrt)
+
+
+def test_single_head_django_passes_single_leaf_per_app():
+    mrt = _django_mrt_with_leaves([("users", "0001_initial"), ("orders", "0001_initial")])
+    _single_head(mrt)  # one leaf per app — should pass
+
+
+def test_single_head_django_fails_multiple_leaves_same_app():
+    mrt = _django_mrt_with_leaves(
+        [("users", "0002_add_email"), ("users", "0002_add_phone")]
+    )
+    with pytest.raises(AssertionError, match="multiple leaf"):
+        _single_head(mrt)
 
 
 # ── test_mrt_upgrade ─────────────────────────────────────────────────────────
