@@ -41,6 +41,7 @@ nav:
   - Detection Accuracy: accuracy.md
   - Upgrade Guide: migration-guide.md
   - Benchmarks: benchmarks.md
+  - Roadmap: roadmap.md
   - Contributing: contributing.md
 
 plugins:
