@@ -7,6 +7,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.4.1] — 2026-06-11
+
+### Added
+- **`mrt check --check-compat`** — rolling-deploy compatibility checks. Flags operations that break a running app during a rolling deploy (DROP COLUMN, RENAME COLUMN/TABLE, type changes with data loss, index drops, constraint drops). Five new patterns MRT701–MRT705, all opt-in via `--check-compat`. (#80)
+- **`test_single_head_revision` Django support** — previously skipped for Django projects; now checks `MigrationGraph.leaf_nodes()` and fails if multiple leaf nodes (branch) are present. (#78)
+- **GitHub Actions integration** — [`croc100/pytest-mrt-action`](https://github.com/croc100/pytest-mrt-action) v1.0.0: run `mrt check` in CI with a single `uses:` line and auto-posted step summary. (#79)
+
+---
+
 ## [1.4.0] — 2026-06-10
 
 ### Added
