@@ -15,6 +15,52 @@ def _severity_color(s: str) -> str:
     return "red" if s == "error" else "yellow"
 
 
+def _collect_warnings(versions_dir: str, since: str | None, is_django: bool) -> list:
+    if is_django:
+        return analyze_django_migrations(versions_dir, since=since)
+    return analyze_migrations(versions_dir, since=since)
+
+
+def _print_table(warnings: list, strict: bool) -> int:
+    """Print table output and return the intended exit code (0/1/2)."""
+    if not warnings:
+        console.print("[green]✓ No rollback risks detected.[/green]")
+        return 0
+
+    errors = [w for w in warnings if w.severity == "error"]
+    warns = [w for w in warnings if w.severity == "warning"]
+
+    table = Table(box=box.ROUNDED, title="Rollback Risk Analysis", show_lines=True)
+    table.add_column("Revision", style="cyan", no_wrap=True)
+    table.add_column("Code", style="dim", no_wrap=True)
+    table.add_column("Pattern", no_wrap=True)
+    table.add_column("Sev", no_wrap=True)
+    table.add_column("Line", no_wrap=True, justify="right")
+    table.add_column("Message")
+
+    for w in warnings:
+        c = _severity_color(w.severity)
+        line_str = str(w.line) if w.line is not None else ""
+        table.add_row(
+            w.revision, w.code, w.pattern, f"[{c}]{w.severity}[/{c}]", line_str, w.message
+        )
+
+    console.print(table)
+    console.print()
+
+    if errors:
+        console.print(
+            f"[red]{len(errors)} error(s)[/red], [yellow]{len(warns)} warning(s)[/yellow]"
+        )
+        return 2
+    elif warns and strict:
+        console.print(f"[yellow]{len(warns)} warning(s)[/yellow] (--strict: treated as errors)")
+        return 2
+    else:
+        console.print(f"[yellow]{len(warns)} warning(s)[/yellow] — review before deploying")
+        return 1
+
+
 def check(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
     strict: bool = typer.Option(False, "--strict", help="Treat warnings as errors (exit 2)"),
@@ -29,6 +75,12 @@ def check(
             "Django: app_label.migration_name (e.g. 'myapp.0010_add_email'). "
             "Useful in CI to skip already-reviewed history."
         ),
+    ),
+    watch: bool = typer.Option(
+        False,
+        "--watch",
+        "-w",
+        help="Re-run check automatically when migration files change. Ctrl+C to stop.",
     ),
 ) -> None:
     """Statically analyze migrations for rollback risk patterns (Alembic and Django)."""
@@ -73,9 +125,15 @@ def check(
 
     if is_django:
         console.print("[dim]Detected: Django migrations[/dim]")
-        warnings = analyze_django_migrations(versions_dir, since=since)
-    else:
-        warnings = analyze_migrations(versions_dir, since=since)
+
+    if watch:
+        if fmt != "table":
+            console.print("[red]Error: --watch is only supported with --format table[/red]")
+            raise typer.Exit(1)
+        _watch_loop(versions_dir, since=since, strict=strict, is_django=is_django)
+        return
+
+    warnings = _collect_warnings(versions_dir, since, is_django)
 
     if fmt == "json":
         import json
@@ -149,39 +207,38 @@ def check(
             raise typer.Exit(1)
         raise typer.Exit(0)
 
-    if not warnings:
-        console.print("[green]✓ No rollback risks detected.[/green]")
-        raise typer.Exit(0)
+    exit_code = _print_table(warnings, strict)
+    raise typer.Exit(exit_code)
 
-    errors = [w for w in warnings if w.severity == "error"]
-    warns = [w for w in warnings if w.severity == "warning"]
 
-    table = Table(box=box.ROUNDED, title="Rollback Risk Analysis", show_lines=True)
-    table.add_column("Revision", style="cyan", no_wrap=True)
-    table.add_column("Code", style="dim", no_wrap=True)
-    table.add_column("Pattern", no_wrap=True)
-    table.add_column("Sev", no_wrap=True)
-    table.add_column("Line", no_wrap=True, justify="right")
-    table.add_column("Message")
+def _file_mtimes(versions_dir: str) -> dict:
+    from pathlib import Path as _Path
+    return {
+        str(p): p.stat().st_mtime
+        for p in _Path(versions_dir).rglob("*.py")
+    }
 
-    for w in warnings:
-        c = _severity_color(w.severity)
-        line_str = str(w.line) if w.line is not None else ""
-        table.add_row(
-            w.revision, w.code, w.pattern, f"[{c}]{w.severity}[/{c}]", line_str, w.message
-        )
 
-    console.print(table)
+def _watch_loop(versions_dir: str, *, since: str | None, strict: bool, is_django: bool) -> None:
+    import time
+
+    console.print(f"[dim]Watching {versions_dir} for changes. Ctrl+C to stop.[/dim]")
     console.print()
 
-    if errors:
-        console.print(
-            f"[red]{len(errors)} error(s)[/red], [yellow]{len(warns)} warning(s)[/yellow]"
-        )
-        raise typer.Exit(2)
-    elif warns and strict:
-        console.print(f"[yellow]{len(warns)} warning(s)[/yellow] (--strict: treated as errors)")
-        raise typer.Exit(2)
-    else:
-        console.print(f"[yellow]{len(warns)} warning(s)[/yellow] — review before deploying")
-        raise typer.Exit(1)
+    last_mtimes = _file_mtimes(versions_dir)
+
+    # Run once immediately
+    warnings = _collect_warnings(versions_dir, since, is_django)
+    _print_table(warnings, strict)
+
+    try:
+        while True:
+            time.sleep(1)
+            current_mtimes = _file_mtimes(versions_dir)
+            if current_mtimes != last_mtimes:
+                last_mtimes = current_mtimes
+                console.rule("[dim]files changed — re-running[/dim]")
+                warnings = _collect_warnings(versions_dir, since, is_django)
+                _print_table(warnings, strict)
+    except KeyboardInterrupt:
+        console.print("\n[dim]Watch stopped.[/dim]")

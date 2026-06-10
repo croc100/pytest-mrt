@@ -150,6 +150,34 @@ def test_check_json_warnings_only_exits_1(tmp_path, versions_dir):
     assert result.exit_code == 1
 
 
+def test_check_watch_rejects_non_table_format(tmp_path, versions_dir):
+    _safe_migration(versions_dir)
+    result = runner.invoke(app, ["check", str(versions_dir), "--watch", "--format", "json"])
+    assert result.exit_code == 1
+    assert "--watch" in result.output
+
+
+def test_check_watch_runs_once_then_stops(tmp_path, versions_dir):
+    """Watch mode runs the check once and exits cleanly on KeyboardInterrupt."""
+    _safe_migration(versions_dir)
+    from unittest.mock import patch
+    import time
+
+    call_count = 0
+
+    def fake_sleep(_):
+        nonlocal call_count
+        call_count += 1
+        raise KeyboardInterrupt
+
+    with patch("time.sleep", side_effect=fake_sleep):
+        result = runner.invoke(app, ["check", str(versions_dir), "--watch"])
+
+    assert "Watch stopped" in result.output or "Watching" in result.output
+    # Should have printed the initial check result
+    assert "No rollback risks" in result.output or "Rollback Risk" in result.output
+
+
 def test_check_html_format_writes_file(tmp_path, versions_dir):
     _risky_migration(versions_dir)
     out = tmp_path / "report.html"
