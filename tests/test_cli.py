@@ -429,6 +429,45 @@ def test_fix_missing_file(tmp_path):
     assert result.exit_code == 1
 
 
+def test_fix_batch_requires_apply_flag(tmp_path):
+    result = runner.invoke(app, ["fix"])
+    assert result.exit_code == 1
+    assert "--apply" in result.output
+
+
+def test_fix_batch_dry_run(tmp_path):
+    mig = tmp_path / "0001_initial.py"
+    mig.write_text(textwrap.dedent("""
+        revision = '0001'
+        from alembic import op
+        def upgrade():
+            op.create_table('users', op.Column('id', op.Integer, primary_key=True))
+        def downgrade():
+            pass
+    """))
+    result = runner.invoke(app, ["fix", "--apply", "--dry-run", "--dir", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "dry-run" in result.output.lower() or "Dry-run" in result.output
+    # File should NOT be modified in dry-run
+    assert "pass" in mig.read_text()
+
+
+def test_fix_batch_applies_all(tmp_path):
+    for i in range(3):
+        mig = tmp_path / f"000{i}_mig.py"
+        mig.write_text(textwrap.dedent(f"""
+            revision = '000{i}'
+            from alembic import op
+            def upgrade():
+                op.create_table('t{i}', op.Column('id', op.Integer, primary_key=True))
+            def downgrade():
+                pass
+        """))
+    result = runner.invoke(app, ["fix", "--apply", "--dir", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "fixed" in result.output
+
+
 # ── mrt report ───────────────────────────────────
 
 
