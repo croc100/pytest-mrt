@@ -83,8 +83,12 @@ class RollbackVerifier:
                                 text(f"INSERT INTO {q(tname)} ({cols}) VALUES ({placeholders})"),
                                 params,
                             )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        import warnings
+                        warnings.warn(
+                            f"pytest-mrt: failed to insert custom seed row into '{tname}': {exc}",
+                            stacklevel=2,
+                        )
             else:
                 seeder.seed_table(table_info)
         return seeder

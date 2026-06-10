@@ -113,10 +113,9 @@ class MRTFixture:
 
     def seed(self, table: str, rows: list[dict], pk_col: str = "id") -> None:
         snap = SchemaSnapshot.capture(self._seeder.engine)
-        if table in snap.tables:
-            self._seeder.seed_table(snap.tables[table])
-        else:
+        if table not in snap.tables:
             raise ValueError(f"Table '{table}' not found in current schema")
+        self._seeder.seed_custom(table, pk_col, rows)
 
     # ── static analysis ───────────────────────────────────────────────
 
