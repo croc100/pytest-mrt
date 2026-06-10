@@ -315,7 +315,7 @@ mrt clean-backups --db $DATABASE_URL --yes         # skip confirmation prompt
 
 ```bash
 mrt version
-# pytest-mrt 1.3.1
+# pytest-mrt 1.4.0
 ```
 
 ---
