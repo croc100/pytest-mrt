@@ -10,6 +10,8 @@ Operations that break that window are flagged here.
 
 from __future__ import annotations
 
+import ast
+
 from .ast_analyzer import MigrationAST
 from .detector import RiskWarning, _is_suppressed, _warn
 
@@ -96,9 +98,10 @@ def _check_compat_not_null_no_server_default(m: MigrationAST) -> list[RiskWarnin
     for call in m.upgrade_calls():
         if call.method in ("add_column", "add_columns"):
             # Column spec is the second positional arg (sa.Column(...))
-            col_call = call.node.args[1] if len(call.node.args) > 1 else None
-            if col_call is None:
+            col_call_raw = call.node.args[1] if len(call.node.args) > 1 else None
+            if not isinstance(col_call_raw, ast.Call):
                 continue
+            col_call: ast.Call = col_call_raw
             nullable = m.kwarg_bool(col_call, "nullable")
             has_server_default = m.has_kwarg(col_call, "server_default")
             if nullable is False and not has_server_default:
