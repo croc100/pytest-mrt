@@ -581,3 +581,30 @@ def test_squash_missing_replaces_warning(tmp_path):
     warnings = analyze_django_migrations(str(tmp_path))
     codes = [w.code for w in warnings]
     assert "MRT602" in codes
+
+
+def test_squash_run_python_positional_reverse_not_flagged(tmp_path):
+    """RunPython(forward, backward) — positional reverse_code — must NOT trigger MRT601."""
+    app_dir = tmp_path / "myapp" / "migrations"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "0010_squashed.py").write_text(
+        textwrap.dedent("""
+        from django.db import migrations
+
+        def forward(apps, schema_editor):
+            pass
+
+        def backward(apps, schema_editor):
+            pass
+
+        class Migration(migrations.Migration):
+            replaces = [('myapp', '0005_a'), ('myapp', '0006_b')]
+            dependencies = []
+            operations = [
+                migrations.RunPython(forward, backward),
+            ]
+    """).lstrip()
+    )
+    warnings = analyze_django_migrations(str(tmp_path))
+    codes = [w.code for w in warnings]
+    assert "MRT601" not in codes, "Positional reverse_code must not trigger MRT601"

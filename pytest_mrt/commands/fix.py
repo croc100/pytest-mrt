@@ -183,7 +183,6 @@ def _find_migration_dir(base: Path) -> Path | None:
         base / "migrations",
         base / "alembic" / "versions",
         base / "versions",
-        base,
     ]
     for c in candidates:
         if c.is_dir() and list(c.glob("*.py")):

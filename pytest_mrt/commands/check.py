@@ -155,7 +155,7 @@ def check(
             )
             raise typer.Exit(1)
         console.print(
-            f"[dim]--min-revision {min_revision}: skipping {len(min_set)} older migration(s)[/dim]"
+            f"[dim]--min-revision {min_revision}: checking {len(min_set)} newer migration(s), older ones skipped[/dim]"
         )
 
     if watch:

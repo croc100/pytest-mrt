@@ -504,8 +504,12 @@ def _check_squash_run_python_no_reverse(m: DjangoMigrationAST) -> list[RiskWarni
         )
         if name != "RunPython":
             continue
-        kw_names = {kw.arg for kw in op.keywords}
-        if "reverse_code" in kw_names:
+        # reverse_code may be passed as the second positional arg or as a keyword
+        has_reverse = (
+            "reverse_code" in {kw.arg for kw in op.keywords}
+            or len(op.args) >= 2
+        )
+        if has_reverse:
             continue
         warnings.append(
             RiskWarning(
