@@ -12,10 +12,18 @@ console = Console()
 
 
 def fix(
-    migration_file: str | None = typer.Argument(default=None, help="Path to a migration .py file. Omit to batch-fix all migrations."),
-    apply: bool = typer.Option(False, "--apply", help="Write fixes to file(s). Required for batch mode."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Preview batch fixes without writing (use with --apply)."),
-    directory: str | None = typer.Option(None, "--dir", "-d", help="Directory to scan in batch mode (auto-detected if omitted)."),
+    migration_file: str | None = typer.Argument(
+        default=None, help="Path to a migration .py file. Omit to batch-fix all migrations."
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Write fixes to file(s). Required for batch mode."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview batch fixes without writing (use with --apply)."
+    ),
+    directory: str | None = typer.Option(
+        None, "--dir", "-d", help="Directory to scan in batch mode (auto-detected if omitted)."
+    ),
 ) -> None:
     """
     Auto-generate missing reverse operations for an Alembic or Django migration.
@@ -204,7 +212,9 @@ def _fix_batch(directory: str | None, *, dry_run: bool) -> None:
         scan_dir = _find_migration_dir(Path.cwd())
 
     if scan_dir is None or not scan_dir.is_dir():
-        console.print("[red]Error: could not find a migrations directory. Use --dir to specify.[/red]")
+        console.print(
+            "[red]Error: could not find a migrations directory. Use --dir to specify.[/red]"
+        )
         raise typer.Exit(1)
 
     files = sorted(scan_dir.rglob("*.py"))
@@ -237,7 +247,9 @@ def _fix_batch(directory: str | None, *, dry_run: bool) -> None:
                 if suggestion is None:
                     skipped += 1
                     continue
-                console.print(f"  {label}[cyan]{f.name}[/cyan] — {suggestion.issue} (confidence: {suggestion.confidence})")
+                console.print(
+                    f"  {label}[cyan]{f.name}[/cyan] — {suggestion.issue} (confidence: {suggestion.confidence})"
+                )
                 if not dry_run:
                     apply_fix(str(f), suggestion)
                 fixed += 1
@@ -247,10 +259,14 @@ def _fix_batch(directory: str | None, *, dry_run: bool) -> None:
 
     console.print()
     if dry_run:
-        console.print(f"[dim]Dry-run complete: {fixed} fixable, {skipped} clean, {failed} error(s).[/dim]")
+        console.print(
+            f"[dim]Dry-run complete: {fixed} fixable, {skipped} clean, {failed} error(s).[/dim]"
+        )
         console.print("[dim]Run without --dry-run to apply.[/dim]")
     else:
-        console.print(f"[green]✓ Done: {fixed} fixed, {skipped} already clean, {failed} error(s).[/green]")
+        console.print(
+            f"[green]✓ Done: {fixed} fixed, {skipped} already clean, {failed} error(s).[/green]"
+        )
 
     if failed:
         raise typer.Exit(1)

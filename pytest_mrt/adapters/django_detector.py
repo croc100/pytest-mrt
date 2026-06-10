@@ -478,6 +478,7 @@ def _check_missing_atomic_false(m: DjangoMigrationAST) -> list[RiskWarning]:
 # Registry
 # ─────────────────────────────────────────────────────────────
 
+
 def _check_squash_run_python_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
     """Squashed migrations with RunPython lacking reverse_code are unrecoverable on rollback."""
     # Detect squashed migration: has a `replaces` class attribute
@@ -499,16 +500,16 @@ def _check_squash_run_python_no_reverse(m: DjangoMigrationAST) -> list[RiskWarni
             continue
         func = op.func
         name = (
-            func.attr if isinstance(func, ast.Attribute) else
-            func.id if isinstance(func, ast.Name) else None
+            func.attr
+            if isinstance(func, ast.Attribute)
+            else func.id
+            if isinstance(func, ast.Name)
+            else None
         )
         if name != "RunPython":
             continue
         # reverse_code may be passed as the second positional arg or as a keyword
-        has_reverse = (
-            "reverse_code" in {kw.arg for kw in op.keywords}
-            or len(op.args) >= 2
-        )
+        has_reverse = "reverse_code" in {kw.arg for kw in op.keywords} or len(op.args) >= 2
         if has_reverse:
             continue
         warnings.append(

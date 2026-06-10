@@ -70,7 +70,9 @@ def check(
     versions_dir: str = typer.Argument(help="Path to Alembic versions directory"),
     strict: bool = typer.Option(False, "--strict", help="Treat warnings as errors (exit 2)"),
     fmt: str = typer.Option("table", "--format", "-f", help="Output format: table | json | html"),
-    output: str | None = typer.Option(None, "--output", "-o", help="Write output to file (for --format html/json)"),
+    output: str | None = typer.Option(
+        None, "--output", "-o", help="Write output to file (for --format html/json)"
+    ),
     since: str | None = typer.Option(
         None,
         "--since",
@@ -143,9 +145,11 @@ def check(
     if min_revision:
         if is_django:
             from ..adapters.django_detector import _django_migrations_since
+
             min_set = _django_migrations_since(versions_dir, min_revision)
         else:
             from ..core.detector import _revisions_since
+
             min_set = _revisions_since(versions_dir, min_revision)
 
         if not min_set:
@@ -162,7 +166,13 @@ def check(
         if fmt != "table":
             console.print("[red]Error: --watch is only supported with --format table[/red]")
             raise typer.Exit(1)
-        _watch_loop(versions_dir, since=since, strict=strict, is_django=is_django, min_revision=min_revision)
+        _watch_loop(
+            versions_dir,
+            since=since,
+            strict=strict,
+            is_django=is_django,
+            min_revision=min_revision,
+        )
         return
 
     warnings = _collect_warnings(versions_dir, since, is_django, min_revision=min_revision)
@@ -207,6 +217,7 @@ def check(
         json_text = json.dumps(payload, indent=2) + "\n"
         if output:
             from pathlib import Path as _Path
+
             _Path(output).write_text(json_text)
             console.print(f"[green]✓ JSON report saved to [bold]{output}[/bold][/green]")
         else:
@@ -245,13 +256,18 @@ def check(
 
 def _file_mtimes(versions_dir: str) -> dict:
     from pathlib import Path as _Path
-    return {
-        str(p): p.stat().st_mtime
-        for p in _Path(versions_dir).rglob("*.py")
-    }
+
+    return {str(p): p.stat().st_mtime for p in _Path(versions_dir).rglob("*.py")}
 
 
-def _watch_loop(versions_dir: str, *, since: str | None, strict: bool, is_django: bool, min_revision: str | None = None) -> None:
+def _watch_loop(
+    versions_dir: str,
+    *,
+    since: str | None,
+    strict: bool,
+    is_django: bool,
+    min_revision: str | None = None,
+) -> None:
     import time
 
     console.print(f"[dim]Watching {versions_dir} for changes. Ctrl+C to stop.[/dim]")
@@ -270,7 +286,9 @@ def _watch_loop(versions_dir: str, *, since: str | None, strict: bool, is_django
             if current_mtimes != last_mtimes:
                 last_mtimes = current_mtimes
                 console.rule("[dim]files changed — re-running[/dim]")
-                warnings = _collect_warnings(versions_dir, since, is_django, min_revision=min_revision)
+                warnings = _collect_warnings(
+                    versions_dir, since, is_django, min_revision=min_revision
+                )
                 _print_table(warnings, strict)
     except KeyboardInterrupt:
         console.print("\n[dim]Watch stopped.[/dim]")
