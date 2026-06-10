@@ -112,7 +112,7 @@ class MRTFixture:
     # ── manual seeding ────────────────────────────────────────────────
 
     def seed(self, table: str, rows: list[dict], pk_col: str = "id") -> None:
-        snap = SchemaSnapshot.capture(self._runner.engine)
+        snap = SchemaSnapshot.capture(self._seeder.engine)
         if table in snap.tables:
             self._seeder.seed_table(snap.tables[table])
         else:

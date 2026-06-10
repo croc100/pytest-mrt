@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import uuid
+import warnings
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -297,8 +298,11 @@ class SmartSeeder:
                         full_row = dict(result.mappings().first() or {})
                         self._rows.append(SeededRow(table.name, pk_col, pk_val, full_row))
 
-            except Exception:
-                pass
+            except Exception as exc:
+                warnings.warn(
+                    f"pytest-mrt: failed to seed row {row_index} into '{table.name}': {exc}",
+                    stacklevel=2,
+                )
 
     def verify(self) -> list[str]:
         """
