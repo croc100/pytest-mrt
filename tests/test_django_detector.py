@@ -515,3 +515,69 @@ def test_mrt_ignore_only_suppresses_annotated_django_line(tmp_path):
     remove_warnings = [w for w in warnings if w.pattern == "RemoveField"]
     assert len(remove_warnings) == 1
     assert "email" in remove_warnings[0].message
+
+
+def test_squash_run_python_no_reverse_detected(tmp_path):
+    app_dir = tmp_path / "myapp" / "migrations"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "0010_squashed.py").write_text(
+        textwrap.dedent("""
+        from django.db import migrations
+
+        def forward(apps, schema_editor):
+            pass
+
+        class Migration(migrations.Migration):
+            replaces = [('myapp', '0005_a'), ('myapp', '0006_b')]
+            dependencies = []
+            operations = [
+                migrations.RunPython(forward),
+            ]
+    """).lstrip()
+    )
+    warnings = analyze_django_migrations(str(tmp_path))
+    codes = [w.code for w in warnings]
+    assert "MRT601" in codes
+
+
+def test_squash_run_python_with_reverse_clean(tmp_path):
+    app_dir = tmp_path / "myapp" / "migrations"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "0010_squashed.py").write_text(
+        textwrap.dedent("""
+        from django.db import migrations
+
+        def forward(apps, schema_editor):
+            pass
+
+        def backward(apps, schema_editor):
+            pass
+
+        class Migration(migrations.Migration):
+            replaces = [('myapp', '0005_a'), ('myapp', '0006_b')]
+            dependencies = []
+            operations = [
+                migrations.RunPython(forward, reverse_code=backward),
+            ]
+    """).lstrip()
+    )
+    warnings = analyze_django_migrations(str(tmp_path))
+    codes = [w.code for w in warnings]
+    assert "MRT601" not in codes
+
+
+def test_squash_missing_replaces_warning(tmp_path):
+    app_dir = tmp_path / "myapp" / "migrations"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "0010_squashed_0001_0005.py").write_text(
+        textwrap.dedent("""
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = []
+            operations = []
+    """).lstrip()
+    )
+    warnings = analyze_django_migrations(str(tmp_path))
+    codes = [w.code for w in warnings]
+    assert "MRT602" in codes

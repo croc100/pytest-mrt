@@ -478,6 +478,79 @@ def _check_missing_atomic_false(m: DjangoMigrationAST) -> list[RiskWarning]:
 # Registry
 # ─────────────────────────────────────────────────────────────
 
+def _check_squash_run_python_no_reverse(m: DjangoMigrationAST) -> list[RiskWarning]:
+    """Squashed migrations with RunPython lacking reverse_code are unrecoverable on rollback."""
+    # Detect squashed migration: has a `replaces` class attribute
+    klass = DjangoMigrationAST._find_migration_class(m.tree)
+    if not klass:
+        return []
+
+    has_replaces = any(
+        isinstance(item, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "replaces" for t in item.targets)
+        for item in klass.body
+    )
+    if not has_replaces:
+        return []
+
+    warnings = []
+    for op in m.operations:
+        if not isinstance(op, ast.Call):
+            continue
+        func = op.func
+        name = (
+            func.attr if isinstance(func, ast.Attribute) else
+            func.id if isinstance(func, ast.Name) else None
+        )
+        if name != "RunPython":
+            continue
+        kw_names = {kw.arg for kw in op.keywords}
+        if "reverse_code" in kw_names:
+            continue
+        warnings.append(
+            RiskWarning(
+                f"{m.app_label}.{m.migration_name}",
+                m.filename,
+                "Squashed migration: RunPython without reverse_code",
+                "Squashed migration contains RunPython with no reverse_code — rollback will silently do nothing",
+                "error",
+                line=op.lineno,
+                code="MRT601",
+            )
+        )
+    return warnings
+
+
+def _check_squash_missing_replaces(m: DjangoMigrationAST) -> list[RiskWarning]:
+    """Squashed migrations must declare replaces to avoid double-apply risk."""
+    # A migration with a name containing 'squash' but no replaces attribute is suspicious.
+    if "squash" not in m.migration_name.lower():
+        return []
+
+    klass = DjangoMigrationAST._find_migration_class(m.tree)
+    if not klass:
+        return []
+
+    has_replaces = any(
+        isinstance(item, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "replaces" for t in item.targets)
+        for item in klass.body
+    )
+    if has_replaces:
+        return []
+
+    return [
+        RiskWarning(
+            f"{m.app_label}.{m.migration_name}",
+            m.filename,
+            "Squashed migration: missing replaces list",
+            "Migration name contains 'squash' but has no replaces attribute — Django may apply it on top of the original migrations",
+            "warning",
+            code="MRT602",
+        )
+    ]
+
+
 _DJANGO_CHECKS = [
     _check_remove_field,
     _check_delete_model,
@@ -489,6 +562,8 @@ _DJANGO_CHECKS = [
     _check_rename_model_no_reverse,
     _check_add_index_no_concurrently,
     _check_missing_atomic_false,
+    _check_squash_run_python_no_reverse,
+    _check_squash_missing_replaces,
 ]
 
 
