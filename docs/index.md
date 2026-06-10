@@ -27,7 +27,7 @@ This is one of the most common sources of production incidents with database mig
 
 pytest-mrt does two things:
 
-**1. Static analysis** — scans your migration files for 24 known dangerous patterns before you touch a database:
+**1. Static analysis** — scans your migration files for 46 known dangerous patterns before you touch a database:
 
 ```bash
 mrt check migrations/versions/
@@ -118,7 +118,7 @@ pytest tests/test_migrations.py -s
 
 ## Why not just read the migration file manually?
 
-You could — but you'd have to know all 24 patterns, remember to check every PR, and still wouldn't catch the cases that only appear when real data is present. pytest-mrt does it automatically on every test run.
+You could — but you'd have to know all 46 patterns, remember to check every PR, and still wouldn't catch the cases that only appear when real data is present. pytest-mrt does it automatically on every test run.
 
 ---
 

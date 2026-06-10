@@ -7,6 +7,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.4.0] — 2026-06-10
+
+### Added
+- **`mrt check --format json`** — structured JSON output with `version`, `checked_at`, `summary` (errors/warnings counts), and `findings[]` per issue. Each finding includes a `fixable` flag. Use `--output <file>` to write to a file instead of stdout. Designed for CI integration and downstream tooling. (#67)
+- **`mrt check --format html`** — generates a self-contained HTML safety report directly from `mrt check`. Replaces the separate `mrt report` command for most use cases. `--output` defaults to `mrt-report.html`. Exit codes consistent with table output. (#63)
+- **`mrt check --watch`** — re-runs analysis automatically whenever a migration file changes. Uses 1-second stat polling with no extra dependencies. Ctrl-C exits cleanly. Only available with `--format table`. (#62)
+- **`mrt check --min-revision <rev>`** — skip revisions at or older than the specified floor. Alembic: revision ID. Django: `app_label.migration_name`. Mirrors `MRTConfig.minimum_downgrade_revision`. Intersects with `--since` when both are given. (#66)
+- **`MRTConfig.minimum_downgrade_revision`** — new config field for setting a permanent rollback testing floor in `conftest.py`. Now honoured by `check_static()` in the pytest fixture. (#66)
+- **`mrt fix --apply` batch mode** — omit the file argument to fix all auto-fixable migrations in a directory. `--dry-run` previews without writing. `--dir` overrides auto-detection of the migrations directory. (#64)
+- **Django squashmigrations detection** — two new rules:
+  - **MRT601** (error): squashed migration (`replaces` attribute present) contains `RunPython` without `reverse_code` — rollback silently does nothing
+  - **MRT602** (warning): migration filename contains "squash" but declares no `replaces` list — Django may apply it on top of the original migrations (#65)
+
+### Fixed
+- **MRT601 false positive** — `RunPython(forward, backward)` with `reverse_code` as the second positional argument was incorrectly flagged. Now checks both keyword and positional arguments.
+- **`--min-revision` message showed inverted count** — the message reported the number of newer migrations being kept as "skipping N older", which was backwards.
+- **`plugin.py` ignored `minimum_downgrade_revision`** — `check_static()` never passed `MRTConfig.minimum_downgrade_revision` to `analyze_migrations()`.
+- **`mrt fix` batch auto-detection could scan project root** — removed the cwd fallback from `_find_migration_dir`; now exits with an error if no standard migrations directory is found, rather than recursively scanning the entire project.
+
+---
+
 ## [1.3.1] — 2026-06-08
 
 ### Fixed

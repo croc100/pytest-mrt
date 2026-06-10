@@ -9,9 +9,14 @@ pytest-mrt has two interfaces:
 
 | Command | What it does | Needs DB? |
 |---|---|---|
-| `mrt check <dir>` | Static analysis — 44 risk patterns | No |
-| `mrt check <dir> --since <ref>` | Incremental scan — only migrations after a given revision (Alembic ID or Django `app.migration`) | No |
-| `mrt fix <file>` | Auto-generate reverse operations (Alembic + Django) | No |
+| `mrt check <dir>` | Static analysis — 46 risk patterns | No |
+| `mrt check <dir> --since <ref>` | Incremental scan — only migrations after a given revision | No |
+| `mrt check <dir> --min-revision <rev>` | Skip revisions at or older than a floor revision | No |
+| `mrt check <dir> --format json` | Structured JSON output for CI / downstream tools | No |
+| `mrt check <dir> --format html` | Self-contained HTML safety report | No |
+| `mrt check <dir> --watch` | Re-run on file change (dev mode) | No |
+| `mrt fix <file>` | Auto-generate reverse operations for a single file | No |
+| `mrt fix --apply` | Batch-fix all auto-fixable migrations in a directory | No |
 | `mrt clean-backups` | Remove `_mrt_backups` rows after stable deployment | Yes |
 | `mrt drift` | Compare live DB schema against ORM models | Yes |
 | `mrt report <dir>` | HTML safety report of entire migration history | No |
@@ -52,7 +57,11 @@ mrt check migrations/versions/
 | Option | Description | Default |
 |---|---|---|
 | `--strict` | Also fail on warnings, not just errors | Off |
-| `--since <ref>` | Only check migrations after this revision. Alembic: revision ID. Django: `app_label.migration_name`. | Off |
+| `--format` | Output format: `table`, `json`, `html` | `table` |
+| `--output <file>` | Write output to file (for `--format json` or `--format html`) | stdout / `mrt-report.html` |
+| `--since <ref>` | Only check migrations after this revision (CI incremental scan) | Off |
+| `--min-revision <rev>` | Skip revisions at or older than this floor | Off |
+| `--watch` | Re-run on file change. Ctrl-C to stop. (`--format table` only) | Off |
 
 #### `--since` — incremental scanning
 
@@ -106,12 +115,85 @@ Common causes:
 - Wrong directory passed — for Django, pass `myapp/migrations/`, not the project root
 - The migration has been squashed or renamed
 
+#### `--min-revision` — permanent rollback floor
+
+Unlike `--since` (which is for CI incremental scans), `--min-revision` is for permanently excluding old migrations you've decided not to test.
+
+```bash
+mrt check migrations/versions/ --min-revision a1b2c3d4
+```
+
+Only migrations that are newer than (descendants of) `a1b2c3d4` are analysed. If both `--since` and `--min-revision` are given, the stricter bound wins (intersection).
+
+You can also set this permanently in `conftest.py`:
+
+```python
+config._mrt_config = MRTConfig(
+    alembic_ini="alembic.ini",
+    db_url="sqlite:///test.db",
+    minimum_downgrade_revision="a1b2c3d4",
+)
+```
+
+#### `--format json` — structured output
+
+```bash
+mrt check migrations/versions/ --format json
+mrt check migrations/versions/ --format json --output results.json
+```
+
+Output schema:
+
+```json
+{
+  "version": "1.4.0",
+  "checked_at": "2026-06-10T11:00:00Z",
+  "summary": { "total_issues": 2, "errors": 1, "warnings": 1 },
+  "findings": [
+    {
+      "file": "003_drop_column.py",
+      "line": 14,
+      "rule": "MRT103",
+      "severity": "error",
+      "pattern": "DROP COLUMN in upgrade",
+      "message": "Column dropped — data permanently lost on rollback",
+      "fixable": false
+    }
+  ]
+}
+```
+
+Pipe to `jq` for filtering:
+
+```bash
+mrt check migrations/versions/ --format json | jq '.findings[] | select(.severity == "error")'
+```
+
+#### `--format html` — HTML report
+
+```bash
+mrt check migrations/versions/ --format html
+mrt check migrations/versions/ --format html --output report.html
+```
+
+Generates a self-contained HTML file (no external dependencies) with a summary table and per-revision cards. Exit codes are identical to table output.
+
+#### `--watch` — dev mode
+
+```bash
+mrt check migrations/versions/ --watch
+```
+
+Re-runs the check whenever any `.py` file in the directory changes. Uses 1-second polling with no extra dependencies. Press Ctrl-C to stop.
+
+Only available with `--format table`.
+
 ### Exit codes
 
 | Code | Meaning |
 |---|---|
 | `0` | No problems found |
-| `1` | Warnings found (without `--strict`), or `--since` matched no migrations |
+| `1` | Warnings found (without `--strict`), or `--since`/`--min-revision` matched no migrations |
 | `2` | Errors found, or warnings found with `--strict` |
 
 Use exit code `2` to fail the pipeline on actionable findings:
@@ -153,9 +235,23 @@ When there are no problems:
 Auto-generates missing reverse operations. Works for both Alembic and Django migrations.
 
 ```bash
-mrt fix <migration-file>          # preview
-mrt fix <migration-file> --apply  # write to file
+# Single-file mode
+mrt fix <migration-file>           # preview suggested fix
+mrt fix <migration-file> --apply   # write fix to file
+
+# Batch mode (v1.4.0)
+mrt fix --apply                    # fix all auto-fixable migrations in the detected directory
+mrt fix --apply --dry-run          # preview without writing
+mrt fix --apply --dir <path>       # specify the directory explicitly
 ```
+
+### Batch mode options
+
+| Option | Description |
+|---|---|
+| `--apply` | Required to write fixes. Without a file argument, scans the whole directory. |
+| `--dry-run` | Preview what would change without writing. Use with `--apply`. |
+| `--dir <path>` | Directory to scan. Auto-detected from cwd if omitted (`migrations/`, `alembic/versions/`, `versions/`). |
 
 ### Alembic
 
@@ -361,5 +457,12 @@ MRTConfig(
     # Optional. Default: 3.
     # Number of rows inserted per table before each rollback test.
     # Higher values catch more edge cases but make tests slower.
+
+    minimum_downgrade_revision=None,
+    # Optional. Default: None (test all revisions).
+    # Rollback testing floor — skip revisions at or older than this point.
+    # Alembic: revision ID (e.g. "abc123def456").
+    # Django: app_label.migration_name (e.g. "myapp.0050_baseline").
+    # Also settable from the CLI with --min-revision.
 )
 ```
