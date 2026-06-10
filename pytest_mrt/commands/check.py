@@ -20,10 +20,29 @@ def _collect_warnings(
     since: str | None,
     is_django: bool,
     min_revision: str | None = None,
+    check_compat: bool = False,
 ) -> list:
     if is_django:
-        return analyze_django_migrations(versions_dir, since=since, min_revision=min_revision)
-    return analyze_migrations(versions_dir, since=since, min_revision=min_revision)
+        warnings = analyze_django_migrations(versions_dir, since=since, min_revision=min_revision)
+    else:
+        warnings = analyze_migrations(versions_dir, since=since, min_revision=min_revision)
+
+    if check_compat and not is_django:
+        import re
+        from pathlib import Path as _Path
+
+        from ..core.ast_analyzer import MigrationAST
+        from ..core.compat import analyze_compat
+
+        for path in sorted(_Path(versions_dir).rglob("*.py")):
+            source = path.read_text()
+            m_rev = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
+            revision = m_rev.group(1) if m_rev else path.stem
+            m = MigrationAST(source, revision, path.name)
+            if not m._parse_error:
+                warnings.extend(analyze_compat(m))
+
+    return warnings
 
 
 def _print_table(warnings: list, strict: bool) -> int:
@@ -98,6 +117,16 @@ def check(
             "Mirrors mrt_minimum_downgrade_revision in MRTConfig."
         ),
     ),
+    check_compat: bool = typer.Option(
+        False,
+        "--check-compat",
+        help=(
+            "Also run rolling-deploy compatibility checks (MRT7xx). "
+            "Flags operations that break the old app during a rolling deploy: "
+            "DROP COLUMN, RENAME COLUMN, DROP TABLE, ADD NOT NULL without server_default. "
+            "Alembic only."
+        ),
+    ),
 ) -> None:
     """Statically analyze migrations for rollback risk patterns (Alembic and Django)."""
     from pathlib import Path as _Path
@@ -162,6 +191,18 @@ def check(
             f"[dim]--min-revision {min_revision}: checking {len(min_set)} newer migration(s), older ones skipped[/dim]"
         )
 
+    if check_compat and is_django:
+        console.print(
+            "[yellow]Warning: --check-compat is not yet supported for Django migrations. "
+            "Compat checks will be skipped.[/yellow]"
+        )
+        check_compat = False
+
+    if check_compat:
+        console.print(
+            "[dim]--check-compat: rolling-deploy compatibility checks enabled (MRT7xx)[/dim]"
+        )
+
     if watch:
         if fmt != "table":
             console.print("[red]Error: --watch is only supported with --format table[/red]")
@@ -172,10 +213,13 @@ def check(
             strict=strict,
             is_django=is_django,
             min_revision=min_revision,
+            check_compat=check_compat,
         )
         return
 
-    warnings = _collect_warnings(versions_dir, since, is_django, min_revision=min_revision)
+    warnings = _collect_warnings(
+        versions_dir, since, is_django, min_revision=min_revision, check_compat=check_compat
+    )
 
     if fmt == "json":
         import json
@@ -267,6 +311,7 @@ def _watch_loop(
     strict: bool,
     is_django: bool,
     min_revision: str | None = None,
+    check_compat: bool = False,
 ) -> None:
     import time
 
@@ -276,7 +321,9 @@ def _watch_loop(
     last_mtimes = _file_mtimes(versions_dir)
 
     # Run once immediately
-    warnings = _collect_warnings(versions_dir, since, is_django, min_revision=min_revision)
+    warnings = _collect_warnings(
+        versions_dir, since, is_django, min_revision=min_revision, check_compat=check_compat
+    )
     _print_table(warnings, strict)
 
     try:
@@ -287,7 +334,11 @@ def _watch_loop(
                 last_mtimes = current_mtimes
                 console.rule("[dim]files changed — re-running[/dim]")
                 warnings = _collect_warnings(
-                    versions_dir, since, is_django, min_revision=min_revision
+                    versions_dir,
+                    since,
+                    is_django,
+                    min_revision=min_revision,
+                    check_compat=check_compat,
                 )
                 _print_table(warnings, strict)
     except KeyboardInterrupt:
