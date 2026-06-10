@@ -479,3 +479,34 @@ class Migration(migrations.Migration):
     dependencies = []
     operations = [...]
 ```
+
+---
+
+## Rolling-deploy compatibility checks (MRT7xx)
+
+These checks are opt-in via `mrt check --check-compat`. They flag operations that are unsafe during a rolling deploy — when the old app version and the new schema coexist briefly while instances are being replaced.
+
+Run rollback-safety checks (`mrt check`) always. Add `--check-compat` when your deployment strategy involves rolling restarts rather than a full stop/start.
+
+### MRT701 — DROP COLUMN during rolling deploy (error)
+
+Dropping a column immediately breaks any old app instance that still references it via ORM or raw SQL. The fix is a two-step process:
+
+1. Remove all code references to the column, then deploy the code change.
+2. Drop the column in a follow-up migration after all instances are on the new code.
+
+### MRT702 — RENAME COLUMN during rolling deploy (error)
+
+Renaming a column breaks old app instances referencing the old name. Use the expand-contract pattern: add the new column, backfill data, update code to use the new name, deploy, then drop the old column.
+
+### MRT703 — DROP TABLE during rolling deploy (error)
+
+Dropping a table crashes old app instances that query it. Remove all ORM models and direct references, deploy, then drop the table.
+
+### MRT704 — ADD NOT NULL column without server_default (error)
+
+Adding a NOT NULL column without a `server_default` causes INSERT failures from old app instances that don't know about the new column. Add a `server_default` to handle inserts from the old app, or make the column nullable initially.
+
+### MRT705 — Column type change during rolling deploy (warning)
+
+Changing a column's type may cause type errors in old app instances. VARCHAR widening (e.g. VARCHAR(100) -> VARCHAR(255)) is generally safe. Type narrowing, kind changes (e.g. INTEGER -> BIGINT on some databases), or precision changes are not.
