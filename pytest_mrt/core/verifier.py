@@ -64,10 +64,6 @@ class RollbackVerifier:
                 rows = self.custom_seeds[tname]()
                 pk_col = table_info.pk_cols[0] if table_info.pk_cols else "id"
                 for row in rows:
-                    seeder._rows.append(
-                        SeededRow(table=tname, pk_col=pk_col, pk_val=row.get(pk_col), data=row)
-                    )
-                for row in rows:
                     # Use dialect-aware quoting — fixes MySQL double-quote bug
                     def q(name: str) -> str:
                         return _q(self.runner.engine, name)
@@ -85,10 +81,19 @@ class RollbackVerifier:
                             )
                     except Exception as exc:
                         import warnings
+
                         warnings.warn(
                             f"pytest-mrt: failed to insert custom seed row into '{tname}': {exc}",
                             stacklevel=2,
                         )
+                        # Insert failed — do NOT track this row, otherwise verify()
+                        # would report it as "lost after rollback" (false positive).
+                        continue
+
+                    # Only track rows that were actually inserted.
+                    seeder._rows.append(
+                        SeededRow(table=tname, pk_col=pk_col, pk_val=row.get(pk_col), data=row)
+                    )
             else:
                 seeder.seed_table(table_info)
         return seeder
