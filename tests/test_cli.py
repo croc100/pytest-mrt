@@ -739,3 +739,173 @@ def test_fix_shows_run_with_apply_hint(tmp_path):
     )
     result = runner.invoke(app, ["fix", str(f)])
     assert "--apply" in result.output
+
+
+# ── mrt drift ────────────────────────────────────────────────────────
+
+
+def _alembic_env(tmp_path):
+    """Minimal Alembic setup returning (ini_path, versions_dir, db_url)."""
+    import textwrap as _tw
+
+    db = tmp_path / "test.db"
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    env_py = tmp_path / "env.py"
+    env_py.write_text(
+        _tw.dedent("""
+        from alembic import context
+        from sqlalchemy import engine_from_config, pool
+
+        config = context.config
+
+        def run_migrations_offline():
+            url = config.get_main_option("sqlalchemy.url")
+            context.configure(url=url, literal_binds=True)
+            with context.begin_transaction():
+                context.run_migrations()
+
+        def run_migrations_online():
+            connectable = engine_from_config(
+                config.get_section(config.config_ini_section),
+                prefix="sqlalchemy.",
+                poolclass=pool.NullPool,
+            )
+            with connectable.connect() as connection:
+                context.configure(connection=connection)
+                with context.begin_transaction():
+                    context.run_migrations()
+
+        if context.is_offline_mode():
+            run_migrations_offline()
+        else:
+            run_migrations_online()
+    """)
+    )
+    ini = tmp_path / "alembic.ini"
+    ini.write_text(
+        _tw.dedent(f"""
+        [alembic]
+        script_location = {tmp_path}
+        sqlalchemy.url = sqlite:///{db}
+        version_locations = {versions}
+    """)
+    )
+    (versions / "001_create_users.py").write_text(
+        _tw.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        import sqlalchemy as sa
+        from alembic import op
+        def upgrade():
+            op.create_table('users',
+                sa.Column('id', sa.Integer, primary_key=True),
+                sa.Column('name', sa.String(64), nullable=False),
+            )
+        def downgrade():
+            op.drop_table('users')
+    """)
+    )
+    return str(ini), str(versions), f"sqlite:///{db}"
+
+
+def test_drift_invalid_metadata_path_exits_1(tmp_path):
+    """mrt drift with a bad metadata path exits 1 with an error message."""
+    ini, _, db_url = _alembic_env(tmp_path)
+    result = runner.invoke(
+        app,
+        ["drift", "nonexistent.module:Base", "--config", ini, "--db-url", db_url],
+    )
+    assert result.exit_code == 1
+    assert "Error" in result.output
+
+
+def test_drift_missing_alembic_ini_exits_1(tmp_path):
+    """mrt drift exits 1 when alembic.ini does not exist."""
+    import sys
+    import types
+    import sqlalchemy as sa
+
+    # Register a valid metadata module so metadata loading succeeds,
+    # then the missing alembic.ini triggers the expected error.
+    mod = types.ModuleType("_test_drift_meta_noini")
+    base = sa.MetaData()
+    mod.Base = base
+    sys.modules["_test_drift_meta_noini"] = mod
+    try:
+        result = runner.invoke(
+            app,
+            ["drift", "_test_drift_meta_noini:Base", "--config", str(tmp_path / "nope.ini")],
+        )
+    finally:
+        sys.modules.pop("_test_drift_meta_noini", None)
+
+    assert result.exit_code == 1
+    assert "not found" in result.output.lower() or "no such file" in result.output.lower()
+
+
+def test_drift_no_drift_exits_0(tmp_path):
+    """mrt drift exits 0 and prints success when models match the DB."""
+    import sqlalchemy as sa
+
+    ini, _, db_url = _alembic_env(tmp_path)
+
+    # Register the metadata in sys.modules so load_metadata can find it
+    import sys
+    import types
+
+    mod = types.ModuleType("_mrt_test_models")
+    meta = sa.MetaData()
+    sa.Table(
+        "users",
+        meta,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("name", sa.String(64), nullable=False),
+    )
+    mod.Base = meta
+    sys.modules["_mrt_test_models"] = mod
+
+    try:
+        result = runner.invoke(
+            app,
+            ["drift", "_mrt_test_models:Base", "--config", ini, "--db-url", db_url],
+        )
+    finally:
+        sys.modules.pop("_mrt_test_models", None)
+
+    assert result.exit_code == 0
+    assert "No schema drift" in result.output
+
+
+def test_drift_with_drift_exits_1(tmp_path):
+    """mrt drift exits 1 and lists differences when the model has an extra column."""
+    import sqlalchemy as sa
+    import sys
+    import types
+
+    ini, _, db_url = _alembic_env(tmp_path)
+
+    mod = types.ModuleType("_mrt_test_drift_models")
+    meta = sa.MetaData()
+    sa.Table(
+        "users",
+        meta,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("name", sa.String(64), nullable=False),
+        sa.Column("email", sa.String(255)),  # extra — not in DB
+    )
+    mod.Base = meta
+    sys.modules["_mrt_test_drift_models"] = mod
+
+    try:
+        result = runner.invoke(
+            app,
+            ["drift", "_mrt_test_drift_models:Base", "--config", ini, "--db-url", db_url],
+        )
+    finally:
+        sys.modules.pop("_mrt_test_drift_models", None)
+
+    assert result.exit_code == 1
+    assert "difference" in result.output.lower()
