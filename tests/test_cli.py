@@ -121,7 +121,6 @@ def test_check_json_format(tmp_path, versions_dir):
     finding = data["findings"][0]
     assert "rule" in finding
     assert "severity" in finding
-    assert "fixable" in finding
     assert result.exit_code == 2  # errors → exit 2
 
 
@@ -436,107 +435,6 @@ def test_init_alembic_mode_when_manage_py_and_alembic_ini_both_exist(tmp_path, m
         assert "alembic_ini" in conftest.read_text()
 
 
-# ── mrt fix ──────────────────────────────────────
-
-
-def test_fix_no_issues(tmp_path):
-    f = tmp_path / "mig.py"
-    f.write_text(
-        textwrap.dedent("""
-        revision = '001'
-        from alembic import op
-        def upgrade():
-            op.create_table('users')
-        def downgrade():
-            op.drop_table('users')
-    """)
-    )
-    result = runner.invoke(app, ["fix", str(f)])
-    assert result.exit_code == 0
-    assert "No fix needed" in result.output
-
-
-def test_fix_suggests_downgrade(tmp_path):
-    f = tmp_path / "mig.py"
-    f.write_text(
-        textwrap.dedent("""
-        revision = '001'
-        from alembic import op
-        import sqlalchemy as sa
-        def upgrade():
-            op.create_table('events', sa.Column('id', sa.Integer, primary_key=True))
-        def downgrade():
-            pass
-    """)
-    )
-    result = runner.invoke(app, ["fix", str(f)])
-    assert result.exit_code == 0
-    assert "downgrade" in result.output.lower()
-
-
-def test_fix_apply_writes_file(tmp_path):
-    f = tmp_path / "mig.py"
-    f.write_text(
-        textwrap.dedent("""
-        revision = '001'
-        from alembic import op
-        import sqlalchemy as sa
-        def upgrade():
-            op.create_table('jobs', sa.Column('id', sa.Integer, primary_key=True))
-        def downgrade():
-            pass
-    """)
-    )
-    result = runner.invoke(app, ["fix", str(f), "--apply"])
-    assert result.exit_code == 0
-    content = f.read_text()
-    assert 'drop_table("jobs")' in content
-
-
-def test_fix_missing_file(tmp_path):
-    result = runner.invoke(app, ["fix", str(tmp_path / "nonexistent.py")])
-    assert result.exit_code == 1
-
-
-def test_fix_batch_requires_apply_flag(tmp_path):
-    result = runner.invoke(app, ["fix"])
-    assert result.exit_code == 1
-    assert "--apply" in result.output
-
-
-def test_fix_batch_dry_run(tmp_path):
-    mig = tmp_path / "0001_initial.py"
-    mig.write_text(textwrap.dedent("""
-        revision = '0001'
-        from alembic import op
-        def upgrade():
-            op.create_table('users', op.Column('id', op.Integer, primary_key=True))
-        def downgrade():
-            pass
-    """))
-    result = runner.invoke(app, ["fix", "--apply", "--dry-run", "--dir", str(tmp_path)])
-    assert result.exit_code == 0
-    assert "dry-run" in result.output.lower() or "Dry-run" in result.output
-    # File should NOT be modified in dry-run
-    assert "pass" in mig.read_text()
-
-
-def test_fix_batch_applies_all(tmp_path):
-    for i in range(3):
-        mig = tmp_path / f"000{i}_mig.py"
-        mig.write_text(textwrap.dedent(f"""
-            revision = '000{i}'
-            from alembic import op
-            def upgrade():
-                op.create_table('t{i}', op.Column('id', op.Integer, primary_key=True))
-            def downgrade():
-                pass
-        """))
-    result = runner.invoke(app, ["fix", "--apply", "--dir", str(tmp_path)])
-    assert result.exit_code == 0
-    assert "fixed" in result.output
-
-
 # ── mrt report ───────────────────────────────────
 
 
@@ -699,46 +597,6 @@ def test_explain_missing_file(tmp_path):
     assert result.exit_code == 1
     # anthropic may or may not be installed; either way, exit 1
     assert "not found" in result.output.lower() or "not installed" in result.output.lower()
-
-
-# ── mrt fix edge cases ───────────────────────────
-
-
-def test_fix_shows_confidence(tmp_path):
-    """fix output contains confidence level."""
-    f = tmp_path / "mig.py"
-    f.write_text(
-        textwrap.dedent("""
-        revision = '001'
-        from alembic import op
-        import sqlalchemy as sa
-        def upgrade():
-            op.create_table('widgets', sa.Column('id', sa.Integer, primary_key=True))
-        def downgrade():
-            pass
-    """)
-    )
-    result = runner.invoke(app, ["fix", str(f)])
-    assert result.exit_code == 0
-    assert any(level in result.output.lower() for level in ["high", "medium", "low"])
-
-
-def test_fix_shows_run_with_apply_hint(tmp_path):
-    """fix without --apply tells user to run with --apply."""
-    f = tmp_path / "mig.py"
-    f.write_text(
-        textwrap.dedent("""
-        revision = '001'
-        from alembic import op
-        import sqlalchemy as sa
-        def upgrade():
-            op.create_table('items', sa.Column('id', sa.Integer, primary_key=True))
-        def downgrade():
-            pass
-    """)
-    )
-    result = runner.invoke(app, ["fix", str(f)])
-    assert "--apply" in result.output
 
 
 # ── mrt drift ────────────────────────────────────────────────────────

@@ -17,9 +17,6 @@ For GitHub Actions integration, see [croc100/pytest-mrt-action](https://github.c
 | `mrt check <dir> --format json` | Structured JSON output for CI / downstream tools | No |
 | `mrt check <dir> --format html` | Self-contained HTML safety report | No |
 | `mrt check <dir> --watch` | Re-run on file change (dev mode) | No |
-| `mrt fix <file>` | Auto-generate reverse operations for a single file | No |
-| `mrt fix --apply` | Batch-fix all auto-fixable migrations in a directory | No |
-| `mrt clean-backups` | Remove `_mrt_backups` rows after stable deployment | Yes |
 | `mrt drift` | Compare live DB schema against ORM models | Yes |
 | `mrt report <dir>` | HTML safety report of entire migration history | No |
 | `mrt explain <file>` | AI explanation in plain English | No (needs API key) |
@@ -158,8 +155,7 @@ Output schema:
       "rule": "MRT103",
       "severity": "error",
       "pattern": "DROP COLUMN in upgrade",
-      "message": "Column dropped — data permanently lost on rollback",
-      "fixable": false
+      "message": "Column dropped — data permanently lost on rollback"
     }
   ]
 }
@@ -229,87 +225,6 @@ When there are no problems:
 ```
 ✓ No rollback risks detected.
 ```
-
----
-
-## CLI: `mrt fix`
-
-Auto-generates missing reverse operations. Works for both Alembic and Django migrations.
-
-```bash
-# Single-file mode
-mrt fix <migration-file>           # preview suggested fix
-mrt fix <migration-file> --apply   # write fix to file
-
-# Batch mode (v1.4.0)
-mrt fix --apply                    # fix all auto-fixable migrations in the detected directory
-mrt fix --apply --dry-run          # preview without writing
-mrt fix --apply --dir <path>       # specify the directory explicitly
-```
-
-### Batch mode options
-
-| Option | Description |
-|---|---|
-| `--apply` | Required to write fixes. Without a file argument, scans the whole directory. |
-| `--dry-run` | Preview what would change without writing. Use with `--apply`. |
-| `--dir <path>` | Directory to scan. Auto-detected from cwd if omitted (`migrations/`, `alembic/versions/`, `versions/`). |
-
-### Alembic
-
-Generates a missing or stub `downgrade()` function with the inverse operations inferred from `upgrade()`.
-
-### Django (v1.3.0)
-
-Detects and fixes four operation types:
-
-| Operation | Fix | Confidence |
-|---|---|---|
-| `RunSQL` without `reverse_sql` | Adds `reverse_sql=migrations.RunSQL.noop` | High |
-| `RunPython` without `reverse_code` | Adds `reverse_code=migrations.RunPython.noop` | Medium |
-| `RemoveField` | Injects `RunPython(backup, restore)` before the op | Medium |
-| `DeleteModel` | Injects `RunPython(backup, restore)` before the op | Medium |
-
-For `RemoveField` and `DeleteModel`, the generated code:
-
-1. **Backs up** the column/row data into a `_mrt_backups` table using keyset pagination (safe for large tables, no server-side cursors required)
-2. **Restores** the data when the migration is reversed, with constraint checking disabled for FK safety
-3. **Inlines a type codec** (`__mrt_enc`/`__mrt_dec`) directly into the migration file — no runtime dependency on pytest-mrt in your production migrations
-
-After you've confirmed the deployment is stable and rollback is no longer needed:
-
-```bash
-mrt clean-backups --db $DATABASE_URL
-mrt clean-backups --db $DATABASE_URL --label 0042_remove_user_phone --yes
-```
-
-#### Known limitations (documented in generated code)
-
-- Type fidelity depends on the codec: complex custom types may not round-trip perfectly
-- Very large tables (millions of rows) increase migration time proportionally
-- The backup table (`_mrt_backups`) persists until explicitly cleaned
-
----
-
-## CLI: `mrt clean-backups` (v1.3.0)
-
-Removes rows from the `_mrt_backups` table created by Django `mrt fix` backup/restore operations.
-
-```bash
-mrt clean-backups --db <database-url>
-mrt clean-backups --db $DATABASE_URL --list        # preview without deleting
-mrt clean-backups --db $DATABASE_URL --label 0042  # delete one migration's backup
-mrt clean-backups --db $DATABASE_URL --yes         # skip confirmation prompt
-```
-
-### Options
-
-| Option | Description |
-|---|---|
-| `--db` | SQLAlchemy database URL. Also reads from `DATABASE_URL` env var. |
-| `--label` | Delete only rows for this migration label. Omit to delete all backup data. |
-| `--list`, `-l` | List backup labels and row counts without deleting. |
-| `--yes`, `-y` | Skip the confirmation prompt. |
 
 ---
 

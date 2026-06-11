@@ -298,21 +298,6 @@ mrt check alembic/versions/ --format json
 
 ---
 
-### `mrt fix <migration_file>`
-
-Suggest or apply a missing/broken `downgrade()` function.
-
-```
-mrt fix alembic/versions/001_create_users.py
-mrt fix alembic/versions/001_create_users.py --apply
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--apply` | `False` | Write the suggested fix to the file |
-
----
-
 ### `mrt report <versions_dir>`
 
 Generate an HTML safety report for all migrations.

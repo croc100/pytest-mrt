@@ -227,8 +227,6 @@ def check(
         from datetime import datetime, timezone
         from importlib.metadata import version as pkg_version
 
-        _FIXABLE_CODES = {"MRT101", "MRT102"}
-
         try:
             _ver = pkg_version("pytest-mrt")
         except Exception:
@@ -253,7 +251,6 @@ def check(
                     "severity": w.severity,
                     "pattern": w.pattern,
                     "message": w.message,
-                    "fixable": w.code in _FIXABLE_CODES,
                 }
                 for w in warnings
             ],
