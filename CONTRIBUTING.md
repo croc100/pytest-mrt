@@ -118,7 +118,6 @@ pytest_mrt/
 ├── core/
 │   ├── ast_analyzer.py     # MigrationAST — Alembic AST parsing
 │   ├── detector.py         # Built-in Alembic risk checks
-│   ├── fixer.py            # mrt fix — auto-generate downgrade()
 │   ├── graph.py            # Migration dependency graph
 │   ├── html_report.py      # mrt report — HTML output
 │   ├── runner.py           # MigrationRunner — wraps alembic commands
@@ -135,7 +134,6 @@ tests/
 ├── test_cli.py
 ├── test_detector.py
 ├── test_django_detector.py
-├── test_fixer.py
 ├── test_graph.py
 ├── test_html_report.py
 ├── test_integration.py     # SQLite end-to-end tests
@@ -167,7 +165,6 @@ Check [open issues](https://github.com/croc100/pytest-mrt/issues) and the [ROADM
 - Add an example to `examples/` for a common use case
 - Add a new CI integration guide to `examples/ci-integration/`
 - Improve HTML report output
-- Add a new `mrt fix` heuristic
 
 ### Higher effort (discuss in an issue first)
 

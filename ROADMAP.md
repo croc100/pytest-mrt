@@ -96,13 +96,13 @@ These are not committed to a specific version yet:
 - **Sentry integration** — report migration failures as Sentry events
 - **GitHub App** — automated PR comments with migration risk summary
 - **VS Code extension** — inline warnings in migration files
-- **`mrt fix --apply` batch mode** — fix all migration files in a directory at once
 
 ---
 
 ## What won't be in scope
 
 - Executing migrations in production (this is a *testing* tool only)
+- **Migration code generation / auto-fix** — pytest-mrt verifies migrations; it does not rewrite them. The former `mrt fix` / `mrt clean-backups` commands were removed in v1.5.0 (out of scope: "transform", not "verify")
 - Schema diff tools (use `alembic check` or `django-migration-linter`)
 - ORM-agnostic support (focused on Alembic and Django)
 

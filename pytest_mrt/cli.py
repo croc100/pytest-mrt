@@ -3,9 +3,7 @@ from rich.console import Console
 
 from . import __version__
 from .commands.check import check
-from .commands.clean_backups import clean_backups
 from .commands.drift_cmd import drift
-from .commands.fix import fix
 from .commands.init import init
 from .commands.output import explain, report
 
@@ -26,7 +24,5 @@ def version_cmd() -> None:
 app.command("check")(check)
 app.command("drift")(drift)
 app.command("init")(init)
-app.command("fix")(fix)
 app.command("report")(report)
 app.command("explain")(explain)
-app.command("clean-backups")(clean_backups)

@@ -160,27 +160,6 @@ pip install pytest-mrt[oracle]   # python-oracledb
 pip install pytest-mrt[mssql]    # pymssql
 ```
 
-## Auto-fix missing reverse operations
-
-`mrt fix` generates missing reverse operations for both Alembic and Django migrations.
-
-**Alembic** — generates a missing or stub `downgrade()`:
-```bash
-mrt fix migrations/versions/0042_drop_phone.py --apply
-```
-
-**Django** — adds `reverse_sql`, `reverse_code`, and full backup/restore scaffolding for data-loss operations (`RemoveField`, `DeleteModel`):
-```bash
-mrt fix myapp/migrations/0042_remove_user_phone.py --apply
-```
-
-For `RemoveField` and `DeleteModel`, the generated code backs up data to a `_mrt_backups` table before the migration runs, and restores it on rollback. After deployment is confirmed stable, clean up the backup rows:
-
-```bash
-mrt clean-backups --db $DATABASE_URL
-mrt clean-backups --db $DATABASE_URL --label 0042_remove_user_phone --yes
-```
-
 ## pre-commit integration
 
 Add to `.pre-commit-config.yaml` to run `mrt check` automatically before every push:
@@ -279,7 +258,6 @@ Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
 | Dynamic rollback testing | ✅ | ✅ | ❌ | ✅ |
 | **Data survival check** (seeds rows, verifies after rollback) | ✅ | ❌ schema only | ❌ | ❌ |
 | Django support | ✅ | ❌ | ❌ | ✅ |
-| Auto-fix (`mrt fix`) | ✅ | ❌ | ❌ | ❌ |
 | Pre-commit hook | ✅ | ❌ | ❌ | ❌ |
 | Inline suppression (`# noqa: MRTxxx`) | ✅ | ❌ | ❌ | ❌ |
 
@@ -290,7 +268,6 @@ The key difference from pytest-alembic: pytest-mrt seeds actual rows before each
 - **`mrt check --format json/html`** — structured JSON output for CI tooling; self-contained HTML safety report
 - **`mrt check --watch`** — re-runs automatically whenever a migration file changes
 - **`mrt check --min-revision`** — skip revisions older than a configured floor (mirrors `MRTConfig.minimum_downgrade_revision`)
-- **`mrt fix --apply` batch mode** — fix all auto-fixable migrations at once; `--dry-run` previews without writing
 - **Django squashmigrations detection** — MRT601/MRT602 catch unsafe `RunPython` in squashed migrations
 - **`minimum_downgrade_revision` in dynamic tests** — floor now respected by the `mrt` fixture `check_all()`, not just static analysis
 
