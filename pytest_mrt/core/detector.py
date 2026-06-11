@@ -773,65 +773,6 @@ def _check_create_type_without_drop(m: MigrationAST) -> list[RiskWarning]:
     ]
 
 
-def _check_foreign_key_not_valid(m: MigrationAST) -> list[RiskWarning]:
-    """
-    op.create_foreign_key() without postgresql_not_valid=True acquires
-    ShareRowExclusiveLock and scans the entire referencing table to validate
-    existing rows. On large tables this blocks all concurrent writes.
-
-    Safe path: add constraint with postgresql_not_valid=True, then run
-    op.execute('ALTER TABLE ... VALIDATE CONSTRAINT ...') in a separate migration.
-    """
-    warnings = []
-    for c in m.upgrade_calls():
-        if c.method == "create_foreign_key":
-            not_valid = m.kwarg_bool(c.node, "postgresql_not_valid")
-            if not not_valid:
-                name = m.str_arg(c.node, 0) or "?"
-                warnings.append(
-                    _warn(
-                        m,
-                        "ADD FOREIGN KEY without NOT VALID",
-                        f"create_foreign_key('{name}') scans the entire table and blocks writes "
-                        "for the duration. Use postgresql_not_valid=True then validate in a "
-                        "separate migration to avoid the lock.",
-                        "warning",
-                        line=c.node.lineno,
-                        code="MRT211",
-                    )
-                )
-    return warnings
-
-
-def _check_check_constraint_not_valid(m: MigrationAST) -> list[RiskWarning]:
-    """
-    op.create_check_constraint() without postgresql_not_valid=True performs a
-    full table scan while holding AccessShareLock. Blocks autovacuum and can
-    cause query pile-ups on busy tables.
-
-    Safe path: add constraint with postgresql_not_valid=True, then validate
-    in a separate migration during a low-traffic window.
-    """
-    warnings = []
-    for c in m.upgrade_calls():
-        if c.method == "create_check_constraint":
-            not_valid = m.kwarg_bool(c.node, "postgresql_not_valid")
-            if not not_valid:
-                name = m.str_arg(c.node, 0) or "?"
-                warnings.append(
-                    _warn(
-                        m,
-                        "ADD CHECK CONSTRAINT without NOT VALID",
-                        f"create_check_constraint('{name}') scans the entire table. "
-                        "Use postgresql_not_valid=True then validate in a separate migration.",
-                        "warning",
-                        line=c.node.lineno,
-                        code="MRT212",
-                    )
-                )
-    return warnings
-
-
 def _check_set_not_null_alter_column(m: MigrationAST) -> list[RiskWarning]:
     """
     alter_column(nullable=False) issues SET NOT NULL which does a full table
@@ -895,8 +836,6 @@ _PER_FILE_CHECKS = [
     _check_drop_foreign_key,
     _check_create_trigger_without_drop,
     _check_create_type_without_drop,
-    _check_foreign_key_not_valid,
-    _check_check_constraint_not_valid,
     _check_set_not_null_alter_column,
 ]
 
