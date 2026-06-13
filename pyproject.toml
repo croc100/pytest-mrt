@@ -47,6 +47,7 @@ Changelog = "https://github.com/croc100/pytest-mrt/releases"
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pytest-cov",
     "psycopg2-binary",
     "hatch",
     "ruff",
