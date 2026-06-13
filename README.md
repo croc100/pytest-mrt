@@ -9,6 +9,7 @@
   <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="Production/Stable">
   <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue" alt="Python 3.10-3.13">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+  <a href="https://gcv-five.vercel.app/croc100/pytest-mrt"><img src="https://img.shields.io/badge/contributors-GCV-6e40c9?logo=github" alt="Contributors"></a>
 </p>
 
 <p align="center">
@@ -307,6 +308,17 @@ Full docs at **[croc100.github.io/pytest-mrt](https://croc100.github.io/pytest-m
 - [Detection accuracy report](docs/accuracy.md) — what each pattern catches and doesn't catch
 - [API reference](docs/api.md) — stable public API
 - [FAQ](docs/faq.md) — timeouts, large codebases, Django, error handling
+
+## Production SQLite monitoring
+
+pytest-mrt catches rollback failures at test time. For production SQLite monitoring — schema drift detection, backup integrity, and continuous alerting — see **[Litescope](https://github.com/croc100/Litescope)**.
+
+```bash
+# Catch drift in production after deploy
+litescope monitor check production.db --baseline baseline.json
+```
+
+---
 
 ## Sponsorship
 
