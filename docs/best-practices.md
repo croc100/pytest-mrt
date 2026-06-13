@@ -20,8 +20,6 @@ def downgrade():
     op.drop_table("users")
 ```
 
-Use `mrt fix` to auto-generate a `downgrade()` when you're unsure what it should do.
-
 ### 2. Test rollback locally before code review
 
 ```bash

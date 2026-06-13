@@ -27,7 +27,6 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "tests.django_app",
     "tests.django_bad_app",
-    "tests.django_fixer_app",
 ]
 
 

@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.5.0] — 2026-06-11
+
+### Removed
+- **`mrt fix` command and the entire auto-fix subsystem** (`core/fixer.py`, `adapters/django_fixer.py`, `commands/fix.py`). Migration code generation is a *transform*, not a *verify*, operation and was out of scope for a rollback-testing tool. **Breaking change.** Projects that need automatic `downgrade()` generation should pin `pytest-mrt<1.5.0`.
+- **`mrt clean-backups` command** — it only cleaned the `_mrt_backups` table created by `mrt fix`-generated migrations, which no longer exist. **Breaking change.** If you have `_mrt_backups` tables from a previous `mrt fix` run, drop them manually or run `pytest-mrt<1.5.0` one last time.
+- **`fixable` field in `mrt check --format json` output** — it advertised the now-removed auto-fix capability. **Breaking change** for downstream tooling that read this field.
+
+### Fixed
+- **`RollbackVerifier` false positive on failed custom seeds** — a custom seed row whose `INSERT` failed (caught and warned) was still tracked, so `verify()` reported it as "lost after rollback" and blamed the migration for data the seed never inserted. Rows are now tracked only after a successful insert.
+
+---
+
 ## [1.4.1] — 2026-06-11
 
 ### Added
