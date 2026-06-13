@@ -124,3 +124,78 @@ def test_mrt_config_django_mode():
     )
     assert cfg_django.django_settings == "myproject.settings_test"
     assert cfg_django.django_apps == ["users"]
+
+
+# ── seed() in Django mode ─────────────────────────────────────────────────────
+
+
+def test_django_mode_seed_inserts_rows_and_tracks_them(django_runner):
+    """MRTFixture.seed() in Django mode inserts rows and tracks them in _seeder._rows.
+
+    Directly tests the SmartSeeder layer that MRTFixture.seed() delegates to in
+    Django mode (self._seeder = SmartSeeder(self._django_runner.engine)).
+    Verifies the crash fix (self._runner is None) and the tracking logic.
+    """
+    from pytest_mrt.core.seeder import SmartSeeder
+    from sqlalchemy import text
+
+    # Ensure django_app migrations are applied — prior tests may have downgraded
+    django_runner.upgrade("django_app", "0001_initial")
+
+    seeder = SmartSeeder(django_runner.engine)
+    seeder.seed_custom(
+        "django_app_widget",
+        "id",
+        [{"id": 999, "name": "Sprocket", "created_at": "2024-01-01 00:00:00"}],
+    )
+
+    with django_runner.engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT name FROM django_app_widget WHERE id = 999")
+        ).fetchone()
+
+    assert row is not None, "seed_custom() did not insert the row"
+    assert row[0] == "Sprocket"
+    assert len(seeder._rows) == 1
+    assert seeder._rows[0].pk_val == 999
+
+
+def test_django_mode_mrt_fixture_seed(django_runner):
+    """MRTFixture.seed() in Django mode does not crash and inserts the given rows.
+
+    Django is already configured by the module-scoped fixture.
+    DjangoMigrationRunner.__init__ is idempotent when Django is already set up.
+    """
+    from pytest_mrt.config import MRTConfig
+    from pytest_mrt.plugin import MRTFixture
+    from sqlalchemy import text
+
+    # Ensure the widget table exists
+    django_runner.upgrade("django_app", "0001_initial")
+
+    # Django is already configured; creating another runner with the same db_url
+    # is safe — _configure_django() returns early when settings are already set.
+    cfg = MRTConfig(
+        db_url=django_runner.db_url,
+        django_settings="ignored_already_configured",
+        django_apps=["django_app"],
+    )
+    fixture = MRTFixture(cfg)
+
+    # self._runner must be None in Django mode (that was the crash site)
+    assert fixture._runner is None
+
+    fixture.seed(
+        "django_app_widget",
+        [{"id": 777, "name": "Gear", "created_at": "2024-01-01 00:00:00"}],
+    )
+
+    with django_runner.engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT name FROM django_app_widget WHERE id = 777")
+        ).fetchone()
+
+    assert row is not None, "MRTFixture.seed() did not insert the row in Django mode"
+    assert row[0] == "Gear"
+    assert fixture._seeder._rows[0].pk_val == 777
+    fixture.reset()

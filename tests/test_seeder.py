@@ -519,3 +519,161 @@ def test_seed_table_skips_serial_pk_row(engine):
     with engine.connect() as conn:
         count = conn.execute(text("SELECT COUNT(*) FROM only_serial")).scalar()
     assert count == 0
+
+
+# ── seed_custom() ─────────────────────────────────────────────────────
+
+
+def test_seed_custom_inserts_rows_and_tracks_them(engine):
+    """seed_custom() inserts caller-supplied rows and tracks them in _rows."""
+    with engine.begin() as conn:
+        conn.execute(
+            text("CREATE TABLE products (id INTEGER PRIMARY KEY, sku TEXT NOT NULL)")
+        )
+
+    seeder = SmartSeeder(engine)
+    seeder.seed_custom("products", "id", [{"id": 1, "sku": "ABC"}, {"id": 2, "sku": "DEF"}])
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT id, sku FROM products ORDER BY id")).fetchall()
+    assert len(rows) == 2
+    assert rows[0] == (1, "ABC")
+    assert rows[1] == (2, "DEF")
+    assert len(seeder._rows) == 2
+    assert seeder._rows[0].pk_val == 1
+    assert seeder._rows[1].pk_val == 2
+
+
+def test_seed_custom_verify_passes_when_rows_intact(engine):
+    """verify() returns no failures when seed_custom rows are still present."""
+    with engine.begin() as conn:
+        conn.execute(
+            text("CREATE TABLE orders (id INTEGER PRIMARY KEY, ref TEXT NOT NULL)")
+        )
+
+    seeder = SmartSeeder(engine)
+    seeder.seed_custom("orders", "id", [{"id": 10, "ref": "ORD-010"}])
+    assert seeder.verify() == []
+
+
+def test_seed_custom_verify_detects_deleted_row(engine):
+    """verify() reports the missing row after it's deleted."""
+    with engine.begin() as conn:
+        conn.execute(
+            text("CREATE TABLE tickets (id INTEGER PRIMARY KEY, code TEXT NOT NULL)")
+        )
+
+    seeder = SmartSeeder(engine)
+    seeder.seed_custom("tickets", "id", [{"id": 7, "code": "T007"}])
+
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM tickets WHERE id = 7"))
+
+    failures = seeder.verify()
+    assert any("7" in f for f in failures)
+
+
+def test_seed_custom_warns_on_insert_failure(engine):
+    """seed_custom() emits a warning when INSERT fails (e.g. duplicate PK)."""
+    import warnings as _warnings
+
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE dupes (id INTEGER PRIMARY KEY, val TEXT NOT NULL)"))
+        conn.execute(text("INSERT INTO dupes VALUES (1, 'existing')"))
+
+    seeder = SmartSeeder(engine)
+    with _warnings.catch_warnings(record=True) as w:
+        _warnings.simplefilter("always")
+        seeder.seed_custom("dupes", "id", [{"id": 1, "val": "conflict"}])
+    assert any("dupes" in str(warning.message) for warning in w)
+
+
+def test_seed_custom_auto_pk_retrieval(engine):
+    """seed_custom() retrieves the auto-assigned PK when not provided in the row."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE events2 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)"
+            )
+        )
+
+    seeder = SmartSeeder(engine)
+    # Don't include 'id' — it's auto-assigned
+    seeder.seed_custom("events2", "id", [{"name": "launch"}])
+
+    assert len(seeder._rows) == 1
+    assert seeder._rows[0].pk_val is not None
+
+
+# ── _get_unique_constraints ────────────────────────────────────────────
+
+
+def test_get_unique_constraints_returns_pk_and_unique(engine):
+    """Returns both unique constraint columns and PK columns."""
+    from pytest_mrt.core.seeder import _get_unique_constraints
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE members (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE)"
+            )
+        )
+
+    groups = _get_unique_constraints(engine, "members")
+    flat = [col for group in groups for col in group]
+    assert "id" in flat
+    assert "email" in flat
+
+
+def test_get_unique_constraints_unknown_table_returns_empty(engine):
+    """Returns empty list when the table does not exist (exception path)."""
+    from pytest_mrt.core.seeder import _get_unique_constraints
+
+    result = _get_unique_constraints(engine, "nonexistent_xyz")
+    assert result == []
+
+
+# ── _get_enum_values ──────────────────────────────────────────────────
+
+
+def test_get_enum_values_non_pg_dialect_returns_none(engine):
+    """SQLite dialect is not PostgreSQL or MySQL — returns None."""
+    from pytest_mrt.core.seeder import _get_enum_values
+
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE t (id INTEGER PRIMARY KEY, status TEXT)"))
+
+    result = _get_enum_values(engine, "t", "status")
+    assert result is None
+
+
+# ── multiple seeder instances — no UNIQUE collision ───────────────────
+
+
+def test_two_seeder_instances_no_unique_collision(engine):
+    """Two SmartSeeder instances seeding the same table must not produce
+    duplicate values on columns with a UNIQUE constraint."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL UNIQUE)"
+            )
+        )
+
+    from pytest_mrt.core.schema import SchemaSnapshot
+
+    snap = SchemaSnapshot.capture(engine)
+
+    import warnings as _warnings
+
+    with _warnings.catch_warnings(record=True) as w:
+        _warnings.simplefilter("always")
+        SmartSeeder(engine).seed_table(snap.tables["tags"])
+        SmartSeeder(engine).seed_table(snap.tables["tags"])
+
+    seed_warnings = [x for x in w if "failed to seed" in str(x.message)]
+    assert seed_warnings == [], f"UNIQUE collision: {seed_warnings}"
+
+    with engine.connect() as conn:
+        count = conn.execute(text("SELECT COUNT(*) FROM tags")).scalar()
+    assert count == 6  # 3 + 3

@@ -436,6 +436,74 @@ def test_verifier_custom_seeds(alembic_env):
     assert result.passed
 
 
+def test_verifier_custom_seed_insert_failure_no_false_positive(alembic_env):
+    """A custom seed row that fails to INSERT must not be tracked.
+
+    Regression: previously every custom row was tracked before insertion, so a
+    failed INSERT (caught and warned) left a phantom row in the seeder. verify()
+    then reported it as "lost after rollback" — a false positive blaming the
+    migration for data the seed never inserted.
+    """
+    _add_migration(
+        alembic_env["versions"],
+        "001_create.py",
+        "001",
+        None,
+        textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.create_table('users',
+                sa.Column('id', sa.Integer, primary_key=True),
+                sa.Column('name', sa.String(64), nullable=False),
+            )
+
+        def downgrade():
+            op.drop_table('users')
+    """),
+    )
+
+    _add_migration(
+        alembic_env["versions"],
+        "002_add_email.py",
+        "002",
+        "001",
+        textwrap.dedent("""
+        revision = '002'
+        down_revision = '001'
+        branch_labels = None
+        depends_on = None
+
+        import sqlalchemy as sa
+        from alembic import op
+
+        def upgrade():
+            op.add_column('users', sa.Column('email', sa.String(128), nullable=True))
+
+        def downgrade():
+            op.drop_column('users', 'email')
+    """),
+    )
+
+    runner = MigrationRunner(alembic_env["ini"], alembic_env["db_url"])
+    runner.upgrade("001")
+    # 'name' is NOT NULL but the seed omits it → INSERT fails and is warned.
+    verifier = RollbackVerifier(
+        runner,
+        custom_seeds={"users": lambda: [{"id": 99}]},
+    )
+    with pytest.warns(UserWarning, match="failed to insert custom seed row"):
+        result = verifier.check_revision("002")
+    # The migration is perfectly reversible; the failed seed must not blame it.
+    assert result.passed, result.failures
+
+
 def test_verifier_skip(alembic_env):
     """Skipped revisions return passed=True with skipped=True."""
     _add_migration(

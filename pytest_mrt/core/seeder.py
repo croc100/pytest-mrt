@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import random
 import re
 import uuid
+import warnings
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -121,18 +123,20 @@ def _generate_value(
     if any(x in t for x in ("BYTEA", "VARBINARY", "BLOB", "BINARY")):
         return f"mrt_{row_index}".encode()
     if "TIMESTAMP" in t or "DATETIME" in t:
-        return datetime(2024, 1, row_index % 28 + 1, row_index % 24, 0, 0)
+        return datetime(2020, 1, 1) + timedelta(seconds=seed % (10 * 365 * 86400))
     if "DATE" in t:
-        return date(2024, 1, row_index % 28 + 1)
+        return date(2020, 1, 1) + timedelta(days=seed % (10 * 365))
     if "TIME" in t:
-        return time(row_index % 24, 0, 0)
+        return time((seed // 3600) % 24, (seed // 60) % 60, seed % 60)
     if any(x in t for x in ("VARCHAR", "TEXT", "CHAR", "STRING", "CLOB")):
         m = re.search(r"\((\d+)\)", t)
         limit = int(m.group(1)) if m else 255
-        val = f"mrt_{col.name[:8]}_{row_index:04d}"
-        return val[:limit]
+        # UUID guarantees uniqueness regardless of column length or row_index magnitude,
+        # avoiding UNIQUE collisions when the same table is seeded across multiple
+        # check_revision() calls (prior rows survive downgrade and remain in the DB).
+        return uuid.uuid4().hex[:limit]
 
-    return f"mrt_{row_index}"
+    return uuid.uuid4().hex
 
 
 def _normalize_for_compare(val: Any) -> Any:
@@ -207,6 +211,10 @@ class SmartSeeder:
     def __init__(self, engine: Engine):
         self.engine = engine
         self._rows: list[SeededRow] = []
+        # Random offset makes generated values unique per seeder instance, preventing
+        # UNIQUE constraint collisions when check_all() seeds the same table multiple times
+        # (prior check's rows survive downgrade and remain in the DB for the next check).
+        self._offset = random.randint(0, 10**6)
 
     def _q(self, name: str) -> str:
         return _q(self.engine, name)
@@ -248,7 +256,7 @@ class SmartSeeder:
                     enum_vals = None
                     if "ENUM" in col_info.type_str.upper():
                         enum_vals = _get_enum_values(self.engine, table.name, col_name)
-                    val = _generate_value(col_info, row_index, enum_vals)
+                    val = _generate_value(col_info, self._offset + row_index, enum_vals)
                     if val is not None:
                         row[col_name] = val
                 # nullable columns left as NULL intentionally
@@ -297,8 +305,46 @@ class SmartSeeder:
                         full_row = dict(result.mappings().first() or {})
                         self._rows.append(SeededRow(table.name, pk_col, pk_val, full_row))
 
-            except Exception:
-                pass
+            except Exception as exc:
+                warnings.warn(
+                    f"pytest-mrt: failed to seed row {row_index} into '{table.name}': {exc}",
+                    stacklevel=2,
+                )
+
+    def seed_custom(self, table: str, pk_col: str, rows: list[dict]) -> None:
+        """Insert caller-supplied rows and track them for verify()."""
+        tq = self._q(table)
+        pkq = self._q(pk_col)
+        for row in rows:
+            cols = ", ".join(self._q(c) for c in row)
+            placeholders = ", ".join(f":p_{c}" for c in row)
+            params = {f"p_{c}": v for c, v in row.items()}
+            stmt = text(f"INSERT INTO {tq} ({cols}) VALUES ({placeholders})")
+            try:
+                with self.engine.begin() as conn:
+                    conn.execute(stmt, params)
+            except Exception as exc:
+                warnings.warn(
+                    f"pytest-mrt: failed to insert custom row into '{table}': {exc}",
+                    stacklevel=2,
+                )
+                continue
+
+            pk_val = row.get(pk_col)
+            if pk_val is None:
+                with self.engine.connect() as conn:
+                    result = conn.execute(
+                        text(f"SELECT {pkq} FROM {tq} ORDER BY {pkq} DESC LIMIT 1")
+                    )
+                    pk_val = result.scalar()
+
+            if pk_val is not None:
+                with self.engine.connect() as conn:
+                    result = conn.execute(
+                        text(f"SELECT * FROM {tq} WHERE {pkq} = :pk"), {"pk": pk_val}
+                    )
+                    full_row = dict(result.mappings().first() or {})
+                    self._rows.append(SeededRow(table, pk_col, pk_val, full_row))
 
     def verify(self) -> list[str]:
         """

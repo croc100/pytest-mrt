@@ -773,6 +773,39 @@ def _check_create_type_without_drop(m: MigrationAST) -> list[RiskWarning]:
     ]
 
 
+def _check_set_not_null_alter_column(m: MigrationAST) -> list[RiskWarning]:
+    """
+    alter_column(nullable=False) issues SET NOT NULL which does a full table
+    scan on PostgreSQL to verify no NULLs exist. Holds AccessExclusiveLock
+    for the scan duration.
+
+    Safe path (PostgreSQL 12+): add a NOT NULL check constraint with NOT VALID,
+    validate it, then ALTER COLUMN SET NOT NULL (PostgreSQL skips the scan when
+    a validated constraint already covers it).
+    """
+    warnings = []
+    for c in m.upgrade_calls():
+        if c.method == "alter_column":
+            nullable = m.kwarg_bool(c.node, "nullable")
+            if nullable is False:
+                table = m.str_arg(c.node, 0) or "?"
+                col = m.str_arg(c.node, 1) or "?"
+                warnings.append(
+                    _warn(
+                        m,
+                        "SET NOT NULL on existing column",
+                        f"alter_column('{table}', '{col}', nullable=False) runs SET NOT NULL — "
+                        "full table scan with AccessExclusiveLock on PostgreSQL. "
+                        "Safe path on PG 12+: add a NOT NULL check constraint (NOT VALID), "
+                        "validate it, then SET NOT NULL.",
+                        "warning",
+                        line=c.node.lineno,
+                        code="MRT213",
+                    )
+                )
+    return warnings
+
+
 _PER_FILE_CHECKS = [
     _check_batch_alter_drop,  # first: batch context needs special handling
     _check_downgrade_exists,
@@ -803,6 +836,7 @@ _PER_FILE_CHECKS = [
     _check_drop_foreign_key,
     _check_create_trigger_without_drop,
     _check_create_type_without_drop,
+    _check_set_not_null_alter_column,
 ]
 
 
