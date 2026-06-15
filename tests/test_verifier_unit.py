@@ -59,9 +59,11 @@ def test_check_revision_timeout_records_failure():
     def slow_check(*args, **kwargs):
         import time
 
-        time.sleep(10)  # will be interrupted by timeout
+        # Keep sleep short: ThreadPoolExecutor.shutdown(wait=True) blocks until
+        # the thread finishes even after TimeoutError, so this controls test duration.
+        time.sleep(0.5)
 
-    verifier = _make_verifier(runner, timeout=1)
+    verifier = _make_verifier(runner, timeout=0.05)
 
     with patch.object(verifier, "_run_migration_check", side_effect=slow_check):
         result = verifier.check_revision("rev1")

@@ -273,8 +273,12 @@ class SmartSeeder:
                             suffix = f"_{row_index}"
                             m = re.search(r"\((\d+)\)", col_info.type_str)
                             limit = int(m.group(1)) if m else 255
-                            trimmed = val[: max(0, limit - len(suffix))]
-                            row[col_name] = (trimmed + suffix)[:limit]
+                            if len(suffix) >= limit:
+                                # Column too short for suffix — rely on UUID randomness
+                                row[col_name] = uuid.uuid4().hex[:limit]
+                            else:
+                                trimmed = val[: limit - len(suffix)]
+                                row[col_name] = (trimmed + suffix)[:limit]
                         elif isinstance(val, int):
                             row[col_name] = val + row_index
 
