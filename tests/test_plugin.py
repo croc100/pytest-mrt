@@ -1111,3 +1111,141 @@ def test_collection_modifyitems_exception_warns_not_raises(pytester, alembic_env
     result = pytester.runpytest("-v")
     # Normal user test should still run even if injection fails
     assert result.ret in (0, 1, 2)  # not a hard crash
+
+
+# ── fine-grained step control (#86) ──────────────────────────────────────────
+
+
+def _two_step_migrations(versions_dir: str) -> None:
+    _add_migration(
+        versions_dir,
+        "001_users.py",
+        textwrap.dedent("""
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        import sqlalchemy as sa
+        from alembic import op
+        def upgrade():
+            op.create_table('users',
+                sa.Column('id', sa.Integer, primary_key=True),
+                sa.Column('name', sa.String(64), nullable=False),
+            )
+        def downgrade():
+            op.drop_table('users')
+        """),
+    )
+    _add_migration(
+        versions_dir,
+        "002_posts.py",
+        textwrap.dedent("""
+        revision = '002'
+        down_revision = '001'
+        branch_labels = None
+        depends_on = None
+        import sqlalchemy as sa
+        from alembic import op
+        def upgrade():
+            op.create_table('posts',
+                sa.Column('id', sa.Integer, primary_key=True),
+                sa.Column('title', sa.String(128), nullable=False),
+            )
+        def downgrade():
+            op.drop_table('posts')
+        """),
+    )
+
+
+def _table_names(db_url: str) -> list[str]:
+    engine = create_engine(db_url)
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
+    engine.dispose()
+    return [r[0] for r in rows]
+
+
+def test_upgrade_to(alembic_env):
+    _two_step_migrations(alembic_env["versions"])
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture(cfg)
+
+    fixture.upgrade_to("001")
+    tables = _table_names(alembic_env["db_url"])
+    assert "users" in tables
+    assert "posts" not in tables
+    fixture.reset()
+
+
+def test_upgrade_one(alembic_env):
+    _two_step_migrations(alembic_env["versions"])
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture(cfg)
+
+    fixture.upgrade_to("001")
+    fixture.upgrade_one()
+    tables = _table_names(alembic_env["db_url"])
+    assert "users" in tables
+    assert "posts" in tables
+    fixture.reset()
+
+
+def test_downgrade_one(alembic_env):
+    _two_step_migrations(alembic_env["versions"])
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture(cfg)
+
+    fixture.upgrade("head")
+    fixture.downgrade_one()
+    tables = _table_names(alembic_env["db_url"])
+    assert "posts" not in tables
+    assert "users" in tables
+    fixture.reset()
+
+
+def test_downgrade_to(alembic_env):
+    _two_step_migrations(alembic_env["versions"])
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture(cfg)
+
+    fixture.upgrade("head")
+    fixture.downgrade_to("001")
+    tables = _table_names(alembic_env["db_url"])
+    assert "posts" not in tables
+    assert "users" in tables
+    fixture.reset()
+
+
+def test_current_revision(alembic_env):
+    _two_step_migrations(alembic_env["versions"])
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture(cfg)
+
+    assert fixture.current_revision() is None
+    fixture.upgrade_to("001")
+    assert fixture.current_revision() == "001"
+    fixture.upgrade_one()
+    assert fixture.current_revision() == "002"
+    fixture.reset()
+
+
+def test_step_control_data_migration_pattern(alembic_env):
+    """Issue #86 use case: insert legacy data at mid-migration, verify transformation."""
+    _two_step_migrations(alembic_env["versions"])
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture(cfg)
+
+    # Upgrade to first migration, seed data, then upgrade further
+    fixture.upgrade_to("001")
+    fixture.seed("users", [{"id": 1, "name": "legacy_user"}], pk_col="id")
+    fixture.upgrade_one()
+
+    # Data seeded before second migration should still be there
+    engine = create_engine(alembic_env["db_url"])
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT name FROM users WHERE id=1")).fetchone()
+    engine.dispose()
+    assert result is not None
+    assert result[0] == "legacy_user"
+
+    fixture.reset()

@@ -106,8 +106,32 @@ class MRTFixture:
     def upgrade(self, revision: str = "head") -> None:
         self._runner.upgrade(revision)
 
+    def upgrade_to(self, revision: str) -> None:
+        """Upgrade to a specific revision. Equivalent to upgrade(revision)."""
+        self._runner.upgrade(revision)
+
+    def upgrade_one(self) -> None:
+        """Upgrade exactly one step from the current revision."""
+        self._runner.upgrade("+1")
+
     def downgrade(self, revision: str = "-1") -> None:
         self._runner.downgrade(revision)
+
+    def downgrade_one(self) -> None:
+        """Downgrade exactly one step from the current revision."""
+        self._runner.downgrade("-1")
+
+    def downgrade_to(self, revision: str) -> None:
+        """Downgrade to a specific revision."""
+        self._runner.downgrade(revision)
+
+    def current_revision(self) -> str | None:
+        """Return the current Alembic revision, or None if at base."""
+        if self._django_mode:
+            raise RuntimeError(
+                "current_revision() is not available in Django mode."
+            )
+        return self._runner.current_revision()
 
     # ── manual seeding ────────────────────────────────────────────────
 
