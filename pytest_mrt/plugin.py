@@ -128,9 +128,7 @@ class MRTFixture:
     def current_revision(self) -> str | None:
         """Return the current Alembic revision, or None if at base."""
         if self._django_mode:
-            raise RuntimeError(
-                "current_revision() is not available in Django mode."
-            )
+            raise RuntimeError("current_revision() is not available in Django mode.")
         return self._runner.current_revision()
 
     # ── manual seeding ────────────────────────────────────────────────
