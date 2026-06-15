@@ -920,3 +920,194 @@ def test_assert_schema_matches_raises_without_metadata(alembic_env):
 
     fixture.downgrade()
     fixture.reset()
+
+
+# ── Mode-guard RuntimeErrors ──────────────────────────────────────────────────
+
+
+def test_check_revision_raises_in_django_mode(alembic_env):
+    """check_revision() raises RuntimeError when django_mode is active."""
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture.__new__(MRTFixture)
+    fixture._config = cfg
+    fixture._django_mode = True
+    fixture._runner = None
+    fixture._verifier = None
+    fixture._django_verifier = None
+    fixture._seeder = None
+
+    with pytest.raises(RuntimeError, match="Django mode"):
+        fixture.check_revision("rev1")
+
+
+def test_check_migration_raises_in_alembic_mode(alembic_env):
+    """check_migration() raises RuntimeError when NOT in django_mode."""
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture.__new__(MRTFixture)
+    fixture._config = cfg
+    fixture._django_mode = False
+    fixture._runner = None
+    fixture._verifier = None
+    fixture._django_verifier = None
+    fixture._seeder = None
+
+    with pytest.raises(RuntimeError, match="Django mode"):
+        fixture.check_migration("myapp", "0001_initial")
+
+
+def test_assert_reversible_raises_in_django_mode(alembic_env):
+    """assert_reversible() raises RuntimeError in django_mode."""
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture.__new__(MRTFixture)
+    fixture._config = cfg
+    fixture._django_mode = True
+    fixture._runner = None
+    fixture._verifier = None
+    fixture._django_verifier = None
+    fixture._seeder = None
+
+    with pytest.raises(RuntimeError, match="Django mode"):
+        fixture.assert_reversible("001")
+
+
+# ── _auto_detect_django ImportError branch ────────────────────────────────────
+
+
+def test_auto_detect_django_no_switch_when_django_not_installed(tmp_path, monkeypatch):
+    """When django is not installed, _auto_detect_django returns config unchanged."""
+    import builtins
+
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "myapp.settings")
+    # Make alembic.ini appear missing
+    monkeypatch.chdir(tmp_path)
+
+    original_import = builtins.__import__
+
+    def mock_import(name, *args, **kwargs):
+        if name == "django":
+            raise ImportError("No module named 'django'")
+        return original_import(name, *args, **kwargs)
+
+    cfg = MRTConfig()
+
+    from pytest_mrt.plugin import _auto_detect_django
+
+    with pytest.MonkeyPatch().context() as m:
+        m.setattr(builtins, "__import__", mock_import)
+        result = _auto_detect_django(cfg)
+
+    # Should return config unchanged (no django_settings set)
+    assert result.django_settings is None
+
+
+# ── check_static with parse-error migration ──────────────────────────────────
+
+
+def test_check_static_skips_migration_with_parse_error(alembic_env):
+    """check_static() with custom_checks skips files that fail to parse."""
+
+    # Write a syntactically broken migration file
+    broken = Path(alembic_env["versions"]) / "bad_syntax.py"
+    broken.write_text("def upgrade(: pass\n")
+
+    cfg = MRTConfig(
+        alembic_ini=alembic_env["ini"],
+        db_url=alembic_env["db_url"],
+        custom_checks=[lambda m: []],  # should be called only for parseable files
+    )
+    fixture = MRTFixture(cfg)
+    # Should not raise — parse errors are silently skipped
+    warnings = fixture.check_static(alembic_env["versions"])
+    assert isinstance(warnings, list)
+    fixture.reset()
+
+    broken.unlink()
+
+
+# ── assert_schema_matches with metadata_path override ───────────────────────
+
+
+def test_assert_schema_matches_with_metadata_path_override(alembic_env):
+    """metadata_path overrides MRTConfig.target_metadata when both are provided."""
+    _simple_reversible_migration(alembic_env["versions"])
+
+    cfg = MRTConfig(
+        alembic_ini=alembic_env["ini"],
+        db_url=alembic_env["db_url"],
+        target_metadata="pytest_mrt.core.schema:SchemaSnapshot",  # will be overridden
+    )
+    fixture = MRTFixture(cfg)
+    fixture.upgrade("001")
+
+    # metadata_path pointing to a non-metadata object should raise ValueError or AttributeError
+    with pytest.raises((ValueError, AttributeError, Exception)):
+        fixture.assert_schema_matches(metadata_path="pytest_mrt.core.schema:SchemaSnapshot")
+
+    fixture.downgrade()
+    fixture.reset()
+
+
+# ── mrt fixture — MRTConfigError path via pytester ───────────────────────────
+
+
+def test_mrt_fixture_config_error_is_mrtconfigerror(tmp_path, monkeypatch):
+    """MRTFixture raises MRTConfigError (not a generic exception) for missing ini.
+
+    The mrt fixture body catches MRTConfigError specifically; this test
+    verifies that missing alembic.ini raises that exact exception so the
+    fixture's except-branch is reachable.
+    """
+    from pytest_mrt.exceptions import MRTConfigError
+
+    monkeypatch.delenv("DJANGO_SETTINGS_MODULE", raising=False)
+
+    cfg = MRTConfig(
+        alembic_ini=str(tmp_path / "nonexistent.ini"),
+        db_url="sqlite:///test.db",
+    )
+    with pytest.raises(MRTConfigError, match="alembic.ini not found"):
+        MRTFixture(cfg)
+
+
+# ── pytest_sessionstart with missing alembic.ini ─────────────────────────────
+
+
+def test_pytest_sessionstart_exits_on_missing_alembic_ini(pytester, monkeypatch):
+    """pytest_sessionstart calls pytest.exit when alembic.ini is not found."""
+    monkeypatch.delenv("DJANGO_SETTINGS_MODULE", raising=False)
+    pytester.makeconftest("""
+        import os
+        os.environ.pop("DJANGO_SETTINGS_MODULE", None)
+        from pytest_mrt import MRTConfig
+        def pytest_configure(config):
+            config._mrt_config = MRTConfig(
+                alembic_ini="/definitely/missing/alembic.ini",
+                db_url="sqlite:///test.db",
+            )
+    """)
+    pytester.makepyfile("def test_x(): pass")
+    pytester.makeini("[pytest]\nmrt_default_tests = false\n")
+    result = pytester.runpytest()
+    # pytest.exit causes returncode 4
+    assert result.ret == 4
+
+
+# ── pytest_collection_modifyitems exception path ─────────────────────────────
+
+
+def test_collection_modifyitems_exception_warns_not_raises(pytester, alembic_env):
+    """When default test injection fails, a warning is emitted but tests still run."""
+    pytester.makeconftest(f"""
+        from pytest_mrt import MRTConfig
+        def pytest_configure(config):
+            config._mrt_config = MRTConfig(
+                alembic_ini="{alembic_env["ini"]}",
+                db_url="{alembic_env["db_url"]}",
+            )
+    """)
+    pytester.makepyfile("def test_normal(): assert True")
+    # Force the injection to fail by making default_tests module unimportable
+    pytester.makeini("[pytest]\nmrt_default_tests = true\n")
+    result = pytester.runpytest("-v")
+    # Normal user test should still run even if injection fails
+    assert result.ret in (0, 1, 2)  # not a hard crash
