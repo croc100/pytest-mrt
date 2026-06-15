@@ -84,7 +84,7 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run tests
-        run: pytest tests/ -v --ignore=tests/test_postgres.py --ignore=tests/test_mysql.py --ignore=tests/test_oracle.py --ignore=tests/test_mssql.py --cov=pytest_mrt --cov-report=xml
+        run: coverage run -m pytest tests/ -v --ignore=tests/test_postgres.py --ignore=tests/test_mysql.py --ignore=tests/test_oracle.py --ignore=tests/test_mssql.py && coverage xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v7

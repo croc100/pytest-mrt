@@ -527,9 +527,7 @@ def test_seed_table_skips_serial_pk_row(engine):
 def test_seed_custom_inserts_rows_and_tracks_them(engine):
     """seed_custom() inserts caller-supplied rows and tracks them in _rows."""
     with engine.begin() as conn:
-        conn.execute(
-            text("CREATE TABLE products (id INTEGER PRIMARY KEY, sku TEXT NOT NULL)")
-        )
+        conn.execute(text("CREATE TABLE products (id INTEGER PRIMARY KEY, sku TEXT NOT NULL)"))
 
     seeder = SmartSeeder(engine)
     seeder.seed_custom("products", "id", [{"id": 1, "sku": "ABC"}, {"id": 2, "sku": "DEF"}])
@@ -547,9 +545,7 @@ def test_seed_custom_inserts_rows_and_tracks_them(engine):
 def test_seed_custom_verify_passes_when_rows_intact(engine):
     """verify() returns no failures when seed_custom rows are still present."""
     with engine.begin() as conn:
-        conn.execute(
-            text("CREATE TABLE orders (id INTEGER PRIMARY KEY, ref TEXT NOT NULL)")
-        )
+        conn.execute(text("CREATE TABLE orders (id INTEGER PRIMARY KEY, ref TEXT NOT NULL)"))
 
     seeder = SmartSeeder(engine)
     seeder.seed_custom("orders", "id", [{"id": 10, "ref": "ORD-010"}])
@@ -559,9 +555,7 @@ def test_seed_custom_verify_passes_when_rows_intact(engine):
 def test_seed_custom_verify_detects_deleted_row(engine):
     """verify() reports the missing row after it's deleted."""
     with engine.begin() as conn:
-        conn.execute(
-            text("CREATE TABLE tickets (id INTEGER PRIMARY KEY, code TEXT NOT NULL)")
-        )
+        conn.execute(text("CREATE TABLE tickets (id INTEGER PRIMARY KEY, code TEXT NOT NULL)"))
 
     seeder = SmartSeeder(engine)
     seeder.seed_custom("tickets", "id", [{"id": 7, "code": "T007"}])
@@ -592,9 +586,7 @@ def test_seed_custom_auto_pk_retrieval(engine):
     """seed_custom() retrieves the auto-assigned PK when not provided in the row."""
     with engine.begin() as conn:
         conn.execute(
-            text(
-                "CREATE TABLE events2 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)"
-            )
+            text("CREATE TABLE events2 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)")
         )
 
     seeder = SmartSeeder(engine)
@@ -614,9 +606,7 @@ def test_get_unique_constraints_returns_pk_and_unique(engine):
 
     with engine.begin() as conn:
         conn.execute(
-            text(
-                "CREATE TABLE members (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE)"
-            )
+            text("CREATE TABLE members (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE)")
         )
 
     groups = _get_unique_constraints(engine, "members")
@@ -677,3 +667,107 @@ def test_two_seeder_instances_no_unique_collision(engine):
     with engine.connect() as conn:
         count = conn.execute(text("SELECT COUNT(*) FROM tags")).scalar()
     assert count == 6  # 3 + 3
+
+
+# ── VARCHAR short column — suffix must not be truncated (Bug 2) ────────────
+
+
+def test_seed_table_short_varchar_suffix_preserved(engine):
+    """VARCHAR(5): unique suffix must survive even though base value fills the limit."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE codes ("
+                "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  code VARCHAR(5) NOT NULL UNIQUE"
+                ")"
+            )
+        )
+
+    from pytest_mrt.core.schema import SchemaSnapshot
+
+    snap = SchemaSnapshot.capture(engine)
+
+    import warnings as _w
+
+    with _w.catch_warnings(record=True) as w:
+        _w.simplefilter("always")
+        SmartSeeder(engine).seed_table(snap.tables["codes"], count=3)
+
+    seed_warnings = [x for x in w if "failed to seed" in str(x.message)]
+    assert seed_warnings == [], f"Unexpected insert failure: {seed_warnings}"
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT code FROM codes ORDER BY id")).fetchall()
+
+    assert len(rows) == 3
+    codes = [r[0] for r in rows]
+    # All values must be distinct — suffix must have survived
+    assert len(set(codes)) == 3, f"Duplicate codes: {codes}"
+    # All values must fit within VARCHAR(5)
+    assert all(len(c) <= 5 for c in codes), f"Code exceeds limit: {codes}"
+
+
+def test_seed_table_short_varchar_suffix_fills_exactly(engine):
+    """When limit is exactly suffix length, suffix still wins and the result fits."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE pins ("
+                "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  pin VARCHAR(3) NOT NULL UNIQUE"
+                ")"
+            )
+        )
+
+    from pytest_mrt.core.schema import SchemaSnapshot
+
+    snap = SchemaSnapshot.capture(engine)
+
+    import warnings as _w
+
+    with _w.catch_warnings(record=True) as w:
+        _w.simplefilter("always")
+        SmartSeeder(engine).seed_table(snap.tables["pins"], count=3)
+
+    seed_warnings = [x for x in w if "failed to seed" in str(x.message)]
+    assert seed_warnings == [], f"Unexpected insert failure: {seed_warnings}"
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT pin FROM pins ORDER BY id")).fetchall()
+
+    pins = [r[0] for r in rows]
+    assert len(set(pins)) == len(pins), f"Duplicate pins: {pins}"
+    assert all(len(p) <= 3 for p in pins), f"Pin exceeds limit: {pins}"
+
+
+def test_seed_table_int_unique_column_no_collision(engine):
+    """INT unique constraint gets row_index added, not string suffix."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE scores ("
+                "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  rank INTEGER NOT NULL UNIQUE"
+                ")"
+            )
+        )
+
+    from pytest_mrt.core.schema import SchemaSnapshot
+
+    snap = SchemaSnapshot.capture(engine)
+
+    import warnings as _w
+
+    with _w.catch_warnings(record=True) as w:
+        _w.simplefilter("always")
+        SmartSeeder(engine).seed_table(snap.tables["scores"], count=3)
+
+    seed_warnings = [x for x in w if "failed to seed" in str(x.message)]
+    assert seed_warnings == [], f"Unexpected insert failure: {seed_warnings}"
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT rank FROM scores ORDER BY id")).fetchall()
+
+    ranks = [r[0] for r in rows]
+    assert len(set(ranks)) == 3, f"Duplicate ranks: {ranks}"
