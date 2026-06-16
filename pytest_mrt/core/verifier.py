@@ -150,6 +150,19 @@ class RollbackVerifier:
                             "The migration may be deadlocked or running a long data operation. "
                             "Increase MRTConfig.migration_timeout or split the migration."
                         )
+                        # Best-effort state recovery: the timed-out thread may have
+                        # left the DB in a partial upgrade/downgrade state.
+                        try:
+                            current = self.runner.current_revision()
+                            if current != start_revision:
+                                self.runner.downgrade_base()
+                                if start_revision is not None:
+                                    self.runner.upgrade(start_revision)
+                        except Exception as recovery_exc:
+                            failures.append(
+                                f"State recovery failed after timeout — DB may be in unknown state: "
+                                f"{recovery_exc}"
+                            )
             else:
                 failures = self._run_migration_check(revision, schema_before, seeder)
 

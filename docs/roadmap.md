@@ -4,49 +4,79 @@ Items are tracked as GitHub issues. This page is a high-level overview.
 
 ---
 
-## Near-term
+## Shipped
 
-### Single-head revision check ([#72](https://github.com/croc100/pytest-mrt/issues/72))
+### v1.6.0 — Fine-grained step control (main, pending release)
 
-Add a built-in default test that fails when the migration chain has more than one head. A diverged head is almost always an unresolved merge conflict and will break deployments silently. pytest-alembic has this; pytest-mrt should too.
+- `upgrade_to()`, `upgrade_one()`, `downgrade_one()`, `downgrade_to()`, `current_revision()` — test data migration logic at any intermediate point in the migration chain
 
-### GitHub Actions action ([#74](https://github.com/croc100/pytest-mrt/issues/74))
+### v1.5.0 — Scope reduction
 
-A dedicated action (`croc100/pytest-mrt-action`) that wraps `mrt check`, posts findings as a job summary, and optionally annotates changed migration files inline. The `--format json` output already exists — this is the CI integration layer on top.
+- Removed `mrt fix` and `mrt clean-backups` — out of scope for a *testing* tool
+- Fixed `RollbackVerifier` false positive on failed custom seeds
 
-```yaml
-- uses: croc100/pytest-mrt-action@v1
-  with:
-    migrations-dir: alembic/versions/
-```
+### v1.4.0 — CI integration + rolling deploy safety
 
-### r/Python showcase post ([#75](https://github.com/croc100/pytest-mrt/issues/75))
+- `mrt check --format json/html` — structured output for CI pipelines and HTML safety reports
+- `mrt check --watch` — re-run on file change during development
+- `mrt check --min-revision` — skip revisions older than a configured floor
+- `mrt check --check-compat` — rolling-deploy compatibility checks (MRT701–MRT705)
+- Django squashmigrations detection — MRT601/MRT602
+- `croc100/pytest-mrt-action` v1.0.0 — GitHub Actions integration
 
-After rolling deploy compat checks ship, write a showcase covering what pytest-mrt does, how it differs from pytest-alembic and django-migration-linter, and a concrete example. Goal: grow star count toward 50+ for awesome-django eligibility.
+### v1.3.0 — Incremental CI + pre-commit
 
----
+- `mrt check --since` — scan only new migrations in PRs
+- pre-commit hook (`.pre-commit-hooks.yaml`)
 
-## Medium-term
+### v1.1.0–v1.2.0 — Default tests + rule codes
 
-### Rolling deploy compatibility checks ([#73](https://github.com/croc100/pytest-mrt/issues/73))
+- Six built-in default tests auto-injected on fixture configuration
+- Schema drift detection (`mrt drift`, `assert_schema_matches()`)
+- MRT rule codes (MRT101–MRT902) and `# noqa: MRTxxx` suppression
 
-Static analysis pass that checks whether a migration is safe during a rolling deploy — i.e., whether the old app version can still run against the new schema while the deploy is in progress.
+### v1.0.0 — Production/Stable
 
-This is a different axis from rollback safety:
-
-- **Rollback safety** (what pytest-mrt tests today): can the migration be undone?
-- **Rolling deploy safety** (new): can the old app survive the new schema long enough to be replaced?
-
-Patterns to detect: DROP COLUMN, RENAME COLUMN, ADD NOT NULL without default, DROP TABLE, incompatible type changes.
-
-New flag: `mrt check --check-compat`. Alembic and Django both.
-
-### pytest-dev contribution ([#76](https://github.com/croc100/pytest-mrt/issues/76))
-
-PR [#14576](https://github.com/pytest-dev/pytest/pull/14576) to pytest-dev: show which items are missing in `dict.items()` / `dict.keys()` set comparisons (`>=`, `<=`, `>`, `<`), the same way set comparisons already work. Waiting for maintainer review.
+- Full database coverage: PostgreSQL, SQLite, MySQL/MariaDB, Oracle, SQL Server
+- Full migration framework coverage: Alembic (static + dynamic) and Django (static + dynamic)
+- 44+ static analysis patterns, public accuracy report
 
 ---
 
-## Why this order
+## Under consideration
 
-The single-head check and GitHub Action are both small, self-contained, and directly address gaps vs. competing tools. Rolling deploy compat is bigger and becomes the centerpiece of the showcase post — do it second so the post has something new to announce.
+### Django squashmigrations: dynamic rollback testing
+
+Static detection of squashmigrations is already in v1.4.0 (MRT601/MRT602). The next step is dynamic verification: run the rollback plan through the squashed migration graph and verify it succeeds. Currently skipped in `check_all()`.
+
+### `--check-compat` Django support
+
+Rolling-deploy compatibility checks (`--check-compat`, MRT7xx) are currently Alembic-only. Extending to Django migrations requires mapping Django operation types to the same compat patterns.
+
+### Per-pattern confidence scores
+
+Add a `confidence` field to `mrt check --format json` output. Lets downstream tooling suppress known false-positive-prone patterns without using `# noqa`.
+
+### HTML report: source line links
+
+Click a finding in the HTML report to jump to the exact line in the migration file. Requires either embedding file contents or linking to the file on disk/GitHub.
+
+### Sentry integration
+
+Report dynamic rollback failures as Sentry events, enabling production-side alerting when a migration that was not tested fails in the field.
+
+---
+
+## What won't be in scope
+
+- Executing migrations in production (this is a *testing* tool only)
+- Migration code generation / auto-fix (removed in v1.5.0 — out of scope)
+- Schema diff tools (use `alembic check` or `django-migration-linter`)
+- ORM-agnostic support (focused on Alembic and Django)
+
+---
+
+## How to influence the roadmap
+
+Open an issue tagged `roadmap` with your use case.
+Sponsorship fast-tracks specific items — see [GitHub Sponsors](https://github.com/sponsors/croc100).

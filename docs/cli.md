@@ -145,7 +145,7 @@ Output schema:
 
 ```json
 {
-  "version": "1.4.0",
+  "version": "1.6.0",
   "checked_at": "2026-06-10T11:00:00Z",
   "summary": { "total_issues": 2, "errors": 1, "warnings": 1 },
   "findings": [
@@ -232,7 +232,7 @@ When there are no problems:
 
 ```bash
 mrt version
-# pytest-mrt 1.4.0
+# pytest-mrt 1.6.0
 ```
 
 ---

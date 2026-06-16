@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.6.0] — 2026-06-17
+
+### Added
+- **Fine-grained migration step control** — `MRTFixture` gains `upgrade_to(revision)`, `upgrade_one()`, `downgrade_one()`, `downgrade_to(revision)`, and `current_revision()` for testing data migration logic at any intermediate point in the chain. Achieves full API parity with pytest-alembic. (#86, #92)
+
+### Fixed
+- **Django mode step methods raised `AttributeError` instead of `RuntimeError`** — `upgrade()`, `upgrade_to()`, `upgrade_one()`, `downgrade()`, `downgrade_one()`, `downgrade_to()`, and `current_revision()` all called `self._runner.*` without checking `_django_mode`. In Django mode `_runner` is `None`, so these methods crashed with an uninformative `AttributeError`. They now raise `RuntimeError` with a clear message, consistent with `check_revision()` and `assert_reversible()`.
+- **`check_static()` raised `AttributeError` in Django mode** — `check_static()` called `self._runner.get_versions_dir()` without a Django mode guard. Now raises `RuntimeError` with a message directing users to `check_migration()` / `check_all()`.
+- **Timeout path did not attempt DB state recovery** — when a migration exceeded `MRTConfig.migration_timeout`, the `FuturesTimeout` was caught but no recovery was attempted. The DB could be left in an upgraded state, corrupting all subsequent revisions in `check_all()`. Recovery now mirrors the `except Exception` path added in v0.7.
+
+---
+
 ## [1.5.0] — 2026-06-11
 
 ### Removed

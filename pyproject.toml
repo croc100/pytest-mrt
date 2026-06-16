@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-mrt"
-version = "1.5.0"
+version = "1.6.0"
 description = "Catch database migration rollback failures before they reach production"
 readme = "README.md"
 license = { text = "MIT" }

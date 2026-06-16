@@ -103,32 +103,44 @@ class MRTFixture:
 
     # ── migration control ──────────────────────────────────────────────
 
+    def _require_alembic(self, method: str) -> None:
+        if self._django_mode:
+            raise RuntimeError(
+                f"{method}() is not available in Django mode. "
+                "Use check_migration() / check_all() for Django projects."
+            )
+
     def upgrade(self, revision: str = "head") -> None:
+        self._require_alembic("upgrade")
         self._runner.upgrade(revision)
 
     def upgrade_to(self, revision: str) -> None:
         """Upgrade to a specific revision. Equivalent to upgrade(revision)."""
+        self._require_alembic("upgrade_to")
         self._runner.upgrade(revision)
 
     def upgrade_one(self) -> None:
         """Upgrade exactly one step from the current revision."""
+        self._require_alembic("upgrade_one")
         self._runner.upgrade("+1")
 
     def downgrade(self, revision: str = "-1") -> None:
+        self._require_alembic("downgrade")
         self._runner.downgrade(revision)
 
     def downgrade_one(self) -> None:
         """Downgrade exactly one step from the current revision."""
+        self._require_alembic("downgrade_one")
         self._runner.downgrade("-1")
 
     def downgrade_to(self, revision: str) -> None:
         """Downgrade to a specific revision."""
+        self._require_alembic("downgrade_to")
         self._runner.downgrade(revision)
 
     def current_revision(self) -> str | None:
         """Return the current Alembic revision, or None if at base."""
-        if self._django_mode:
-            raise RuntimeError("current_revision() is not available in Django mode.")
+        self._require_alembic("current_revision")
         return self._runner.current_revision()
 
     # ── manual seeding ────────────────────────────────────────────────
@@ -147,6 +159,12 @@ class MRTFixture:
         Includes built-in checks + any custom_checks registered in MRTConfig.
         severity_overrides from config are applied to the results.
         """
+        if self._django_mode:
+            raise RuntimeError(
+                "check_static() is not available in Django mode — "
+                "static analysis targets Alembic migration files. "
+                "Use mrt check_migration() / check_all() for Django rollback testing."
+            )
         if versions_dir is None:
             versions_dir = self._runner.get_versions_dir()
 

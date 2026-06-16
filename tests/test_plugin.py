@@ -970,6 +970,45 @@ def test_assert_reversible_raises_in_django_mode(alembic_env):
         fixture.assert_reversible("001")
 
 
+@pytest.mark.parametrize("method,args", [
+    ("upgrade", ("head",)),
+    ("upgrade_to", ("abc123",)),
+    ("upgrade_one", ()),
+    ("downgrade", ()),
+    ("downgrade_one", ()),
+    ("downgrade_to", ("abc123",)),
+    ("current_revision", ()),
+])
+def test_alembic_step_methods_raise_in_django_mode(alembic_env, method, args):
+    """upgrade/downgrade step methods raise RuntimeError in Django mode, not AttributeError."""
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture.__new__(MRTFixture)
+    fixture._config = cfg
+    fixture._django_mode = True
+    fixture._runner = None
+    fixture._verifier = None
+    fixture._django_verifier = None
+    fixture._seeder = None
+
+    with pytest.raises(RuntimeError, match="not available in Django mode"):
+        getattr(fixture, method)(*args)
+
+
+def test_check_static_raises_in_django_mode(alembic_env):
+    """check_static() raises RuntimeError in Django mode, not AttributeError."""
+    cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
+    fixture = MRTFixture.__new__(MRTFixture)
+    fixture._config = cfg
+    fixture._django_mode = True
+    fixture._runner = None
+    fixture._verifier = None
+    fixture._django_verifier = None
+    fixture._seeder = None
+
+    with pytest.raises(RuntimeError, match="not available in Django mode"):
+        fixture.check_static()
+
+
 # ── _auto_detect_django ImportError branch ────────────────────────────────────
 
 

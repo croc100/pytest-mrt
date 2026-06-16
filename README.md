@@ -7,7 +7,7 @@
   <a href="https://github.com/croc100/pytest-mrt/actions"><img src="https://img.shields.io/github/actions/workflow/status/croc100/pytest-mrt/ci.yml?branch=main&label=tests" alt="CI"></a>
   <a href="https://codecov.io/gh/croc100/pytest-mrt"><img src="https://codecov.io/gh/croc100/pytest-mrt/graph/badge.svg?token=CODECOV_TOKEN" alt="Coverage"></a>
   <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="Production/Stable">
-  <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue" alt="Python 3.10-3.13">
+  <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue" alt="Python 3.10-3.14">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
   <a href="https://gcv-five.vercel.app/croc100/pytest-mrt"><img src="https://img.shields.io/badge/contributors-GCV-6e40c9?logo=github" alt="Contributors"></a>
 </p>
@@ -167,14 +167,14 @@ Add to `.pre-commit-config.yaml` to run `mrt check` automatically before every p
 ```yaml
 # Alembic
 - repo: https://github.com/croc100/pytest-mrt
-  rev: v1.4.0
+  rev: v1.5.0
   hooks:
     - id: mrt-check
       args: [alembic/versions/]
 
 # Django
 - repo: https://github.com/croc100/pytest-mrt
-  rev: v1.4.0
+  rev: v1.5.0
   hooks:
     - id: mrt-check
       args: [myapp/migrations/]
@@ -263,13 +263,25 @@ Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
 
 The key difference from pytest-alembic: pytest-mrt seeds actual rows before each rollback and verifies they survive. A migration that reverses the schema cleanly but silently destroys data will pass pytest-alembic and fail pytest-mrt.
 
-## What's new in v1.4.0
+## What's new in v1.6.0
 
-- **`mrt check --format json/html`** — structured JSON output for CI tooling; self-contained HTML safety report
-- **`mrt check --watch`** — re-runs automatically whenever a migration file changes
-- **`mrt check --min-revision`** — skip revisions older than a configured floor (mirrors `MRTConfig.minimum_downgrade_revision`)
-- **Django squashmigrations detection** — MRT601/MRT602 catch unsafe `RunPython` in squashed migrations
-- **`minimum_downgrade_revision` in dynamic tests** — floor now respected by the `mrt` fixture `check_all()`, not just static analysis
+- **Fine-grained migration step control** — `upgrade_to()`, `upgrade_one()`, `downgrade_one()`, `downgrade_to()`, `current_revision()` let you test data migration logic at any point in the chain:
+
+```python
+def test_data_migration(mrt):
+    mrt.upgrade_to("abc123")          # upgrade to a specific revision
+    mrt.seed("users", [...])          # seed data at that checkpoint
+    mrt.upgrade_one()                 # apply exactly one more step
+    assert mrt.current_revision() == "def456"
+    mrt.downgrade_one()               # roll back one step
+    mrt.downgrade_to("base")          # roll all the way back
+```
+
+## Migrating from v1.4.x
+
+**v1.5.0 removed `mrt fix` and `mrt clean-backups`** — migration code generation is a *transform* operation, not a *verify* operation, and was out of scope. Projects relying on these commands should pin `pytest-mrt<1.5.0`.
+
+The `fixable` field in `mrt check --format json` output was also removed in v1.5.0.
 
 ## Changelog
 
