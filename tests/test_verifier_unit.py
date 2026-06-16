@@ -72,6 +72,28 @@ def test_check_revision_timeout_records_failure():
     assert any("timed out" in f for f in result.failures)
 
 
+def test_check_revision_timeout_triggers_recovery():
+    """After a timeout, check_revision attempts DB state recovery."""
+    runner = _make_runner_mock()
+    # After timeout: current_revision returns "rev1" (DB is in upgraded state)
+    runner.current_revision.side_effect = [None, "rev1"]
+
+    def slow_check(*args, **kwargs):
+        import time
+
+        time.sleep(0.5)
+
+    verifier = _make_verifier(runner, timeout=0.05)
+
+    with patch.object(verifier, "_run_migration_check", side_effect=slow_check):
+        result = verifier.check_revision("rev1")
+
+    assert not result.passed
+    assert any("timed out" in f for f in result.failures)
+    # current != start_revision → recovery should have been attempted
+    runner.downgrade_base.assert_called()
+
+
 # ── error recovery ────────────────────────────────────────────────────────────
 
 

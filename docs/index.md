@@ -112,7 +112,9 @@ pytest tests/test_migrations.py -s
 |---|---|---|
 | PostgreSQL | Yes | Yes |
 | SQLite | Yes | Yes |
-| MySQL / MariaDB | Yes | planned |
+| MySQL / MariaDB | Yes | Yes |
+| Oracle | Yes | Yes |
+| SQL Server | Yes | Yes |
 
 ---
 

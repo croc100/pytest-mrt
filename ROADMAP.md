@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current status: Production/Stable (v1.3.0)
+## Current status: Production/Stable (v1.5.0 on PyPI — v1.6.0 on main)
 
 pytest-mrt is production-ready. The core API (`MRTConfig`, `mrt` fixture, `mrt check`) is stable and
 breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the stability guarantee.
@@ -64,45 +64,57 @@ breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the sta
 - Test coverage: `default_tests.py` and `drift.py` at 100%
 - Documentation fully updated (pattern counts, version refs, suppression docs)
 
-## v1.3.0 — Incremental CI + pre-commit + Django fix (shipped)
+## v1.3.0 — Incremental CI + pre-commit (shipped)
 
 - **`mrt check --since <revision>`** — check only migrations added since a given revision; eliminates re-scanning full history on every PR
 - **pre-commit hook** — `.pre-commit-hooks.yaml` ships with the package; two-line setup
-- **Django-aware `mrt fix`** — auto-generates reverse operations for `RunSQL`, `RunPython`, `RemoveField`, `DeleteModel` with transactional DB backup/restore scaffolding
-- **`mrt clean-backups`** — CLI command to remove `_mrt_backups` data after deployment
 
 ---
 
-## v1.4.0 — Under consideration
+## v1.4.0 — CI integration + rolling deploy (shipped)
 
-- **`mrt check --watch`** — re-run on file change during development
-- **Django: `squashmigrations` detection** — squashed migrations with unresolved refs
+- **`mrt check --format json/html`** — structured JSON output for CI tooling; self-contained HTML safety report (`--output` to write file)
+- **`mrt check --watch`** — re-run automatically when migration files change; Ctrl-C to stop
+- **`mrt check --min-revision`** — skip revisions at or before a floor; mirrors `MRTConfig.minimum_downgrade_revision`
+- **`mrt check --check-compat`** — rolling-deploy compatibility checks (MRT701–MRT705): DROP COLUMN, RENAME COLUMN, DROP TABLE, ADD NOT NULL without default, incompatible type changes
+- **Django squashmigrations detection** — MRT601/MRT602: catches `RunPython` without `reverse_code` in squashed migrations and suspicious squash filenames
+- **`MRTConfig.minimum_downgrade_revision`** — permanent rollback floor respected by `check_all()` in the `mrt` fixture
+- **`croc100/pytest-mrt-action` v1.0.0** — GitHub Actions action that posts findings as a job summary
+
+---
+
+## v1.5.0 — Scope reduction (breaking, shipped)
+
+- **Removed `mrt fix` and `mrt clean-backups`** — migration code generation is a *transform* operation, not a *verify* operation. Out of scope. Projects that rely on these must pin `pytest-mrt<1.5.0`.
+- **Removed `fixable` field from `mrt check --format json`** — advertised the removed auto-fix capability. Breaking for downstream tooling that read this field.
+- **Fixed** `RollbackVerifier` false positive on failed custom seeds — rows whose `INSERT` fails are no longer tracked, eliminating "lost after rollback" false positives.
+
+---
+
+## v1.6.0 — Fine-grained step control (shipped on main, pending release)
+
+- **`upgrade_to(revision)`**, **`upgrade_one()`**, **`downgrade_one()`**, **`downgrade_to(revision)`**, **`current_revision()`** — call any migration step from a test, enabling mid-chain data seeding and assertion
+
+---
+
+## Under consideration
+
+These are not committed to a version yet:
+
+- **Django squashmigrations: full rollback plan** — detect and test rollback paths through squashed migration graphs dynamically (static detection is already in v1.4.0)
 - **Per-pattern confidence scores** in JSON output
 - **HTML report: source line links** — click a finding to jump to the migration file
 - **Sentry integration** — report migration failures as Sentry events
 - **GitHub App** — automated PR comments with migration risk summary
 - **VS Code extension** — inline warnings in migration files
-
----
-
-## Next / Under consideration
-
-These are not committed to a specific version yet:
-
-- **`mrt check --watch`** — re-run on file change during development
-- **Django: `squashmigrations` detection** — squashed migrations with unresolved refs
-- **Per-pattern confidence scores** in JSON output
-- **HTML report: source line links** — click a finding to jump to the migration file
-- **Sentry integration** — report migration failures as Sentry events
-- **GitHub App** — automated PR comments with migration risk summary
-- **VS Code extension** — inline warnings in migration files
+- **`mrt check --check-compat` Django support** — currently Alembic only
 
 ---
 
 ## What won't be in scope
 
 - Executing migrations in production (this is a *testing* tool only)
-- **Migration code generation / auto-fix** — pytest-mrt verifies migrations; it does not rewrite them. The former `mrt fix` / `mrt clean-backups` commands were removed in v1.5.0 (out of scope: "transform", not "verify")
+- **Migration code generation / auto-fix** — removed in v1.5.0 (out of scope: "transform", not "verify")
 - Schema diff tools (use `alembic check` or `django-migration-linter`)
 - ORM-agnostic support (focused on Alembic and Django)
 
