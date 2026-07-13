@@ -608,3 +608,94 @@ def test_squash_run_python_positional_reverse_not_flagged(tmp_path):
     warnings = analyze_django_migrations(str(tmp_path))
     codes = [w.code for w in warnings]
     assert "MRT601" not in codes, "Positional reverse_code must not trigger MRT601"
+
+
+# --- --since / --min-revision (dependency-graph scoping) ---
+
+
+def _chain(tmp_path):
+    """Build a three-migration chain 0001 -> 0002 (drop) -> 0003 (drop)."""
+    django_migration(
+        tmp_path,
+        "0001_initial.py",
+        """
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = []
+            operations = []
+    """,
+    )
+    django_migration(
+        tmp_path,
+        "0002_drop_phone.py",
+        """
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.RemoveField(model_name='user', name='phone'),
+            ]
+    """,
+    )
+    django_migration(
+        tmp_path,
+        "0003_drop_bio.py",
+        """
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0002_drop_phone')]
+            operations = [
+                migrations.RemoveField(model_name='user', name='bio'),
+            ]
+    """,
+    )
+
+
+def test_since_includes_only_dependents(tmp_path):
+    """--since scopes analysis to migrations that transitively depend on it."""
+    _chain(tmp_path)
+    # since 0002 -> only 0003 is a dependent; 0002's own drop is excluded.
+    warnings = analyze_django_migrations(str(tmp_path), since="myapp.0002_drop_phone")
+    names = {w.revision for w in warnings}
+    assert "myapp.0003_drop_bio" in names
+    assert "myapp.0002_drop_phone" not in names
+
+
+def test_since_root_includes_all_dependents(tmp_path):
+    """--since the root migration includes every later migration."""
+    _chain(tmp_path)
+    warnings = analyze_django_migrations(str(tmp_path), since="myapp.0001_initial")
+    names = {w.revision for w in warnings}
+    assert "myapp.0002_drop_phone" in names
+    assert "myapp.0003_drop_bio" in names
+
+
+def test_since_unknown_revision_yields_nothing(tmp_path):
+    """--since an unknown key selects no migrations."""
+    _chain(tmp_path)
+    warnings = analyze_django_migrations(str(tmp_path), since="myapp.9999_missing")
+    assert warnings == []
+
+
+def test_min_revision_intersects_with_since(tmp_path):
+    """--since and --min-revision are intersected."""
+    _chain(tmp_path)
+    # since 0001 -> {0002, 0003}; min_revision 0002 -> {0003}; intersection -> {0003}.
+    warnings = analyze_django_migrations(
+        str(tmp_path),
+        since="myapp.0001_initial",
+        min_revision="myapp.0002_drop_phone",
+    )
+    names = {w.revision for w in warnings}
+    assert names == {"myapp.0003_drop_bio"}
+
+
+def test_min_revision_alone(tmp_path):
+    """--min-revision alone scopes to its dependents."""
+    _chain(tmp_path)
+    warnings = analyze_django_migrations(str(tmp_path), min_revision="myapp.0002_drop_phone")
+    names = {w.revision for w in warnings}
+    assert names == {"myapp.0003_drop_bio"}
