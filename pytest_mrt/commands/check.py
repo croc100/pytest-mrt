@@ -163,15 +163,16 @@ def check(
             )
             raise typer.Exit(1)
 
-        console.print(
-            f"[dim]--since {since}: checking {len(since_set)} migration(s) after this point[/dim]"
-        )
-        console.print(
-            "[dim]Note: graph checks (orphan, data-hole detection) skipped — "
-            "run without --since for full analysis.[/dim]"
-        )
+        if fmt == "table":
+            console.print(
+                f"[dim]--since {since}: checking {len(since_set)} migration(s) after this point[/dim]"
+            )
+            console.print(
+                "[dim]Note: graph checks (orphan, data-hole detection) skipped — "
+                "run without --since for full analysis.[/dim]"
+            )
 
-    if is_django:
+    if is_django and fmt == "table":
         console.print("[dim]Detected: Django migrations[/dim]")
 
     if min_revision:
@@ -190,11 +191,12 @@ def check(
                 "Check the revision ID and try again.[/yellow]"
             )
             raise typer.Exit(1)
-        console.print(
-            f"[dim]--min-revision {min_revision}: checking {len(min_set)} newer migration(s), older ones skipped[/dim]"
-        )
+        if fmt == "table":
+            console.print(
+                f"[dim]--min-revision {min_revision}: checking {len(min_set)} newer migration(s), older ones skipped[/dim]"
+            )
 
-    if check_compat:
+    if check_compat and fmt == "table":
         console.print(
             "[dim]--check-compat: rolling-deploy compatibility checks enabled (MRT7xx)[/dim]"
         )

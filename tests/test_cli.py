@@ -293,6 +293,43 @@ def test_check_detects_django_migrations(tmp_path):
     assert "Django" in result.output or result.exit_code == 0
 
 
+def test_check_compat_json_output_is_pure_json_alembic(tmp_path, versions_dir):
+    """--check-compat --format json must not leak the status preamble into stdout."""
+    import json
+
+    _risky_migration(versions_dir)
+    result = runner.invoke(
+        app, ["check", str(versions_dir), "--check-compat", "--format", "json"]
+    )
+    data = json.loads(result.output)  # would raise if preamble leaked
+    assert "findings" in data
+
+
+def test_check_compat_json_output_is_pure_json_django(tmp_path):
+    """Django + --check-compat + --format json emits parseable JSON with MRT7xx codes."""
+    import json
+
+    d = tmp_path / "myapp" / "migrations"
+    d.mkdir(parents=True)
+    (d / "0001_initial.py").write_text(
+        "from django.db import migrations\n"
+        "class Migration(migrations.Migration):\n"
+        "    dependencies = []\n"
+        "    operations = []\n"
+    )
+    (d / "0002_rename.py").write_text(
+        "from django.db import migrations\n"
+        "class Migration(migrations.Migration):\n"
+        "    dependencies = [('myapp', '0001_initial')]\n"
+        "    operations = [migrations.RenameField("
+        "model_name='u', old_name='a', new_name='b')]\n"
+    )
+    result = runner.invoke(app, ["check", str(d), "--check-compat", "--format", "json"])
+    data = json.loads(result.output)
+    assert any(f["rule"] == "MRT702" for f in data["findings"])
+    assert result.exit_code == 2
+
+
 def test_check_empty_directory_exits_0(tmp_path):
     empty = tmp_path / "empty"
     empty.mkdir()
