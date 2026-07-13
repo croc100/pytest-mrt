@@ -160,7 +160,6 @@ def test_check_watch_runs_once_then_stops(tmp_path, versions_dir):
     """Watch mode runs the check once and exits cleanly on KeyboardInterrupt."""
     _safe_migration(versions_dir)
     from unittest.mock import patch
-    import time
 
     call_count = 0
 
@@ -684,6 +683,7 @@ def test_drift_missing_alembic_ini_exits_1(tmp_path):
     """mrt drift exits 1 when alembic.ini does not exist."""
     import sys
     import types
+
     import sqlalchemy as sa
 
     # Register a valid metadata module so metadata loading succeeds,
@@ -739,9 +739,10 @@ def test_drift_no_drift_exits_0(tmp_path):
 
 def test_drift_with_drift_exits_1(tmp_path):
     """mrt drift exits 1 and lists differences when the model has an extra column."""
-    import sqlalchemy as sa
     import sys
     import types
+
+    import sqlalchemy as sa
 
     ini, _, db_url = _alembic_env(tmp_path)
 

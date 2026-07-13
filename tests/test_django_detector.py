@@ -699,3 +699,182 @@ def test_min_revision_alone(tmp_path):
     warnings = analyze_django_migrations(str(tmp_path), min_revision="myapp.0002_drop_phone")
     names = {w.revision for w in warnings}
     assert names == {"myapp.0003_drop_bio"}
+
+# ── rolling-deploy compat checks (MRT7xx, --check-compat) ──────────────────
+
+
+def test_compat_off_by_default(tmp_path):
+    """Compat checks (MRT701) only run when check_compat=True."""
+    django_migration(
+        tmp_path,
+        "0002_remove.py",
+        """
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.RemoveField(model_name='user', name='phone'),
+            ]
+    """,
+    )
+    codes = [w.code for w in analyze_django_migrations(str(tmp_path))]
+    assert "MRT701" not in codes
+    codes_on = [w.code for w in analyze_django_migrations(str(tmp_path), check_compat=True)]
+    assert "MRT701" in codes_on
+
+
+def test_compat_rename_field_mrt702(tmp_path):
+    django_migration(
+        tmp_path,
+        "0002_rename.py",
+        """
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.RenameField(model_name='user', old_name='phone', new_name='mobile'),
+            ]
+    """,
+    )
+    warnings = analyze_django_migrations(str(tmp_path), check_compat=True)
+    assert any(w.code == "MRT702" and w.severity == "error" for w in warnings)
+
+
+def test_compat_delete_model_mrt703(tmp_path):
+    django_migration(
+        tmp_path,
+        "0002_delete.py",
+        """
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.DeleteModel(name='OldThing'),
+            ]
+    """,
+    )
+    warnings = analyze_django_migrations(str(tmp_path), check_compat=True)
+    assert any(w.code == "MRT703" for w in warnings)
+
+
+def test_compat_rename_model_mrt703(tmp_path):
+    django_migration(
+        tmp_path,
+        "0002_renamemodel.py",
+        """
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.RenameModel(old_name='User', new_name='Account'),
+            ]
+    """,
+    )
+    warnings = analyze_django_migrations(str(tmp_path), check_compat=True)
+    assert any(w.code == "MRT703" for w in warnings)
+
+
+def test_compat_alter_model_table_mrt703(tmp_path):
+    django_migration(
+        tmp_path,
+        "0002_altertable.py",
+        """
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.AlterModelTable(name='user', table='accounts'),
+            ]
+    """,
+    )
+    warnings = analyze_django_migrations(str(tmp_path), check_compat=True)
+    assert any(w.code == "MRT703" for w in warnings)
+
+
+def test_compat_add_field_not_null_mrt704(tmp_path):
+    django_migration(
+        tmp_path,
+        "0002_add.py",
+        """
+        from django.db import migrations, models
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.AddField(
+                    model_name='user',
+                    name='score',
+                    field=models.IntegerField(null=False),
+                ),
+            ]
+    """,
+    )
+    warnings = analyze_django_migrations(str(tmp_path), check_compat=True)
+    assert any(w.code == "MRT704" for w in warnings)
+
+
+def test_compat_add_field_with_default_ok(tmp_path):
+    django_migration(
+        tmp_path,
+        "0002_add.py",
+        """
+        from django.db import migrations, models
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.AddField(
+                    model_name='user',
+                    name='score',
+                    field=models.IntegerField(default=0),
+                ),
+            ]
+    """,
+    )
+    warnings = analyze_django_migrations(str(tmp_path), check_compat=True)
+    assert not any(w.code == "MRT704" for w in warnings)
+
+
+def test_compat_add_field_nullable_ok(tmp_path):
+    django_migration(
+        tmp_path,
+        "0002_add.py",
+        """
+        from django.db import migrations, models
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.AddField(
+                    model_name='user',
+                    name='score',
+                    field=models.IntegerField(null=True),
+                ),
+            ]
+    """,
+    )
+    warnings = analyze_django_migrations(str(tmp_path), check_compat=True)
+    assert not any(w.code == "MRT704" for w in warnings)
+
+
+def test_compat_noqa_suppresses_mrt701(tmp_path):
+    django_migration(
+        tmp_path,
+        "0002_remove.py",
+        """
+        from django.db import migrations
+
+        class Migration(migrations.Migration):
+            dependencies = [('myapp', '0001_initial')]
+            operations = [
+                migrations.RemoveField(model_name='user', name='phone'),  # noqa: MRT701
+            ]
+    """,
+    )
+    warnings = analyze_django_migrations(str(tmp_path), check_compat=True)
+    assert not any(w.code == "MRT701" for w in warnings)

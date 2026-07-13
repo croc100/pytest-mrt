@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from pytest_mrt.core.ast_analyzer import MigrationAST
 from pytest_mrt.core.compat import analyze_compat
 

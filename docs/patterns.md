@@ -488,25 +488,35 @@ These checks are opt-in via `mrt check --check-compat`. They flag operations tha
 
 Run rollback-safety checks (`mrt check`) always. Add `--check-compat` when your deployment strategy involves rolling restarts rather than a full stop/start.
 
+MRT701–MRT704 are supported for **both Alembic and Django**. The table below maps each code to the operation that triggers it in each backend. MRT705 (type change) is Alembic-only — Django's `AlterField` carries the full field definition with no reference to the previous type, so a type change cannot be detected statically.
+
+| Code | Alembic | Django |
+|------|---------|--------|
+| MRT701 | `op.drop_column` | `migrations.RemoveField` |
+| MRT702 | `op.alter_column(new_column_name=…)` | `migrations.RenameField` |
+| MRT703 | `op.drop_table` | `migrations.DeleteModel` / `RenameModel` / `AlterModelTable` |
+| MRT704 | `op.add_column` NOT NULL w/o `server_default` | `migrations.AddField` NOT NULL w/o default |
+| MRT705 | `op.alter_column(type_=…)` | — (Alembic only) |
+
 ### MRT701 — DROP COLUMN during rolling deploy (error)
 
-Dropping a column immediately breaks any old app instance that still references it via ORM or raw SQL. The fix is a two-step process:
+Dropping a column (Alembic `op.drop_column`, Django `RemoveField`) immediately breaks any old app instance that still references it via ORM or raw SQL. The fix is a two-step process:
 
 1. Remove all code references to the column, then deploy the code change.
 2. Drop the column in a follow-up migration after all instances are on the new code.
 
 ### MRT702 — RENAME COLUMN during rolling deploy (error)
 
-Renaming a column breaks old app instances referencing the old name. Use the expand-contract pattern: add the new column, backfill data, update code to use the new name, deploy, then drop the old column.
+Renaming a column (Alembic `alter_column(new_column_name=…)`, Django `RenameField`) breaks old app instances referencing the old name. Use the expand-contract pattern: add the new column, backfill data, update code to use the new name, deploy, then drop the old column.
 
 ### MRT703 — DROP TABLE during rolling deploy (error)
 
-Dropping a table crashes old app instances that query it. Remove all ORM models and direct references, deploy, then drop the table.
+Dropping a table (Alembic `drop_table`, Django `DeleteModel`) crashes old app instances that query it. Remove all ORM models and direct references, deploy, then drop the table. For Django, `RenameModel` and `AlterModelTable` also fire MRT703 because they change the table name under the old app.
 
-### MRT704 — ADD NOT NULL column without server_default (error)
+### MRT704 — ADD NOT NULL column without default (error)
 
-Adding a NOT NULL column without a `server_default` causes INSERT failures from old app instances that don't know about the new column. Add a `server_default` to handle inserts from the old app, or make the column nullable initially.
+Adding a NOT NULL column without a default (Alembic `server_default`, Django `default`) causes INSERT failures from old app instances that don't know about the new column. Add a default to handle inserts from the old app, or make the column nullable initially.
 
-### MRT705 — Column type change during rolling deploy (warning)
+### MRT705 — Column type change during rolling deploy (warning, Alembic only)
 
-Changing a column's type may cause type errors in old app instances. VARCHAR widening (e.g. VARCHAR(100) -> VARCHAR(255)) is generally safe. Type narrowing, kind changes (e.g. INTEGER -> BIGINT on some databases), or precision changes are not.
+Changing a column's type (Alembic `alter_column(type_=…)`) may cause type errors in old app instances. VARCHAR widening (e.g. VARCHAR(100) -> VARCHAR(255)) is generally safe. Type narrowing, kind changes (e.g. INTEGER -> BIGINT on some databases), or precision changes are not. Not detectable for Django (see note above).

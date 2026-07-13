@@ -645,6 +645,7 @@ def analyze_django_migrations(
     migrations_dir: str,
     since: str | None = None,
     min_revision: str | None = None,
+    check_compat: bool = False,
 ) -> list[RiskWarning]:
     """Analyze Django migration files for rollback risk patterns.
 
@@ -655,6 +656,8 @@ def analyze_django_migrations(
                in CI to limit analysis to the migrations added in a branch.
         min_revision: If given, skip migrations at or older than this point.
                The two sets are intersected when both are provided.
+        check_compat: If True, also run rolling-deploy compatibility checks
+               (MRT7xx) in addition to the rollback-safety checks.
     """
     since_set: set[str] | None = None
     if since is not None:
@@ -690,7 +693,12 @@ def analyze_django_migrations(
             )
             continue
         source_lines = path.read_text().splitlines()
-        for check in _DJANGO_CHECKS:
+        checks = list(_DJANGO_CHECKS)
+        if check_compat:
+            from .django_compat import analyze_django_compat
+
+            checks.append(analyze_django_compat)
+        for check in checks:
             for w in check(m):
                 if (
                     w.line is not None

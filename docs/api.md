@@ -379,7 +379,7 @@ mrt check alembic/versions/ --check-compat
 | `--since` | `None` | Only check migrations added after this revision. Alembic: revision ID. Django: `app_label.migration_name`. Graph checks (orphan, data-hole detection) are skipped when `--since` is active. |
 | `--min-revision` | `None` | Skip revisions at or older than this point. Alembic: revision ID. Django: `app_label.migration_name`. Mirrors `MRTConfig.minimum_downgrade_revision`. |
 | `--watch` / `-w` | `False` | Re-run automatically when migration files change. `--format table` only. Ctrl-C to stop. |
-| `--check-compat` | `False` | Also run rolling-deploy compatibility checks (MRT701–MRT705). Alembic only. |
+| `--check-compat` | `False` | Also run rolling-deploy compatibility checks (MRT701–MRT705). Alembic and Django (MRT705 type-change detection is Alembic-only). |
 
 **Exit codes:** `0` = no findings, `1` = warnings only, `2` = one or more errors (or warnings with `--strict`)
 

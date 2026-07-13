@@ -7,6 +7,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.7.0] — 2026-07-14
+
+### Added
+- **`mrt check --check-compat` now supports Django migrations.** Rolling-deploy compatibility checks (MRT7xx) were previously Alembic-only. Django operations are now mapped to the same patterns: `RemoveField` → MRT701 (DROP COLUMN), `RenameField` → MRT702 (RENAME COLUMN), `DeleteModel`/`RenameModel`/`AlterModelTable` → MRT703 (DROP/RENAME TABLE), and `AddField` NOT NULL without a default → MRT704. Per-line `# noqa: MRTxxx` suppression works for these too. MRT705 (column type change) remains Alembic-only — Django's `AlterField` carries the full field with no reference to the previous type, so a type change cannot be detected statically.
+
+### Removed
+- The "`--check-compat` is not yet supported for Django migrations" warning, now that it is supported.
+
+---
+
 ## [1.6.0] — 2026-06-17
 
 ### Added
