@@ -135,8 +135,9 @@ def test_django_mode_seed_inserts_rows_and_tracks_them(django_runner):
     Django mode (self._seeder = SmartSeeder(self._django_runner.engine)).
     Verifies the crash fix (self._runner is None) and the tracking logic.
     """
-    from pytest_mrt.core.seeder import SmartSeeder
     from sqlalchemy import text
+
+    from pytest_mrt.core.seeder import SmartSeeder
 
     # Ensure django_app migrations are applied — prior tests may have downgraded
     django_runner.upgrade("django_app", "0001_initial")
@@ -165,9 +166,10 @@ def test_django_mode_mrt_fixture_seed(django_runner):
     Django is already configured by the module-scoped fixture.
     DjangoMigrationRunner.__init__ is idempotent when Django is already set up.
     """
+    from sqlalchemy import text
+
     from pytest_mrt.config import MRTConfig
     from pytest_mrt.plugin import MRTFixture
-    from sqlalchemy import text
 
     # Ensure the widget table exists
     django_runner.upgrade("django_app", "0001_initial")

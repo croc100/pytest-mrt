@@ -23,7 +23,9 @@ def _collect_warnings(
     check_compat: bool = False,
 ) -> list:
     if is_django:
-        warnings = analyze_django_migrations(versions_dir, since=since, min_revision=min_revision)
+        warnings = analyze_django_migrations(
+            versions_dir, since=since, min_revision=min_revision, check_compat=check_compat
+        )
     else:
         warnings = analyze_migrations(versions_dir, since=since, min_revision=min_revision)
 
@@ -123,8 +125,9 @@ def check(
         help=(
             "Also run rolling-deploy compatibility checks (MRT7xx). "
             "Flags operations that break the old app during a rolling deploy: "
-            "DROP COLUMN, RENAME COLUMN, DROP TABLE, ADD NOT NULL without server_default. "
-            "Alembic only."
+            "DROP/RENAME COLUMN, DROP/RENAME TABLE, ADD NOT NULL without default. "
+            "Supported for both Alembic and Django (Django MRT705 type-change "
+            "detection is Alembic-only)."
         ),
     ),
 ) -> None:
@@ -190,13 +193,6 @@ def check(
         console.print(
             f"[dim]--min-revision {min_revision}: checking {len(min_set)} newer migration(s), older ones skipped[/dim]"
         )
-
-    if check_compat and is_django:
-        console.print(
-            "[yellow]Warning: --check-compat is not yet supported for Django migrations. "
-            "Compat checks will be skipped.[/yellow]"
-        )
-        check_compat = False
 
     if check_compat:
         console.print(

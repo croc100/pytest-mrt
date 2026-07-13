@@ -263,6 +263,14 @@ Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
 
 The key difference from pytest-alembic: pytest-mrt seeds actual rows before each rollback and verifies they survive. A migration that reverses the schema cleanly but silently destroys data will pass pytest-alembic and fail pytest-mrt.
 
+## What's new in v1.7.0
+
+- **`mrt check --check-compat` now works for Django migrations.** Rolling-deploy compatibility checks (MRT7xx) were Alembic-only; Django operations now map to the same patterns — `RemoveField` (MRT701), `RenameField` (MRT702), `DeleteModel`/`RenameModel`/`AlterModelTable` (MRT703), and `AddField` NOT NULL without a default (MRT704). MRT705 (type change) stays Alembic-only.
+
+```bash
+mrt check myapp/migrations/ --check-compat
+```
+
 ## What's new in v1.6.0
 
 - **Fine-grained migration step control** — `upgrade_to()`, `upgrade_one()`, `downgrade_one()`, `downgrade_to()`, `current_revision()` let you test data migration logic at any point in the chain:

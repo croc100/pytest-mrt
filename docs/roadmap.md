@@ -6,7 +6,11 @@ Items are tracked as GitHub issues. This page is a high-level overview.
 
 ## Shipped
 
-### v1.6.0 — Fine-grained step control (main, pending release)
+### v1.7.0 — Django rolling-deploy compatibility (main, pending release)
+
+- `mrt check --check-compat` now supports Django migrations (MRT701–MRT704), mapping `RemoveField`/`RenameField`/`DeleteModel`/`RenameModel`/`AlterModelTable`/`AddField` to the same rolling-deploy patterns as Alembic. MRT705 (type change) remains Alembic-only.
+
+### v1.6.0 — Fine-grained step control
 
 - `upgrade_to()`, `upgrade_one()`, `downgrade_one()`, `downgrade_to()`, `current_revision()` — test data migration logic at any intermediate point in the migration chain
 
@@ -48,10 +52,6 @@ Items are tracked as GitHub issues. This page is a high-level overview.
 ### Django squashmigrations: dynamic rollback testing
 
 Static detection of squashmigrations is already in v1.4.0 (MRT601/MRT602). The next step is dynamic verification: run the rollback plan through the squashed migration graph and verify it succeeds. Currently skipped in `check_all()`.
-
-### `--check-compat` Django support
-
-Rolling-deploy compatibility checks (`--check-compat`, MRT7xx) are currently Alembic-only. Extending to Django migrations requires mapping Django operation types to the same compat patterns.
 
 ### Per-pattern confidence scores
 
