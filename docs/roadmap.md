@@ -27,6 +27,25 @@ tool *verifies*. Anything that cannot answer the question above is a candidate f
 
 ## Shipped
 
+### v1.9.1 — Import hygiene
+
+- `mrt` starts about twice as fast: `import pytest_mrt` no longer pulls SQLAlchemy in through `MRTTestCase`, which now loads on first use. `mrt --help` went from 0.34s to 0.19s.
+- Function-local imports cut from 104 to 36; each remaining one states why it stays.
+
+### v1.9.0 — Correctness hardening
+
+- `MRTTestCase.assertDataIntact()` now quotes SQL identifiers, so reserved-word and mixed-case table names work.
+- All file reads state `encoding="utf-8"`, so migrations containing non-ASCII text work off UTF-8 locales.
+- `mrt check --since` no longer skips descendants of migrations that use `swappable_dependency`.
+- `mrt explain` exits 1 on failure and takes `--model`. `MRTConfig.explain_model` is deprecated — it was never read.
+
+### v1.8.0 — Supported versions and toolchain
+
+- Python 3.14 declared and primary in CI; 3.15 runs as a non-blocking prerelease leg.
+- Django matrix moves to 5.2 LTS / 6.0 / 6.1; the `django` extra floor is `>=4.2`.
+- The `postgres` extra installs psycopg 3 alongside psycopg2, since SQLAlchemy 2.1 resolves a bare `postgresql://` URL to psycopg 3.
+- CI services: PostgreSQL 18, MySQL 8.4 LTS, SQL Server 2025.
+
 ### v1.7.0 — Django rolling-deploy compatibility
 
 - `mrt check --check-compat` now supports Django migrations (MRT701–MRT704), mapping `RemoveField`/`RenameField`/`DeleteModel`/`RenameModel`/`AlterModelTable`/`AddField` to the same rolling-deploy patterns as Alembic. MRT705 (type change) remains Alembic-only.

@@ -362,6 +362,6 @@ Run `alembic upgrade head` on your test database first, then run the tests again
 
 ## What to read next
 
-- [All 44 risk patterns explained →](patterns.md)
+- [All 45 risk patterns explained →](patterns.md)
 - [CLI reference →](cli.md)
 - [Contributing a new pattern →](contributing.md)

@@ -52,7 +52,7 @@ Most tools verify that migrations *run* without errors.
 pytest-mrt verifies that your data *survives* a rollback.
 
 It seeds real rows before each migration, rolls back, and checks nothing was lost.
-It also statically scans migration files for 44 known dangerous patterns across both Alembic and Django migrations.
+It also statically scans migration files for 45 known dangerous patterns across both Alembic and Django migrations (52 rule codes in total, counting the 5 rolling-deploy checks and 2 migration-graph checks).
 
 ## Install
 
@@ -167,14 +167,14 @@ Add to `.pre-commit-config.yaml` to run `mrt check` automatically before every p
 ```yaml
 # Alembic
 - repo: https://github.com/croc100/pytest-mrt
-  rev: v1.8.0
+  rev: v1.9.1
   hooks:
     - id: mrt-check
       args: [alembic/versions/]
 
 # Django
 - repo: https://github.com/croc100/pytest-mrt
-  rev: v1.8.0
+  rev: v1.9.1
   hooks:
     - id: mrt-check
       args: [myapp/migrations/]
@@ -254,7 +254,7 @@ Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
 
 | | pytest-mrt | [pytest-alembic](https://github.com/schireson/pytest-alembic) | [alembic check](https://alembic.sqlalchemy.org/en/latest/ops.html#alembic.operations.Operations.check) | [django-test-migrations](https://github.com/wemake-services/django-test-migrations) |
 |---|:---:|:---:|:---:|:---:|
-| Static analysis (no DB required) | ✅ 44 patterns | ❌ | ❌ | ❌ |
+| Static analysis (no DB required) | ✅ 45 patterns | ❌ | ❌ | ❌ |
 | Dynamic rollback testing | ✅ | ✅ | ❌ | ✅ |
 | **Data survival check** (seeds rows, verifies after rollback) | ✅ | ❌ schema only | ❌ | ❌ |
 | Django support | ✅ | ❌ | ❌ | ✅ |
@@ -263,26 +263,19 @@ Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
 
 The key difference from pytest-alembic: pytest-mrt seeds actual rows before each rollback and verifies they survive. A migration that reverses the schema cleanly but silently destroys data will pass pytest-alembic and fail pytest-mrt.
 
+## What's new in v1.9.x
+
+- **`mrt` starts about twice as fast** (v1.9.1) — `import pytest_mrt` no longer pulls SQLAlchemy in through `MRTTestCase`, so `mrt --help` went from 0.34s to 0.19s.
+- **`mrt explain --model`** (v1.9.0) selects the Claude model, and `mrt explain` now exits 1 when the request fails instead of reporting success. `MRTConfig.explain_model` is deprecated — it was never read.
+- **Correctness fixes** (v1.9.0) — `MRTTestCase.assertDataIntact()` quotes SQL identifiers, so a table named `order` works; migration files are read as UTF-8, so non-ASCII text works off UTF-8 locales; `--since` no longer skips descendants of migrations using `swappable_dependency`.
+- **Current versions** (v1.8.0) — Python 3.14, Django 5.2 LTS / 6.0 / 6.1, psycopg 3, SQLAlchemy 2.1.
+
 ## What's new in v1.7.0
 
 - **`mrt check --check-compat` now works for Django migrations.** Rolling-deploy compatibility checks (MRT7xx) were Alembic-only; Django operations now map to the same patterns — `RemoveField` (MRT701), `RenameField` (MRT702), `DeleteModel`/`RenameModel`/`AlterModelTable` (MRT703), and `AddField` NOT NULL without a default (MRT704). MRT705 (type change) stays Alembic-only.
 
 ```bash
 mrt check myapp/migrations/ --check-compat
-```
-
-## What's new in v1.6.0
-
-- **Fine-grained migration step control** — `upgrade_to()`, `upgrade_one()`, `downgrade_one()`, `downgrade_to()`, `current_revision()` let you test data migration logic at any point in the chain:
-
-```python
-def test_data_migration(mrt):
-    mrt.upgrade_to("abc123")          # upgrade to a specific revision
-    mrt.seed("users", [...])          # seed data at that checkpoint
-    mrt.upgrade_one()                 # apply exactly one more step
-    assert mrt.current_revision() == "def456"
-    mrt.downgrade_one()               # roll back one step
-    mrt.downgrade_to("base")          # roll all the way back
 ```
 
 ## Migrating from v1.4.x
@@ -300,7 +293,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 Full docs at **[croc100.github.io/pytest-mrt](https://croc100.github.io/pytest-mrt)**
 
 - [Getting started (step-by-step)](https://croc100.github.io/pytest-mrt/quickstart/)
-- [All 44 patterns explained](https://croc100.github.io/pytest-mrt/patterns/)
+- [All 45 patterns explained](https://croc100.github.io/pytest-mrt/patterns/)
 - [CLI & fixture reference](https://croc100.github.io/pytest-mrt/cli/)
 - [Detection accuracy report](docs/accuracy.md) — what each pattern catches and doesn't catch
 - [API reference](docs/api.md) — stable public API

@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current status: Production/Stable (v1.9.0 on PyPI and main)
+## Current status: Production/Stable (v1.9.1 on PyPI and main)
 
 pytest-mrt is production-ready. The core API (`MRTConfig`, `mrt` fixture, `mrt check`) is stable and
 breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the stability guarantee.
@@ -58,7 +58,7 @@ tool *verifies*. Anything that cannot answer the question above is a candidate f
 - PostgreSQL, SQLite, MySQL/MariaDB dynamic verification
 - Oracle, SQL Server dynamic verification
 - Alembic + Django migration support (static + dynamic)
-- 44 static analysis patterns
+- 44 static analysis patterns (45 as of v1.2.0, with MRT213 added)
 - Zero false-positive guarantee on the pattern test suite
 - Public detection accuracy report
 - Stable plugin API for custom patterns
@@ -112,9 +112,43 @@ tool *verifies*. Anything that cannot answer the question above is a candidate f
 
 ---
 
-## v1.6.0 — Fine-grained step control (shipped on main, pending release)
+## v1.6.0 — Fine-grained step control (shipped)
 
 - **`upgrade_to(revision)`**, **`upgrade_one()`**, **`downgrade_one()`**, **`downgrade_to(revision)`**, **`current_revision()`** — call any migration step from a test, enabling mid-chain data seeding and assertion
+
+---
+
+## v1.7.0 — Django rolling-deploy compatibility (shipped)
+
+- **`mrt check --check-compat` for Django** — `RemoveField` (MRT701), `RenameField` (MRT702), `DeleteModel`/`RenameModel`/`AlterModelTable` (MRT703), `AddField` NOT NULL without a default (MRT704). MRT705 (type change) stays Alembic-only, since Django's `AlterField` carries no reference to the previous type
+- **Fixed** `--format json` leaking human-readable status lines into stdout, which made the output unparseable
+
+---
+
+## v1.8.0 — Supported versions and toolchain (shipped)
+
+- **Python 3.14** declared and used as the primary CI version; 3.15 runs as a non-blocking prerelease leg
+- **Django 5.2 LTS / 6.0 / 6.1** replace the end-of-life 4.2/5.0/5.1 matrix; the `django` extra floor moves to `>=4.2`
+- **psycopg 3 alongside psycopg2** in the `postgres` extra, because SQLAlchemy 2.1 resolves a bare `postgresql://` URL to psycopg 3
+- Dependency floors raised to versions that are actually tested: `pytest>=8.0`, `alembic>=1.13`, `typer>=0.12`, `anthropic>=1.0`
+- CI services on PostgreSQL 18, MySQL 8.4 LTS, SQL Server 2025
+
+---
+
+## v1.9.0 — Correctness hardening (shipped)
+
+- **Fixed** `MRTTestCase.assertDataIntact()` building SQL with unquoted identifiers, which broke on reserved-word and mixed-case table names
+- **Fixed** file reads using the locale encoding, which broke non-ASCII migrations off UTF-8 locales
+- **Fixed** `--since` silently skipping descendants of migrations using `swappable_dependency`
+- **Fixed** `mrt explain` exiting 0 on failure; added `--model` to select the Claude model
+- **Deprecated** `MRTConfig.explain_model` — it was never read; `mrt explain --model` replaces it
+
+---
+
+## v1.9.1 — Import hygiene (shipped)
+
+- **`mrt` starts about twice as fast** — `import pytest_mrt` no longer drags SQLAlchemy in through `MRTTestCase`, which now loads on first use (`mrt --help` 0.34s to 0.19s)
+- Function-local imports cut from 104 to 36; the ones that remain document why they stay
 
 ---
 
