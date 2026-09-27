@@ -85,9 +85,7 @@ Migration file ({path.name}):
             ],
         )
 
-        explanation = next(
-            (block.text for block in message.content if block.type == "text"), ""
-        )
+        explanation = next((block.text for block in message.content if block.type == "text"), "")
         console.print()
         console.print(Panel(explanation, title=f"[bold]{path.name}[/bold]", border_style="blue"))
 

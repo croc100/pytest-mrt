@@ -14,6 +14,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - **Dependency floors raised to versions that are actually tested:** `pytest>=8.0` (was `>=7.0`), `alembic>=1.13` (was `>=1.9`), `typer>=0.12` (was `>=0.9`), and `anthropic>=1.0` for the `ai` extra (was `>=0.25`, predating the 1.x SDK). SQLAlchemy stays at `>=2.0` and is verified against 2.1.
 - **`mrt explain` defaults to `claude-opus-5`** (was `claude-opus-4-5`) and requests a 16K output budget instead of 1K, so long migrations are no longer truncated mid-explanation. The response is now read from the first text block rather than positionally, so it stays correct when a response carries non-text blocks.
 - **CI service images updated** to PostgreSQL 18, MySQL 8.4 LTS and SQL Server 2025.
+- **The `postgres` extra now installs psycopg 3 alongside psycopg2.** SQLAlchemy 2.1 changed which driver a bare `postgresql://` URL resolves to (2.0 picks psycopg2, 2.1 picks psycopg 3), so a plain URL with only psycopg2 installed fails with `ModuleNotFoundError: No module named 'psycopg'` on SQLAlchemy 2.1. Shipping both drivers keeps plain `postgresql://` URLs working under either SQLAlchemy version; spell `postgresql+psycopg2://` or `postgresql+psycopg://` to pin one explicitly.
+- **Example CI configs and the quickstart CI snippet refreshed** — `actions/checkout@v7`, `actions/setup-python@v6`, Python 3.14, and `pip install "pytest-mrt[postgres]"` instead of naming a driver by hand.
 - **Tooling pins refreshed** in `.pre-commit-config.yaml`: pre-commit-hooks v6.0.0, ruff v0.16.9, mypy v2.3.1. The package is clean under all three.
 - The example project's `alembic.ini` declares `path_separator = os`, silencing Alembic's legacy `version_locations` splitting deprecation.
 

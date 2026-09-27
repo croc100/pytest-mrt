@@ -257,14 +257,14 @@ jobs:
           - 5432:5432
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - name: Install dependencies
-        run: pip install pytest-mrt psycopg2-binary alembic
+        run: pip install "pytest-mrt[postgres]" alembic
 
       - name: Static migration check (fast, no DB)
         run: mrt check migrations/versions/
