@@ -1,12 +1,27 @@
 from __future__ import annotations
 
+import json
+import re
+import sys
+import time
+from datetime import datetime, timezone
+from importlib.metadata import version as pkg_version
+from pathlib import Path
+
 import typer
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from ..adapters.django_detector import analyze_django_migrations, is_django_migration
-from ..core.detector import analyze_migrations
+from ..adapters.django_detector import (
+    _django_migrations_since,
+    analyze_django_migrations,
+    is_django_migration,
+)
+from ..core.ast_analyzer import MigrationAST
+from ..core.compat import analyze_compat
+from ..core.detector import _revisions_since, analyze_migrations
+from ..core.html_report import generate_html_report
 
 console = Console()
 
@@ -30,13 +45,7 @@ def _collect_warnings(
         warnings = analyze_migrations(versions_dir, since=since, min_revision=min_revision)
 
     if check_compat and not is_django:
-        import re
-        from pathlib import Path as _Path
-
-        from ..core.ast_analyzer import MigrationAST
-        from ..core.compat import analyze_compat
-
-        for path in sorted(_Path(versions_dir).rglob("*.py")):
+        for path in sorted(Path(versions_dir).rglob("*.py")):
             source = path.read_text(encoding="utf-8")
             m_rev = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
             revision = m_rev.group(1) if m_rev else path.stem
@@ -132,9 +141,7 @@ def check(
     ),
 ) -> None:
     """Statically analyze migrations for rollback risk patterns (Alembic and Django)."""
-    from pathlib import Path as _Path
-
-    _path = _Path(versions_dir)
+    _path = Path(versions_dir)
     if not _path.exists():
         console.print(f"[red]Error: path does not exist: {versions_dir}[/red]")
         raise typer.Exit(1)
@@ -148,12 +155,8 @@ def check(
     if since:
         # Validate that --since actually matches something before running analysis.
         if is_django:
-            from ..adapters.django_detector import _django_migrations_since
-
             since_set = _django_migrations_since(versions_dir, since)
         else:
-            from ..core.detector import _revisions_since
-
             since_set = _revisions_since(versions_dir, since)
 
         if not since_set:
@@ -177,12 +180,8 @@ def check(
 
     if min_revision:
         if is_django:
-            from ..adapters.django_detector import _django_migrations_since
-
             min_set = _django_migrations_since(versions_dir, min_revision)
         else:
-            from ..core.detector import _revisions_since
-
             min_set = _revisions_since(versions_dir, min_revision)
 
         if not min_set:
@@ -220,11 +219,6 @@ def check(
     )
 
     if fmt == "json":
-        import json
-        import sys
-        from datetime import datetime, timezone
-        from importlib.metadata import version as pkg_version
-
         try:
             _ver = pkg_version("pytest-mrt")
         except Exception:
@@ -255,9 +249,7 @@ def check(
         }
         json_text = json.dumps(payload, indent=2) + "\n"
         if output:
-            from pathlib import Path as _Path
-
-            _Path(output).write_text(json_text, encoding="utf-8")
+            Path(output).write_text(json_text, encoding="utf-8")
             console.print(f"[green]✓ JSON report saved to [bold]{output}[/bold][/green]")
         else:
             sys.stdout.write(json_text)
@@ -270,16 +262,12 @@ def check(
         raise typer.Exit(0)
 
     if fmt == "html":
-        from pathlib import Path as _Path
-
-        from ..core.html_report import generate_html_report
-
         html = generate_html_report(versions_dir, warnings)
         out_path = output or "mrt-report.html"
-        _Path(out_path).write_text(html, encoding="utf-8")
+        Path(out_path).write_text(html, encoding="utf-8")
         console.print(f"[green]✓ HTML report saved to [bold]{out_path}[/bold][/green]")
         console.print(
-            f"  Open: [link=file://{_Path(out_path).absolute()}]{_Path(out_path).absolute()}[/link]"
+            f"  Open: [link=file://{Path(out_path).absolute()}]{Path(out_path).absolute()}[/link]"
         )
         errors = [w for w in warnings if w.severity == "error"]
         warns = [w for w in warnings if w.severity == "warning"]
@@ -294,9 +282,7 @@ def check(
 
 
 def _file_mtimes(versions_dir: str) -> dict:
-    from pathlib import Path as _Path
-
-    return {str(p): p.stat().st_mtime for p in _Path(versions_dir).rglob("*.py")}
+    return {str(p): p.stat().st_mtime for p in Path(versions_dir).rglob("*.py")}
 
 
 def _watch_loop(
@@ -308,8 +294,6 @@ def _watch_loop(
     min_revision: str | None = None,
     check_compat: bool = False,
 ) -> None:
-    import time
-
     console.print(f"[dim]Watching {versions_dir} for changes. Ctrl+C to stop.[/dim]")
     console.print()
 

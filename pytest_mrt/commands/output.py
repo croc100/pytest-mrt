@@ -8,6 +8,7 @@ from rich.panel import Panel
 
 from ..config import DEFAULT_EXPLAIN_MODEL
 from ..core.detector import analyze_migrations
+from ..core.html_report import generate_html_report
 
 console = Console()
 
@@ -17,8 +18,6 @@ def report(
     output: str = typer.Option("migration_report.html", "--output", "-o", help="Output file path"),
 ) -> None:
     """Generate an HTML safety report of your entire migration history."""
-    from ..core.html_report import generate_html_report
-
     warnings = analyze_migrations(versions_dir)
     html = generate_html_report(versions_dir, warnings)
 
@@ -45,6 +44,7 @@ def explain(
         raise typer.Exit(1)
 
     try:
+        # Optional dependency: pytest-mrt[ai]
         import anthropic
     except ImportError:
         console.print(

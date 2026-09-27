@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass, field
 from typing import Callable
+
+from sqlalchemy import text
 
 from .runner import MigrationRunner
 from .schema import SchemaDiff, SchemaSnapshot
@@ -72,8 +75,6 @@ class RollbackVerifier:
                     cols = ", ".join(q(c) for c in row)
                     placeholders = ", ".join(f":p_{c}" for c in row)
                     params = {f"p_{c}": v for c, v in row.items()}
-                    from sqlalchemy import text
-
                     try:
                         with self.runner.engine.begin() as conn:
                             conn.execute(
@@ -81,8 +82,6 @@ class RollbackVerifier:
                                 params,
                             )
                     except Exception as exc:
-                        import warnings
-
                         warnings.warn(
                             f"pytest-mrt: failed to insert custom seed row into '{tname}': {exc}",
                             stacklevel=2,

@@ -4,9 +4,11 @@ import os
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
+from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.pool import NullPool
 
 
@@ -38,8 +40,6 @@ class MigrationRunner:
             )
         # NullPool for SQLite: each connection is closed immediately after use,
         # preventing ResourceWarning from unclosed file handles in tests.
-        from sqlalchemy.engine.url import make_url
-
         _dialect = make_url(db_url).drivername.split("+")[0]
         # Use NullPool for all dialects in test environments to prevent
         # connection leaks across migrations and ensure clean state.
@@ -60,8 +60,6 @@ class MigrationRunner:
         command.downgrade(self.alembic_cfg, "base")
 
     def current_revision(self) -> str | None:
-        from alembic.runtime.migration import MigrationContext
-
         with self.engine.connect() as conn:
             ctx = MigrationContext.configure(conn)
             return ctx.get_current_revision()

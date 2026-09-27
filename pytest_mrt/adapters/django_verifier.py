@@ -16,6 +16,8 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Callable
 
+from sqlalchemy import text
+
 from ..core.schema import SchemaDiff, SchemaSnapshot
 from ..core.seeder import SeededRow, SmartSeeder
 from ..core.sql import quote_identifier
@@ -56,7 +58,6 @@ class DjangoRollbackVerifier:
                     seeder._rows.append(
                         SeededRow(table=tname, pk_col=pk_col, pk_val=row.get(pk_col), data=row)
                     )
-                from sqlalchemy import text
 
                 def q(name: str) -> str:
                     return quote_identifier(self.runner.engine, name)

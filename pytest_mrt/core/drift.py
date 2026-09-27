@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import importlib
+
+from alembic.autogenerate import compare_metadata
+from alembic.runtime.migration import MigrationContext
+
 
 def load_metadata(metadata_path: str):
     """Import SQLAlchemy metadata from a dotted path like 'myapp.models:Base'.
@@ -18,8 +23,6 @@ def load_metadata(metadata_path: str):
             f"Dotted attribute '{attr}' is not supported after the colon. "
             f"Use 'myapp.models:Base' instead of 'myapp.models:Base.metadata'."
         )
-    import importlib
-
     mod = importlib.import_module(module_path)
     obj = getattr(mod, attr)
     # Accept either a declarative Base class or a MetaData instance directly.
@@ -28,9 +31,6 @@ def load_metadata(metadata_path: str):
 
 def compare_schema(engine, target_metadata) -> list:
     """Return alembic autogenerate diffs between DB schema and target_metadata."""
-    from alembic.autogenerate import compare_metadata
-    from alembic.runtime.migration import MigrationContext
-
     with engine.connect() as conn:
         ctx = MigrationContext.configure(conn)
         return compare_metadata(ctx, target_metadata)

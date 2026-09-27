@@ -44,7 +44,7 @@ def test_single_head_passes_one_head():
     mrt = _mrt()
     fake_script = MagicMock()
     fake_script.get_heads.return_value = ["abc123"]
-    with patch("alembic.script.ScriptDirectory") as mock_sd:
+    with patch("pytest_mrt.default_tests.ScriptDirectory") as mock_sd:
         mock_sd.from_config.return_value = fake_script
         _single_head(mrt)
 
@@ -53,7 +53,7 @@ def test_single_head_fails_multiple_heads():
     mrt = _mrt()
     fake_script = MagicMock()
     fake_script.get_heads.return_value = ["abc123", "def456"]
-    with patch("alembic.script.ScriptDirectory") as mock_sd:
+    with patch("pytest_mrt.default_tests.ScriptDirectory") as mock_sd:
         mock_sd.from_config.return_value = fake_script
         with pytest.raises(AssertionError, match="single head"):
             _single_head(mrt)

@@ -26,6 +26,9 @@ def drift(
 
         mrt drift myapp.models:Base --config alembic.ini --db-url sqlite:///test.db
     """
+    # Deferred on purpose: these pull in Alembic and SQLAlchemy, which no
+    # other `mrt` subcommand needs. Hoisting them puts ~120ms of import
+    # time into every CLI invocation, `mrt --help` included.
     from ..core.drift import compare_schema, describe_diff, load_metadata
     from ..core.runner import MigrationRunner
 

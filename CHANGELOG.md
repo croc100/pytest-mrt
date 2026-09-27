@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.9.1] — 2026-09-28
+
+### Changed
+- **`mrt` starts about twice as fast.** `import pytest_mrt` eagerly imported `MRTTestCase`, which pulled `SchemaSnapshot`, `SmartSeeder` and SQLAlchemy into every invocation — 193ms of the CLI's 262ms of import time, for a class only unittest-based Django projects touch. `MRTTestCase` now loads on first use via a module `__getattr__` (PEP 562), so `from pytest_mrt import MRTTestCase` works exactly as before. Measured: `pytest_mrt.cli` import 234ms to 111ms, `mrt --help` 0.34s to 0.19s, and no Alembic or SQLAlchemy import at all unless a command needs them.
+- **Function-local imports reduced from 104 to 36.** Most were habit rather than intent: `commands/check.py` imported `pathlib.Path as _Path` in five separate functions, `core/detector.py` re-imported `re` four times although the module already imported it at the top. The 36 that remain are all deliberate — optional dependencies (Django, `anthropic`), two genuine import cycles (`core.graph` and `adapters.django_compat` import their importers), the private `_pytest` API behind its guard, and the two in `commands/drift_cmd.py` that keep Alembic out of CLI startup — and each now carries a one-line comment saying which, so the next reader can tell deliberate from accidental.
+
+### Fixed
+- Three `mock.patch` targets in the test suite pointed at the module a name is *defined* in rather than the module that *uses* it. They only worked because the imports under test were lazy; they are now patched where the name is looked up.
+
+---
+
 ## [1.9.0] — 2026-09-28
 
 ### Added

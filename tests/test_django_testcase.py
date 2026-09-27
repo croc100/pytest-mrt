@@ -130,7 +130,8 @@ def test_assert_data_intact_passes():
         mock.patch.object(SchemaSnapshot, "capture", return_value=mock.MagicMock(tables={})),
         mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
         mock.patch(
-            "pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])
+            "pytest_mrt.django_testcase.SmartSeeder",
+            return_value=mock.MagicMock(verify=lambda: []),
         ),
     ):
         instance = Cls()
@@ -152,7 +153,7 @@ def test_assert_data_intact_fails_on_data_loss():
     with (
         mock.patch.object(SchemaSnapshot, "capture", return_value=mock.MagicMock(tables={})),
         mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
-        mock.patch("pytest_mrt.core.seeder.SmartSeeder", return_value=mock_seeder),
+        mock.patch("pytest_mrt.django_testcase.SmartSeeder", return_value=mock_seeder),
     ):
         instance = Cls()
         with pytest.raises(AssertionError, match="2/3 rows lost"):
@@ -171,7 +172,8 @@ def test_assert_data_intact_recovery_on_downgrade_failure():
         mock.patch.object(SchemaSnapshot, "capture", return_value=mock.MagicMock(tables={})),
         mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
         mock.patch(
-            "pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])
+            "pytest_mrt.django_testcase.SmartSeeder",
+            return_value=mock.MagicMock(verify=lambda: []),
         ),
     ):
         instance = Cls()
@@ -213,7 +215,8 @@ def test_assert_data_intact_detects_user_row_loss():
         mock.patch.object(SchemaSnapshot, "capture", return_value=schema_mock),
         mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
         mock.patch(
-            "pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])
+            "pytest_mrt.django_testcase.SmartSeeder",
+            return_value=mock.MagicMock(verify=lambda: []),
         ),
     ):
         instance = Cls()
