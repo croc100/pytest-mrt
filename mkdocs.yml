@@ -31,6 +31,7 @@ nav:
   - Home: index.md
   - Getting Started: quickstart.md
   - Risk Patterns: patterns.md
+  - Rule Index: rules.md
   - CLI & Fixture Reference: cli.md
   - API Reference: api.md
   - Plugin API & Stability: plugin-api.md

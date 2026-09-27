@@ -186,6 +186,8 @@ Re-runs the check whenever any `.py` file in the directory changes. Uses 1-secon
 
 Only available with `--format table`.
 
+Each row carries an MRT code; the [rule index](rules.md) lists all 52 with their severities.
+
 ### Exit codes
 
 | Code | Meaning |

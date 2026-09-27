@@ -52,7 +52,7 @@ Most tools verify that migrations *run* without errors.
 pytest-mrt verifies that your data *survives* a rollback.
 
 It seeds real rows before each migration, rolls back, and checks nothing was lost.
-It also statically scans migration files for 45 known dangerous patterns across both Alembic and Django migrations (52 rule codes in total, counting the 5 rolling-deploy checks and 2 migration-graph checks).
+It also statically scans migration files for 45 known dangerous patterns across both Alembic and Django migrations. With the 5 rolling-deploy checks (MRT7xx) and 2 structural checks (multiple heads, unparseable file) that is [52 rule codes](https://croc100.github.io/pytest-mrt/rules/) in total.
 
 ## Install
 
@@ -294,6 +294,7 @@ Full docs at **[croc100.github.io/pytest-mrt](https://croc100.github.io/pytest-m
 
 - [Getting started (step-by-step)](https://croc100.github.io/pytest-mrt/quickstart/)
 - [All 45 patterns explained](https://croc100.github.io/pytest-mrt/patterns/)
+- [Rule index](https://croc100.github.io/pytest-mrt/rules/) — every MRT code, its severity, and which migration format it applies to
 - [CLI & fixture reference](https://croc100.github.io/pytest-mrt/cli/)
 - [Detection accuracy report](docs/accuracy.md) — what each pattern catches and doesn't catch
 - [API reference](docs/api.md) — stable public API
