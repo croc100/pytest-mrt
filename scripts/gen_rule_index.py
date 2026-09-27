@@ -31,6 +31,7 @@ PATTERNS_PAGE = ROOT / "docs" / "patterns.md"
 SOURCES = {
     "pytest_mrt/core/detector.py": "Alembic",
     "pytest_mrt/core/compat.py": "Alembic",
+    "pytest_mrt/core/graph.py": "Alembic",
     "pytest_mrt/adapters/django_detector.py": "Django",
     "pytest_mrt/adapters/django_compat.py": "Django",
 }
@@ -100,20 +101,21 @@ def collect_rules() -> dict[str, Rule]:
                 continue
             if not isinstance(node.func, ast.Name):
                 continue
-            # Two shapes are in use: the _warn(m, pattern, message, severity)
-            # helper, and RiskWarning(revision, filename, pattern, message,
-            # severity) built directly where there is no MigrationAST to pass.
-            if node.func.id == "_warn":
-                pattern_i, severity_i = 1, 3
-            elif node.func.id == "RiskWarning":
-                pattern_i, severity_i = 2, 4
-            else:
+            # Every rule is emitted through _warn(target, pattern, message,
+            # severity). A RiskWarning built directly would not be picked up
+            # here, so it fails the run rather than quietly missing the page.
+            if node.func.id == "RiskWarning" and _literal_str(_arg(node, 99, "code")):
+                sys.exit(
+                    f"{rel} constructs RiskWarning with a code directly — "
+                    "emit rules through _warn() so they reach the rule index"
+                )
+            if node.func.id != "_warn":
                 continue
             code = _literal_str(_arg(node, 99, "code"))
             if not code or not re.fullmatch(r"MRT\d{3}", code):
                 continue
-            pattern = _literal_str(_arg(node, pattern_i, "pattern")) or ""
-            severity = _literal_str(_arg(node, severity_i, "severity")) or ""
+            pattern = _literal_str(_arg(node, 1, "pattern")) or ""
+            severity = _literal_str(_arg(node, 3, "severity")) or ""
             if code in rules:
                 existing = rules[code]
                 existing.formats.add(fmt)

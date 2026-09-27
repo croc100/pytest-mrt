@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..core.detector import RiskWarning, _is_suppressed
+from ..core.detector import RiskWarning, RuleTarget, _is_suppressed, _warn
 
 
 @dataclass
@@ -26,6 +26,11 @@ class DjangoMigrationAST:
     dependencies: list[tuple[str, str]]
     is_atomic: bool | None  # None = not set (defaults to True)
     _parse_error: Exception | None = None
+
+    @property
+    def revision(self) -> str:
+        """`app_label.migration_name` — the id pytest-mrt reports Django migrations by."""
+        return f"{self.app_label}.{self.migration_name}"
 
     @classmethod
     def from_file(cls, path: Path, app_label: str) -> "DjangoMigrationAST":
@@ -146,18 +151,6 @@ class DjangoMigrationAST:
             if arg.args and isinstance(arg.args[0], ast.Constant):
                 return str(arg.args[0].value).upper()
         return ""
-
-
-def _warn(
-    m: DjangoMigrationAST,
-    pattern: str,
-    message: str,
-    severity: str,
-    line: int | None = None,
-    code: str = "",
-) -> RiskWarning:
-    rev = f"{m.app_label}.{m.migration_name}"
-    return RiskWarning(rev, m.filename, pattern, message, severity, line, code)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -513,9 +506,8 @@ def _check_squash_run_python_no_reverse(m: DjangoMigrationAST) -> list[RiskWarni
         if has_reverse:
             continue
         warnings.append(
-            RiskWarning(
-                f"{m.app_label}.{m.migration_name}",
-                m.filename,
+            _warn(
+                m,
                 "Squashed migration: RunPython without reverse_code",
                 "Squashed migration contains RunPython with no reverse_code — rollback will silently do nothing",
                 "error",
@@ -545,9 +537,8 @@ def _check_squash_missing_replaces(m: DjangoMigrationAST) -> list[RiskWarning]:
         return []
 
     return [
-        RiskWarning(
-            f"{m.app_label}.{m.migration_name}",
-            m.filename,
+        _warn(
+            m,
             "Squashed migration: missing replaces list",
             "Migration name contains 'squash' but has no replaces attribute — Django may apply it on top of the original migrations",
             "warning",
@@ -705,9 +696,8 @@ def analyze_django_migrations(
         m = DjangoMigrationAST.from_file(path, app_label)
         if m._parse_error:
             warnings.append(
-                RiskWarning(
-                    f"{app_label}.{path.stem}",
-                    path.name,
+                _warn(
+                    RuleTarget(f"{app_label}.{path.stem}", path.name),
                     "Syntax error",
                     f"Could not parse: {m._parse_error}",
                     "error",
