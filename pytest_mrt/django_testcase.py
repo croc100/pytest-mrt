@@ -25,6 +25,8 @@ import os
 import unittest
 from typing import TYPE_CHECKING, Any
 
+from .core.sql import quote_identifier as q
+
 if TYPE_CHECKING:
     from .adapters.django_runner import DjangoMigrationRunner
     from .adapters.django_verifier import DjangoRollbackVerifier
@@ -172,7 +174,7 @@ class MRTTestCase(unittest.TestCase):
                     pk_col = tinfo.pk_cols[0]
                     rows: list[Any] = list(
                         conn.execute(
-                            text(f"SELECT {pk_col} FROM {tname}")  # noqa: S608
+                            text(f"SELECT {q(engine, pk_col)} FROM {q(engine, tname)}")  # noqa: S608
                         )
                         .scalars()
                         .all()
@@ -216,7 +218,7 @@ class MRTTestCase(unittest.TestCase):
                     pk_col = tinfo.pk_cols[0]
                     after_pks: set[Any] = set(
                         conn.execute(
-                            text(f"SELECT {pk_col} FROM {tname}")  # noqa: S608
+                            text(f"SELECT {q(engine, pk_col)} FROM {q(engine, tname)}")  # noqa: S608
                         )
                         .scalars()
                         .all()

@@ -7,7 +7,8 @@ from typing import Callable
 
 from .runner import MigrationRunner
 from .schema import SchemaDiff, SchemaSnapshot
-from .seeder import SeededRow, SmartSeeder, _q
+from .seeder import SeededRow, SmartSeeder
+from .sql import quote_identifier
 
 
 @dataclass
@@ -63,11 +64,11 @@ class RollbackVerifier:
             if tname in self.custom_seeds:
                 rows = self.custom_seeds[tname]()
                 pk_col = table_info.pk_cols[0] if table_info.pk_cols else "id"
-                for row in rows:
-                    # Use dialect-aware quoting — fixes MySQL double-quote bug
-                    def q(name: str) -> str:
-                        return _q(self.runner.engine, name)
 
+                def q(name: str) -> str:
+                    return quote_identifier(self.runner.engine, name)
+
+                for row in rows:
                     cols = ", ".join(q(c) for c in row)
                     placeholders = ", ".join(f":p_{c}" for c in row)
                     params = {f"p_{c}": v for c, v in row.items()}

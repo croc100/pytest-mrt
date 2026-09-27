@@ -700,6 +700,7 @@ def test_min_revision_alone(tmp_path):
     names = {w.revision for w in warnings}
     assert names == {"myapp.0003_drop_bio"}
 
+
 # ── rolling-deploy compat checks (MRT7xx, --check-compat) ──────────────────
 
 
@@ -878,3 +879,92 @@ def test_compat_noqa_suppresses_mrt701(tmp_path):
     )
     warnings = analyze_django_migrations(str(tmp_path), check_compat=True)
     assert not any(w.code == "MRT701" for w in warnings)
+
+
+# ── dependency parsing (--since scoping) ──────────────────────────────────
+
+
+def test_parse_dependencies_reads_literal_tuples():
+    from pytest_mrt.adapters.django_detector import _parse_dependencies
+
+    source = """
+from django.db import migrations
+
+class Migration(migrations.Migration):
+    dependencies = [("myapp", "0001_initial"), ("other", "0003_thing")]
+    operations = []
+"""
+    assert _parse_dependencies(source) == ["myapp.0001_initial", "other.0003_thing"]
+
+
+def test_parse_dependencies_keeps_literals_next_to_swappable():
+    """A swappable_dependency() entry must not discard the resolvable ones.
+
+    This is what the old regex + literal_eval over the whole list got wrong:
+    one computed entry made every parent disappear, so `--since` treated the
+    migration as a root and silently skipped its descendants.
+    """
+    from pytest_mrt.adapters.django_detector import _parse_dependencies
+
+    source = """
+from django.conf import settings
+from django.db import migrations
+
+class Migration(migrations.Migration):
+    dependencies = [
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        ("myapp", "0001_initial"),
+    ]
+    operations = []
+"""
+    assert _parse_dependencies(source) == ["myapp.0001_initial"]
+
+
+def test_parse_dependencies_handles_no_dependencies():
+    from pytest_mrt.adapters.django_detector import _parse_dependencies
+
+    source = """
+from django.db import migrations
+
+class Migration(migrations.Migration):
+    initial = True
+    operations = []
+"""
+    assert _parse_dependencies(source) == []
+
+
+def test_parse_dependencies_survives_syntax_error():
+    from pytest_mrt.adapters.django_detector import _parse_dependencies
+
+    assert _parse_dependencies("class Migration(:\n") == []
+
+
+def test_since_walks_past_a_swappable_dependency(tmp_path):
+    """End to end: descendants of `since` are found even across swappable deps."""
+    from pytest_mrt.adapters.django_detector import _django_migrations_since
+
+    migrations_dir = tmp_path / "myapp" / "migrations"
+    migrations_dir.mkdir(parents=True)
+    (migrations_dir / "__init__.py").write_text("", encoding="utf-8")
+    (migrations_dir / "0001_initial.py").write_text(
+        "from django.db import migrations\n"
+        "class Migration(migrations.Migration):\n"
+        "    dependencies = []\n"
+        "    operations = []\n",
+        encoding="utf-8",
+    )
+    (migrations_dir / "0002_add_profile.py").write_text(
+        "from django.conf import settings\n"
+        "from django.db import migrations\n"
+        "class Migration(migrations.Migration):\n"
+        "    dependencies = [\n"
+        "        migrations.swappable_dependency(settings.AUTH_USER_MODEL),\n"
+        '        ("myapp", "0001_initial"),\n'
+        "    ]\n"
+        "    operations = []\n",
+        encoding="utf-8",
+    )
+
+    assert _django_migrations_since(str(tmp_path), "myapp.0001_initial") == {
+        "myapp.0002_add_profile"
+    }

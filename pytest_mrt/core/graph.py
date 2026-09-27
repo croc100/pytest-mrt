@@ -80,7 +80,7 @@ def _build_graph(versions_dir: str) -> MigrationGraph:
 
     graph = MigrationGraph()
     for path in sorted(Path(versions_dir).glob("*.py")):
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
         m_down = _re.search(r'down_revision\s*=\s*["\']([^"\']+)["\']', source)
         if not m_rev:

@@ -44,13 +44,14 @@ def _write_conftest(path: Path, alembic_ini: str, db_url: str) -> None:
         f'        alembic_ini="{alembic_ini}",\n'
         f"        db_url={url_expr},\n"
         f'        # skip={{"revision_id": "Reason this migration is intentionally irreversible"}},\n'
-        f"    )\n"
+        f"    )\n",
+        encoding="utf-8",
     )
 
 
 def _append_conftest(path: Path, alembic_ini: str, db_url: str) -> None:
     url_expr = _db_url_expr(db_url)
-    existing = path.read_text()
+    existing = path.read_text(encoding="utf-8")
     addition = (
         f"\n\n# Added by mrt init\n"
         f"from pytest_mrt import MRTConfig\n\n\n"
@@ -60,7 +61,7 @@ def _append_conftest(path: Path, alembic_ini: str, db_url: str) -> None:
         f"        db_url={url_expr},\n"
         f"    )\n"
     )
-    path.write_text(existing + addition)
+    path.write_text(existing + addition, encoding="utf-8")
     console.print(f"[green]✓[/green] Updated [bold]{path}[/bold]")
 
 
@@ -113,16 +114,18 @@ def _init_django(detected_settings: str | None) -> None:
         if not overwrite:
             console.print("[dim]Skipping conftest.py[/dim]")
         else:
-            existing = conftest_path.read_text()
-            conftest_path.write_text(existing + "\n\n# Added by mrt init\n" + django_conftest)
+            existing = conftest_path.read_text(encoding="utf-8")
+            conftest_path.write_text(
+                existing + "\n\n# Added by mrt init\n" + django_conftest, encoding="utf-8"
+            )
             console.print(f"[green]✓[/green] Updated [bold]{conftest_path}[/bold]")
     else:
-        conftest_path.write_text(django_conftest)
+        conftest_path.write_text(django_conftest, encoding="utf-8")
         console.print(f"[green]✓[/green] Created [bold]{conftest_path}[/bold]")
 
     test_path = Path(test_dir) / "test_migrations.py"
     if not test_path.exists():
-        test_path.write_text(django_test)
+        test_path.write_text(django_test, encoding="utf-8")
         console.print(f"[green]✓[/green] Created [bold]{test_path}[/bold]")
 
     console.print()
@@ -186,7 +189,8 @@ def init() -> None:
             '"""Migration rollback tests — powered by pytest-mrt"""\n\n\n'
             "def test_all_migrations_are_reversible(mrt):\n"
             '    """Check every migration can be safely rolled back."""\n'
-            "    mrt.assert_all_reversible()\n"
+            "    mrt.assert_all_reversible()\n",
+            encoding="utf-8",
         )
         console.print(f"[green]✓[/green] Created [bold]{test_path}[/bold]")
 

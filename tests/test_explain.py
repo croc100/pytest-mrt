@@ -91,7 +91,7 @@ def test_explain_happy_path(tmp_path, monkeypatch):
     import anthropic
 
     fake_message = MagicMock()
-    fake_message.content = [MagicMock(text="This migration adds an email column.")]
+    fake_message.content = [MagicMock(type="text", text="This migration adds an email column.")]
 
     fake_client = MagicMock()
     fake_client.messages.create.return_value = fake_message
