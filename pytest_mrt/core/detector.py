@@ -894,7 +894,7 @@ def _revisions_since(versions_dir: str, since: str) -> set[str]:
     rev_to_path: dict[str, Path] = {}
 
     for path in sorted(Path(versions_dir).glob("*.py")):
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
         if not m_rev:
             continue
@@ -966,7 +966,7 @@ def analyze_migrations(
     migrations: list[MigrationAST] = []
 
     for path in sorted(Path(versions_dir).glob("*.py")):
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         import re as _re
 
         m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)

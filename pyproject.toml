@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-mrt"
-version = "1.8.0"
+version = "1.9.0"
 description = "Catch database migration rollback failures before they reach production"
 readme = "README.md"
 license = { text = "MIT" }
@@ -50,6 +50,9 @@ Changelog = "https://github.com/croc100/pytest-mrt/releases"
 dev = [
     "pytest",
     "coverage",
+    # Without this, tests/test_explain.py skips itself and the `mrt explain`
+    # path goes untested in CI.
+    "anthropic>=1.0",
     "psycopg[binary]>=3.2",
     "psycopg2-binary",
     "hatch",

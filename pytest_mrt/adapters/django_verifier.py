@@ -17,7 +17,8 @@ from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Callable
 
 from ..core.schema import SchemaDiff, SchemaSnapshot
-from ..core.seeder import SeededRow, SmartSeeder, _q
+from ..core.seeder import SeededRow, SmartSeeder
+from ..core.sql import quote_identifier
 from ..core.verifier import RevisionResult
 from .django_runner import DjangoMigration, DjangoMigrationRunner
 
@@ -58,7 +59,7 @@ class DjangoRollbackVerifier:
                 from sqlalchemy import text
 
                 def q(name: str) -> str:
-                    return _q(self.runner.engine, name)
+                    return quote_identifier(self.runner.engine, name)
 
                 for row in rows:
                     cols = ", ".join(q(c) for c in row)

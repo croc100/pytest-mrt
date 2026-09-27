@@ -37,7 +37,7 @@ def _collect_warnings(
         from ..core.compat import analyze_compat
 
         for path in sorted(_Path(versions_dir).rglob("*.py")):
-            source = path.read_text()
+            source = path.read_text(encoding="utf-8")
             m_rev = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
             revision = m_rev.group(1) if m_rev else path.stem
             m = MigrationAST(source, revision, path.name)
@@ -257,7 +257,7 @@ def check(
         if output:
             from pathlib import Path as _Path
 
-            _Path(output).write_text(json_text)
+            _Path(output).write_text(json_text, encoding="utf-8")
             console.print(f"[green]✓ JSON report saved to [bold]{output}[/bold][/green]")
         else:
             sys.stdout.write(json_text)
@@ -276,7 +276,7 @@ def check(
 
         html = generate_html_report(versions_dir, warnings)
         out_path = output or "mrt-report.html"
-        _Path(out_path).write_text(html)
+        _Path(out_path).write_text(html, encoding="utf-8")
         console.print(f"[green]✓ HTML report saved to [bold]{out_path}[/bold][/green]")
         console.print(
             f"  Open: [link=file://{_Path(out_path).absolute()}]{_Path(out_path).absolute()}[/link]"

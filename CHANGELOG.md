@@ -7,6 +7,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [1.9.0] — 2026-09-28
+
+### Added
+- **`mrt explain --model/-m`** — the model is now selectable per invocation, which is what `MRTConfig(explain_model=...)` was documented to do but never did.
+
+### Fixed
+- **`MRTTestCase.assertDataIntact()` built SQL with unquoted identifiers.** Its two pre-existing-row snapshots interpolated table and column names directly, so a table named `order`, or any mixed-case name under PostgreSQL, raised `OperationalError` instead of verifying anything. Both statements now quote through the dialect's preparer, like every other hand-built statement in the package. Identifier quoting moved to `pytest_mrt.core.sql.quote_identifier`, a public helper, rather than a private one imported across modules.
+- **Migration files were read in the locale's encoding.** 22 `read_text()` / `write_text()` calls had no `encoding=`, so a migration containing non-ASCII text (a Korean or accented comment) failed to decode on a Windows machine whose locale is not UTF-8, while passing on Linux CI. All file I/O now states `encoding="utf-8"`, and the test suite asserts it by running the analyzer under `-X warn_default_encoding -W error::EncodingWarning`.
+- **`mrt check --since` silently skipped descendants of migrations that use `swappable_dependency`.** Django dependencies were extracted with a regex plus `literal_eval` over the whole list, which raises on any computed entry — so `dependencies = [migrations.swappable_dependency(settings.AUTH_USER_MODEL), ("myapp", "0001_initial")]` yielded no parents at all, making the migration look like a root. Dependencies are now read from the AST one entry at a time, so a computed entry skips only itself.
+- **`mrt explain` exited 0 when the AI request failed**, so a failure could not be detected in a script. It now exits 1, and only suggests checking `ANTHROPIC_API_KEY` for an actual authentication failure instead of for every error.
+- **`anthropic` was missing from the `dev` extra**, so `tests/test_explain.py` skipped itself on every CI run and the `mrt explain` path went untested. With the dependency present, those tests run — and both of them failed, which is how the exit-code bug above was found.
+- **`MigrationRunner` decided whether to re-raise by substring-matching an exception message** (`"env.py" in str(exc)`). The env.py check is now a plain existence test outside the `try`, so it no longer depends on Alembic's wording.
+
+### Deprecated
+- **`MRTConfig.explain_model`** is inert and documented as such. `mrt explain` is a CLI command and never loaded `MRTConfig`. Use `--model`. The field stays until 2.0.
+
+---
+
 ## [1.8.0] — 2026-09-28
 
 ### Changed

@@ -181,7 +181,7 @@ class MRTFixture:
             from .core.ast_analyzer import MigrationAST
 
             for path in sorted(Path(versions_dir).glob("*.py")):
-                source = path.read_text()
+                source = path.read_text(encoding="utf-8")
                 m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
                 revision = m_rev.group(1) if m_rev else path.stem
                 m = MigrationAST(source, revision, path.name)

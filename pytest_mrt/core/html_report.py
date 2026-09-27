@@ -101,7 +101,7 @@ def generate_html_report(versions_dir: str, warnings: list[RiskWarning]) -> str:
     for path in all_files:
         import re
 
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         m = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
         rev = m.group(1) if m else path.stem
         by_revision.setdefault(rev, [])

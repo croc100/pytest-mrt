@@ -79,8 +79,10 @@ class MRTConfig:
     # None = test all revisions (default).
     minimum_downgrade_revision: str | None = None
 
-    # Model used by `mrt explain`. Defaults to DEFAULT_EXPLAIN_MODEL.
-    # Override to use a different Claude model, e.g. "claude-haiku-4-5".
+    # Deprecated and inert: `mrt explain` is a CLI command and never reads
+    # MRTConfig, so setting this has never had any effect. Use the command's
+    # --model option instead (`mrt explain <file> --model claude-haiku-4-5`).
+    # Kept until 2.0 so existing configs keep importing.
     explain_model: str = DEFAULT_EXPLAIN_MODEL
 
     # Import path for the SQLAlchemy declarative Base (or MetaData) used by

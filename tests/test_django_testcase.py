@@ -129,7 +129,9 @@ def test_assert_data_intact_passes():
     with (
         mock.patch.object(SchemaSnapshot, "capture", return_value=mock.MagicMock(tables={})),
         mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
-        mock.patch("pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])),
+        mock.patch(
+            "pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])
+        ),
     ):
         instance = Cls()
         instance.assertDataIntact()  # should not raise
@@ -168,7 +170,9 @@ def test_assert_data_intact_recovery_on_downgrade_failure():
     with (
         mock.patch.object(SchemaSnapshot, "capture", return_value=mock.MagicMock(tables={})),
         mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
-        mock.patch("pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])),
+        mock.patch(
+            "pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])
+        ),
     ):
         instance = Cls()
         with pytest.raises(RuntimeError, match="Migration state corrupted"):
@@ -202,13 +206,15 @@ def test_assert_data_intact_detects_user_row_loss():
 
     runner.engine.connect.side_effect = [
         make_mock_conn([1, 2, 3]),  # before seeder
-        make_mock_conn([1, 2]),     # after rollback — row 3 missing
+        make_mock_conn([1, 2]),  # after rollback — row 3 missing
     ]
 
     with (
         mock.patch.object(SchemaSnapshot, "capture", return_value=schema_mock),
         mock.patch.object(SchemaDiff, "verify_restored", return_value=[]),
-        mock.patch("pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])),
+        mock.patch(
+            "pytest_mrt.core.seeder.SmartSeeder", return_value=mock.MagicMock(verify=lambda: [])
+        ),
     ):
         instance = Cls()
         with pytest.raises(AssertionError, match="pre-existing row"):
@@ -246,3 +252,42 @@ def test_teardown_swallows_errors():
     runner.downgrade_app_zero.side_effect = RuntimeError("DB gone")
 
     Cls.tearDownClass()  # should not raise
+
+
+# ── identifier quoting ────────────────────────────────────────────────────
+
+
+def test_assert_data_intact_quotes_identifiers(tmp_path):
+    """A table named `order` must not break the pre-existing-row snapshot.
+
+    assertDataIntact() builds its own SELECT statements, so every identifier has
+    to be quoted for the dialect — unquoted, this raises OperationalError on a
+    reserved-word table instead of verifying anything.
+    """
+    from sqlalchemy import create_engine, text
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'quoted.db'}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    'CREATE TABLE "order" ('
+                    "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    '  "select" TEXT NOT NULL'
+                    ")"
+                )
+            )
+            conn.execute(text('INSERT INTO "order" ("select") VALUES (\'pre-existing\')'))
+
+        class Case(_make_testcase_class()):
+            def runTest(self):  # noqa: N802  (unittest naming)
+                pass
+
+        case = Case("runTest")
+        case._runner = mock.Mock(engine=engine)
+
+        # upgrade/downgrade are no-ops here: the point is the SQL this method
+        # builds itself, not the migration round trip.
+        case.assertDataIntact()
+    finally:
+        engine.dispose()

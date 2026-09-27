@@ -22,7 +22,7 @@ def report(
     warnings = analyze_migrations(versions_dir)
     html = generate_html_report(versions_dir, warnings)
 
-    Path(output).write_text(html)
+    Path(output).write_text(html, encoding="utf-8")
     console.print(f"[green]✓ Report saved to [bold]{output}[/bold][/green]")
     console.print(
         f"  Open it in your browser: [link=file://{Path(output).absolute()}]{Path(output).absolute()}[/link]"
@@ -31,6 +31,7 @@ def report(
 
 def explain(
     migration_file: str = typer.Argument(help="Path to the migration .py file"),
+    model: str = typer.Option(DEFAULT_EXPLAIN_MODEL, "--model", "-m", help="Claude model to use"),
 ) -> None:
     """
     Explain what a migration does in plain English using AI.
@@ -55,14 +56,14 @@ def explain(
         )
         raise typer.Exit(1)
 
-    source = path.read_text()
+    source = path.read_text(encoding="utf-8")
 
     console.print(f"[dim]Analyzing {path.name}...[/dim]")
 
     try:
         client = anthropic.Anthropic()
         message = client.messages.create(
-            model=DEFAULT_EXPLAIN_MODEL,
+            model=model,
             max_tokens=16000,
             messages=[
                 {
@@ -91,4 +92,10 @@ Migration file ({path.name}):
 
     except Exception as e:
         console.print(f"[red]AI request failed: {e}[/red]")
-        console.print("[dim]Make sure ANTHROPIC_API_KEY is set.[/dim]")
+        # Only an auth failure is about the key; saying so for every failure
+        # sends people to check an environment variable that is already fine.
+        if type(e).__name__ in ("AuthenticationError", "PermissionDeniedError"):
+            console.print("[dim]Check that ANTHROPIC_API_KEY is set and valid.[/dim]")
+        elif type(e).__name__ == "NotFoundError":
+            console.print(f"[dim]Model '{model}' was not found. Override it with --model.[/dim]")
+        raise typer.Exit(1) from e

@@ -13,11 +13,10 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 from .schema import ColumnInfo, TableInfo
+from .sql import quote_identifier
 
-
-def _q(engine: Engine, name: str) -> str:
-    """Quote an identifier using the engine's dialect (handles MySQL backticks)."""
-    return engine.dialect.identifier_preparer.quote(name)
+# Kept as a short alias: this module builds statements on nearly every line.
+_q = quote_identifier
 
 
 # ──────────────────────────────────────────────

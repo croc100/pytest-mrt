@@ -29,7 +29,7 @@ class DjangoMigrationAST:
 
     @classmethod
     def from_file(cls, path: Path, app_label: str) -> "DjangoMigrationAST":
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         try:
             tree = ast.parse(source)
             parse_error = None
@@ -579,10 +579,47 @@ _DJANGO_CHECKS = [
 
 def is_django_migration(path: Path) -> bool:
     try:
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         return "class Migration" in source and "django.db" in source
     except Exception:
         return False
+
+
+def _parse_dependencies(source: str) -> list[str]:
+    """Return ``app_label.migration_name`` parents from a migration's ``dependencies``.
+
+    Parsed from the AST rather than a regex: a regex that stops at the first
+    ``]`` mis-reads nested values, and running ``literal_eval`` over the whole
+    list drops every parent as soon as one entry is not a literal — which is
+    what ``migrations.swappable_dependency(settings.AUTH_USER_MODEL)`` is.
+    Entries are therefore resolved one at a time, and a non-literal entry only
+    skips itself.
+    """
+    import ast as _ast
+
+    try:
+        tree = _ast.parse(source)
+    except SyntaxError:
+        return []
+
+    parents: list[str] = []
+    for node in _ast.walk(tree):
+        if not isinstance(node, _ast.Assign):
+            continue
+        if not any(isinstance(t, _ast.Name) and t.id == "dependencies" for t in node.targets):
+            continue
+        if not isinstance(node.value, (_ast.List, _ast.Tuple)):
+            continue
+        for element in node.value.elts:
+            try:
+                dep = _ast.literal_eval(element)
+            except ValueError:
+                # swappable_dependency(...) and other computed entries: not a
+                # file-level parent we can resolve statically.
+                continue
+            if isinstance(dep, (tuple, list)) and len(dep) == 2:
+                parents.append(f"{dep[0]}.{dep[1]}")
+    return parents
 
 
 def _django_migrations_since(migrations_dir: str, since: str) -> set[str]:
@@ -593,8 +630,6 @@ def _django_migrations_since(migrations_dir: str, since: str) -> set[str]:
     build a reverse-dependency graph and returns all transitive dependents of
     the given migration (excluding ``since`` itself).
     """
-    import ast as _ast
-    import re as _re
 
     root = Path(migrations_dir)
 
@@ -602,23 +637,13 @@ def _django_migrations_since(migrations_dir: str, since: str) -> set[str]:
     dep_map: dict[str, list[str]] = {}
 
     for path in sorted(root.rglob("*.py")):
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         if "class Migration" not in source or "django.db" not in source:
             continue
         app_label = path.parent.parent.name
         key = f"{app_label}.{path.stem}"
 
-        parents: list[str] = []
-        # Extract dependencies list via regex on the raw source
-        m = _re.search(r"dependencies\s*=\s*(\[.*?\])", source, _re.DOTALL)
-        if m:
-            try:
-                raw_list = _ast.literal_eval(m.group(1))
-                for dep_app, dep_name in raw_list:
-                    parents.append(f"{dep_app}.{dep_name}")
-            except Exception:
-                pass
-        dep_map[key] = parents
+        dep_map[key] = _parse_dependencies(source)
 
     # Build children map
     children: dict[str, list[str]] = {k: [] for k in dep_map}
@@ -692,7 +717,7 @@ def analyze_django_migrations(
                 )
             )
             continue
-        source_lines = path.read_text().splitlines()
+        source_lines = path.read_text(encoding="utf-8").splitlines()
         checks = list(_DJANGO_CHECKS)
         if check_compat:
             from .django_compat import analyze_django_compat
