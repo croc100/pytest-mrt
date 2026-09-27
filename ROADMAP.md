@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current status: Production/Stable (v1.5.0 on PyPI — v1.6.0 on main)
+## Current status: Production/Stable (v1.7.0 on PyPI — v1.8.0 on main)
 
 pytest-mrt is production-ready. The core API (`MRTConfig`, `mrt` fixture, `mrt check`) is stable and
 breaking changes will be versioned. See [`docs/api.md`](docs/api.md) for the stability guarantee.

@@ -18,7 +18,7 @@ variables:
 
 migration:static:
   stage: migration-check
-  image: python:3.12-slim
+  image: python:3.14-slim
   rules:
     - changes:
         - "alembic/versions/*.py"
@@ -33,7 +33,7 @@ migration:static:
 
 migration:rollback:
   stage: test
-  image: python:3.12-slim
+  image: python:3.14-slim
   services:
     - postgres:16
   variables:
@@ -54,7 +54,7 @@ migration:rollback:
 
 migration:report:
   stage: test
-  image: python:3.12-slim
+  image: python:3.14-slim
   services:
     - postgres:16
   variables:

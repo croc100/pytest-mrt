@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     pass
 
 # Default model for `mrt explain`. Override via MRTConfig(explain_model=...).
-DEFAULT_EXPLAIN_MODEL = "claude-opus-4-5"
+DEFAULT_EXPLAIN_MODEL = "claude-opus-5"
 
 
 @dataclass
@@ -80,7 +80,7 @@ class MRTConfig:
     minimum_downgrade_revision: str | None = None
 
     # Model used by `mrt explain`. Defaults to DEFAULT_EXPLAIN_MODEL.
-    # Override to use a different Claude model, e.g. "claude-3-5-haiku-latest".
+    # Override to use a different Claude model, e.g. "claude-haiku-4-5".
     explain_model: str = DEFAULT_EXPLAIN_MODEL
 
     # Import path for the SQLAlchemy declarative Base (or MetaData) used by

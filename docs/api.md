@@ -29,7 +29,7 @@ Configuration object passed to `pytest_configure` to set up migration rollback t
 | `django_settings` | `str \| None` | `None` | Django settings module — enables Django mode |
 | `django_apps` | `list[str] \| None` | `None` | Restrict dynamic testing to specific Django app labels |
 | `django_project_dir` | `str \| None` | `None` | Path added to `sys.path` before Django import |
-| `explain_model` | `str` | `"claude-opus-4-5"` | Claude model used by `mrt explain` |
+| `explain_model` | `str` | `"claude-opus-5"` | Claude model used by `mrt explain` |
 
 ### Example (Alembic)
 
@@ -437,7 +437,7 @@ mrt explain alembic/versions/001_create_users.py
 
 Requires: `pip install pytest-mrt[ai]` and `ANTHROPIC_API_KEY` environment variable.
 
-Override the model with `MRTConfig(explain_model="claude-haiku-4-5-20251001")`.
+Override the model with `MRTConfig(explain_model="claude-haiku-4-5")`.
 
 ---
 

@@ -63,7 +63,7 @@ def explain(
         client = anthropic.Anthropic()
         message = client.messages.create(
             model=DEFAULT_EXPLAIN_MODEL,
-            max_tokens=1024,
+            max_tokens=16000,
             messages=[
                 {
                     "role": "user",
@@ -85,7 +85,7 @@ Migration file ({path.name}):
             ],
         )
 
-        explanation = message.content[0].text
+        explanation = next((block.text for block in message.content if block.type == "text"), "")
         console.print()
         console.print(Panel(explanation, title=f"[bold]{path.name}[/bold]", border_style="blue"))
 

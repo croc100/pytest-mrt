@@ -42,7 +42,7 @@ pytest-mrt is a **testing tool**. Its attack surface is narrow:
 
 **Out of scope:**
 - Issues in your own migration files (by design, the tool reads and executes them)
-- Vulnerabilities in optional dependencies (psycopg2, PyMySQL, anthropic) — report to those projects
+- Vulnerabilities in optional dependencies (psycopg, PyMySQL, anthropic) — report to those projects
 - "pytest-mrt lets me run SQL against a database I configured" — that's intended behavior
 
 ## Security model

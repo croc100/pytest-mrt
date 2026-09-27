@@ -49,7 +49,7 @@ MRTConfig(
 ### `could not connect to server: Connection refused`
 
 ```
-sqlalchemy.exc.OperationalError: (psycopg2.OperationalError)
+sqlalchemy.exc.OperationalError: (psycopg.OperationalError)
 could not connect to server: Connection refused
 ```
 
