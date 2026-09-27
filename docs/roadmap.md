@@ -4,9 +4,30 @@ Items are tracked as GitHub issues. This page is a high-level overview.
 
 ---
 
+## Scope
+
+pytest-mrt answers one question: **will this migration's rollback actually restore the database, data
+included?** Static detection and dynamic up/down/up verification are the two halves of that question,
+and every feature should be traceable back to it.
+
+### The feature surface is frozen (2026-09-28)
+
+23 releases shipped in the 40 days after 2026-06-04, and not one of them started from a request made
+outside the project. That is how a rollback verifier came to own a file watcher, an AI explainer and six
+database backends. So new commands and new flags are on hold: **a new feature needs someone outside the
+project to ask for it** — an issue or a discussion, not an idea.
+
+What continues as normal: bug fixes, supported-version updates (Python, Django, Alembic, SQLAlchemy),
+accuracy work on the rules that already exist, and documentation.
+
+The precedent is v1.5.0, which removed `mrt fix`: generating migration code was a *transform*, and this
+tool *verifies*. Anything that cannot answer the question above is a candidate for the same treatment.
+
+---
+
 ## Shipped
 
-### v1.7.0 — Django rolling-deploy compatibility (main, pending release)
+### v1.7.0 — Django rolling-deploy compatibility
 
 - `mrt check --check-compat` now supports Django migrations (MRT701–MRT704), mapping `RemoveField`/`RenameField`/`DeleteModel`/`RenameModel`/`AlterModelTable`/`AddField` to the same rolling-deploy patterns as Alembic. MRT705 (type change) remains Alembic-only.
 

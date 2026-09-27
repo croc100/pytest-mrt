@@ -970,15 +970,18 @@ def test_assert_reversible_raises_in_django_mode(alembic_env):
         fixture.assert_reversible("001")
 
 
-@pytest.mark.parametrize("method,args", [
-    ("upgrade", ("head",)),
-    ("upgrade_to", ("abc123",)),
-    ("upgrade_one", ()),
-    ("downgrade", ()),
-    ("downgrade_one", ()),
-    ("downgrade_to", ("abc123",)),
-    ("current_revision", ()),
-])
+@pytest.mark.parametrize(
+    "method,args",
+    [
+        ("upgrade", ("head",)),
+        ("upgrade_to", ("abc123",)),
+        ("upgrade_one", ()),
+        ("downgrade", ()),
+        ("downgrade_one", ()),
+        ("downgrade_to", ("abc123",)),
+        ("current_revision", ()),
+    ],
+)
 def test_alembic_step_methods_raise_in_django_mode(alembic_env, method, args):
     """upgrade/downgrade step methods raise RuntimeError in Django mode, not AttributeError."""
     cfg = MRTConfig(alembic_ini=alembic_env["ini"], db_url=alembic_env["db_url"])
