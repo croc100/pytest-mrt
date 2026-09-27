@@ -12,7 +12,7 @@ Last updated: 2026-06-10 · pytest-mrt v1.4.0 · 34 Alembic patterns + 10 Django
 
 The numbers below are measured against the false-positive test suite
 (`tests/test_false_positives.py`, 310 cases) and the detection test suite
-(`tests/test_patterns.py`, 44 pattern × multiple variants each).
+(`tests/test_detector.py` and `tests/test_django_detector.py`, 45 patterns × multiple variants each; `tests/test_false_positives.py` covers the shapes that must *not* fire).
 
 | Metric | Alembic | Django |
 |--------|---------|--------|
@@ -496,7 +496,7 @@ The numbers below are measured against the false-positive test suite
 | Django | 10 | 5 | 5 |
 | **Total** | **44** | **19** | **25** |
 
-False-positive risk distribution across all 44 patterns:
+False-positive risk distribution across all 45 patterns:
 
 | Risk level | Count |
 |-----------|-------|

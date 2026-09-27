@@ -228,11 +228,31 @@ When there are no problems:
 
 ---
 
+## CLI: `mrt explain`
+
+Explains a migration in plain English using Claude. Requires `pip install pytest-mrt[ai]` and an
+`ANTHROPIC_API_KEY` in the environment.
+
+```bash
+mrt explain alembic/versions/003_drop_phone.py
+mrt explain alembic/versions/003_drop_phone.py --model claude-haiku-4-5
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--model`, `-m` | `claude-opus-5` | Claude model to use |
+
+Exit codes: `0` on success, `1` if the file is missing, the `ai` extra is not installed, or the
+request fails. `MRTConfig(explain_model=...)` is deprecated and has no effect — `mrt explain` is a
+CLI command and never loaded `MRTConfig`.
+
+---
+
 ## CLI: `mrt version`
 
 ```bash
 mrt version
-# pytest-mrt 1.6.0
+# pytest-mrt 1.9.1
 ```
 
 ---
