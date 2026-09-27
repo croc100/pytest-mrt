@@ -205,6 +205,7 @@ def test_check_min_revision_filters_older(tmp_path):
     """))
     # Without --min-revision: both checked, bbb is risky
     result_all = runner.invoke(app, ["check", str(vdir)])
+    assert result_all.exit_code != 0
     # With --min-revision=aaa: only bbb (child of aaa) is checked
     result_min = runner.invoke(app, ["check", str(vdir), "--min-revision", "aaa"])
     assert "--min-revision" in result_min.output or "skipping" in result_min.output
@@ -683,6 +684,7 @@ def _alembic_env(tmp_path):
         script_location = {tmp_path}
         sqlalchemy.url = sqlite:///{db}
         version_locations = {versions}
+        path_separator = os
     """)
     )
     (versions / "001_create_users.py").write_text(

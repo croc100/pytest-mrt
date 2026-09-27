@@ -6,7 +6,7 @@ This guide walks you through setting up pytest-mrt from scratch, even if you've 
 
 ## What you need
 
-- Python 3.10 or higher
+- Python 3.10 or higher (tested through 3.14)
 - An existing project that uses [Alembic](https://alembic.sqlalchemy.org/) for database migrations
 - A test database (separate from your production DB — see below)
 
