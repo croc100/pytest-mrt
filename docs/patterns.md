@@ -10,6 +10,11 @@ mrt check migrations/versions/
 
 ---
 
+!!! tip "Looking up a code?"
+    The [rule index](rules.md) lists every MRT code `mrt check` can print, with its
+    severity and which migration format it applies to. This page explains what the
+    patterns cost you in production; it covers 33 of the 52 codes in prose.
+
 ## How to read this page
 
 Each pattern shows:

@@ -27,6 +27,7 @@ jobs:
               - 'pyproject.toml'
             tests:
               - 'tests/**'
+              - 'scripts/**'
             django:
               - 'pytest_mrt/adapters/django*.py'
               - 'tests/test_django*.py'
@@ -52,10 +53,10 @@ jobs:
         run: pip install ruff mypy types-PyMySQL sqlalchemy alembic pytest rich typer
 
       - name: Lint (ruff)
-        run: ruff check pytest_mrt/ tests/
+        run: ruff check pytest_mrt/ tests/ scripts/
 
       - name: Format check (ruff)
-        run: ruff format --check pytest_mrt/ tests/
+        run: ruff format --check pytest_mrt/ tests/ scripts/
 
       - name: Type check (mypy)
         run: mypy pytest_mrt/ --ignore-missing-imports --no-strict-optional
