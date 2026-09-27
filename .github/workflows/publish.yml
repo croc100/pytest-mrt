@@ -1,9 +1,16 @@
 name: Publish to PyPI
 
+# Triggered only by workflow_dispatch. Two constraints shape this:
+#   1. release.yml creates the GitHub Release with GITHUB_TOKEN, and events raised
+#      by GITHUB_TOKEN do not start workflow runs — so `on: release` never fired.
+#   2. This cannot be a reusable workflow (`workflow_call`): PyPI Trusted
+#      Publishers cannot name a reusable workflow (warehouse#11096), so the
+#      publishing job has to live in the workflow PyPI is configured against.
+# workflow_dispatch is the documented exception that GITHUB_TOKEN *can* trigger,
+# so release.yml dispatches this workflow after the release is created.
+# Dispatching with --ref <tag> runs this file as of that tag and publishes it.
 on:
-  release:
-    types: [published]
-  workflow_dispatch:  # allow manual trigger when release event is blocked by GITHUB_TOKEN
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -15,9 +22,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
+
+      - name: Validate tag matches pyproject.toml version
+        if: github.ref_type == 'tag'
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          TOML_VERSION=$(python -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              print(tomllib.load(f)['project']['version'])
+          ")
+          if [ "$TAG" != "$TOML_VERSION" ]; then
+            echo "Tag version ($TAG) does not match pyproject.toml ($TOML_VERSION)"
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME matches pyproject.toml v$TOML_VERSION"
 
       - name: Check if version already exists on PyPI
         id: check
@@ -45,6 +67,6 @@ jobs:
 
       - name: Publish to PyPI
         if: steps.check.outputs.already_published == 'false'
-        uses: pypa/gh-action-pypi-publish@v1.14.0
+        uses: pypa/gh-action-pypi-publish@v1.14.2
         with:
           skip-existing: true

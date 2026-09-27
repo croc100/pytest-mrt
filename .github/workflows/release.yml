@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # required to create releases
+      actions: write   # required to dispatch publish.yml
 
     steps:
       - uses: actions/checkout@v7
@@ -118,3 +119,15 @@ jobs:
           draft: false
           prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
           generate_release_notes: false  # we generate our own above
+
+      # PyPI upload runs only after the release exists. A reusable-workflow call
+      # is not an option here — PyPI Trusted Publishers cannot name a reusable
+      # workflow — and `on: release` never fires for a release created with
+      # GITHUB_TOKEN. workflow_dispatch is the one event GITHUB_TOKEN may raise,
+      # so dispatch publish.yml at this tag and let it publish what the tag holds.
+      - name: Dispatch PyPI publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run publish.yml --ref "$GITHUB_REF_NAME"
+          echo "Dispatched publish.yml for $GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"
