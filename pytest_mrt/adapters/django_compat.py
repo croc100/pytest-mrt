@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import ast
 
-from ..core.detector import RiskWarning
-from .django_detector import DjangoMigrationAST, _warn
+from ..core.detector import RiskWarning, _warn
+from .django_detector import DjangoMigrationAST
 
 
 def _check_compat_remove_field(m: DjangoMigrationAST) -> list[RiskWarning]:

@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .ast_analyzer import MigrationAST
-from .detector import RiskWarning
+from .detector import RiskWarning, RuleTarget, _warn
 
 
 @dataclass
@@ -160,16 +160,13 @@ def _check_data_hole_chain(graph: MigrationGraph) -> list[RiskWarning]:
                 if drop_idx >= 0 and add_idx > drop_idx:
                     col = col_key.split(".")[-1]
                     warnings.append(
-                        RiskWarning(
-                            revision=f"{drop_rev}→{add_rev}",
-                            file=graph.nodes[add_rev].filename,
-                            pattern="Data hole chain",
-                            message=(
-                                f"Column dropped in {drop_rev} then re-added in {add_rev} on table '{table}'. "
-                                "Rolling back both migrations restores the schema but permanently loses "
-                                "the original data — this is invisible to per-migration analysis."
-                            ),
-                            severity="warning",
+                        _warn(
+                            RuleTarget(f"{drop_rev}→{add_rev}", graph.nodes[add_rev].filename),
+                            "Data hole chain",
+                            f"Column dropped in {drop_rev} then re-added in {add_rev} on table '{table}'. "
+                            "Rolling back both migrations restores the schema but permanently loses "
+                            "the original data — this is invisible to per-migration analysis.",
+                            "warning",
                         )
                     )
 
@@ -203,15 +200,12 @@ def _check_orphaned_migrations(graph: MigrationGraph) -> list[RiskWarning]:
     warnings = []
     for node in orphans:
         warnings.append(
-            RiskWarning(
-                revision=node.revision,
-                file=node.filename,
-                pattern="Orphaned migration",
-                message=(
-                    f"Migration {node.revision} is not reachable from any head. "
-                    "It will not run during normal upgrade but may interfere with downgrade."
-                ),
-                severity="warning",
+            _warn(
+                RuleTarget(node.revision, node.filename),
+                "Orphaned migration",
+                f"Migration {node.revision} is not reachable from any head. "
+                "It will not run during normal upgrade but may interfere with downgrade.",
+                "warning",
             )
         )
     return warnings

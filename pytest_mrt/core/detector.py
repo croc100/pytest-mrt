@@ -12,6 +12,7 @@ import ast
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from .ast_analyzer import MigrationAST
 
@@ -52,14 +53,44 @@ def _is_suppressed(line_content: str, code: str) -> bool:
 # ─────────────────────────────────────────────────────────────
 
 
+class WarningTarget(Protocol):
+    """What a rule fired on.
+
+    ``MigrationAST`` and ``DjangoMigrationAST`` both satisfy this, so one factory
+    serves both detectors. Anything else — a directory-level check with no single
+    migration to point at, for instance — passes :class:`RuleTarget`.
+    """
+
+    @property
+    def revision(self) -> str: ...
+
+    @property
+    def filename(self) -> str: ...
+
+
+@dataclass(frozen=True)
+class RuleTarget:
+    """A target for rules that fire outside a single parsed migration."""
+
+    revision: str
+    filename: str
+
+
 def _warn(
-    m: MigrationAST,
+    m: WarningTarget,
     pattern: str,
     message: str,
     severity: str,
     line: int | None = None,
     code: str = "",
 ) -> RiskWarning:
+    """Build a RiskWarning. Every rule in the package goes through here.
+
+    Before this was the only path, four codes (MRT601, MRT602, MRT901, MRT902)
+    constructed RiskWarning directly, with revision and filename first — a
+    different argument order from this helper, where transposing pattern and
+    message would have been silent.
+    """
     return RiskWarning(m.revision, m.filename, pattern, message, severity, line, code)
 
 
@@ -849,9 +880,8 @@ def _check_multiple_heads(migrations: list[MigrationAST]) -> list[RiskWarning]:
         if len(children) > 1:
             revs = ", ".join(children)
             warnings.append(
-                RiskWarning(
-                    revs,
-                    children[0],
+                _warn(
+                    RuleTarget(revs, children[0]),
                     "Multiple heads",
                     f"Revisions {revs} both branch from '{parent}' — "
                     "run `alembic merge heads` to resolve",
@@ -968,9 +998,8 @@ def analyze_migrations(
         m = MigrationAST(source, revision, path.name)
         if m._parse_error:
             warnings.append(
-                RiskWarning(
-                    revision,
-                    path.name,
+                _warn(
+                    RuleTarget(revision, path.name),
                     "Syntax error",
                     f"Could not parse migration file: {m._parse_error}",
                     "error",
