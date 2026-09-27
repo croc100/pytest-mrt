@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import os
+import re
+import warnings
+from dataclasses import replace
+from io import StringIO
+from pathlib import Path
 from typing import Iterator
 
 import pytest
 
 from .config import MRTConfig
+from .core.ast_analyzer import MigrationAST
 from .core.detector import RiskWarning, analyze_migrations
 from .core.drift import compare_schema, describe_diff, load_metadata
 from .core.runner import MigrationRunner
@@ -12,6 +19,7 @@ from .core.schema import SchemaSnapshot
 from .core.seeder import SmartSeeder
 from .core.verifier import RevisionResult, RollbackVerifier
 from .exceptions import MRTConfigError
+from .reporter import print_check_all_summary
 
 
 def _auto_detect_django(config: MRTConfig) -> MRTConfig:
@@ -20,9 +28,6 @@ def _auto_detect_django(config: MRTConfig) -> MRTConfig:
     and alembic.ini is absent, automatically switch to Django mode.
     Returns a (possibly updated) MRTConfig.
     """
-    import os
-    from pathlib import Path
-
     if config.django_settings is not None:
         return config  # already explicit
 
@@ -35,11 +40,10 @@ def _auto_detect_django(config: MRTConfig) -> MRTConfig:
         return config  # alembic.ini exists → user probably wants Alembic mode
 
     try:
+        # Optional dependency: pytest-mrt[django]
         import django  # noqa: F401
     except ImportError:
         return config  # Django not installed
-
-    import warnings
 
     warnings.warn(
         f"pytest-mrt: DJANGO_SETTINGS_MODULE='{env_settings}' detected and alembic.ini "
@@ -47,8 +51,6 @@ def _auto_detect_django(config: MRTConfig) -> MRTConfig:
         f"To make this explicit, set django_settings='{env_settings}' in MRTConfig.",
         stacklevel=3,
     )
-
-    from dataclasses import replace
 
     return replace(config, django_settings=env_settings)
 
@@ -60,6 +62,7 @@ class MRTFixture:
         self._django_mode = config.django_settings is not None
 
         if self._django_mode:
+            # Deferred: the Django adapters import Django itself.
             from .adapters.django_runner import DjangoMigrationRunner
             from .adapters.django_verifier import DjangoRollbackVerifier
 
@@ -80,9 +83,7 @@ class MRTFixture:
             self._seeder = SmartSeeder(self._django_runner.engine)
             self._verifier = None  # type: ignore[assignment]
         else:
-            from pathlib import Path as _Path
-
-            if not _Path(config.alembic_ini).exists():
+            if not Path(config.alembic_ini).exists():
                 raise MRTConfigError(
                     f"alembic.ini not found: '{config.alembic_ini}'\n\n"
                     "Check the path and update MRTConfig(alembic_ini=...) in your conftest.py.\n"
@@ -175,14 +176,9 @@ class MRTFixture:
 
         # Apply custom checks
         if self._config.custom_checks:
-            import re as _re
-            from pathlib import Path
-
-            from .core.ast_analyzer import MigrationAST
-
             for path in sorted(Path(versions_dir).glob("*.py")):
                 source = path.read_text(encoding="utf-8")
-                m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
+                m_rev = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
                 revision = m_rev.group(1) if m_rev else path.stem
                 m = MigrationAST(source, revision, path.name)
                 if not m._parse_error:
@@ -251,8 +247,6 @@ class MRTFixture:
             )
 
     def assert_all_reversible(self, apps: list[str] | None = None) -> None:
-        from .reporter import print_check_all_summary
-
         if self._django_mode:
             results = self._django_verifier.check_all(apps=apps or self._config.django_apps)
         else:
@@ -306,8 +300,7 @@ class MRTFixture:
             )
 
     def _assert_django_no_drift(self) -> None:
-        from io import StringIO
-
+        # Optional dependency: pytest-mrt[django]
         from django.core.management import call_command
 
         out = StringIO()
@@ -358,8 +351,6 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     if cfg.django_settings is not None:
         return
 
-    from pathlib import Path
-
     if not Path(cfg.alembic_ini).exists():
         msg = (
             f"alembic.ini not found: '{cfg.alembic_ini}'\n\n"
@@ -385,9 +376,9 @@ def pytest_collection_modifyitems(
     if config.getini("mrt_default_tests") == "false":
         return
 
-    from pathlib import Path
-
     try:
+        # Private pytest API: guarded by the surrounding try/except so a
+        # pytest release that moves it degrades to a warning, not a crash.
         from _pytest.python import Module as _PytestModule
 
         import pytest_mrt.default_tests as _dt
@@ -397,8 +388,6 @@ def pytest_collection_modifyitems(
         new_items: list[pytest.Item] = [i for i in module.collect() if isinstance(i, pytest.Item)]
         items[:0] = new_items
     except Exception as _exc:
-        import warnings
-
         warnings.warn(
             f"pytest-mrt: failed to inject built-in default tests: {_exc}\n"
             "Set mrt_default_tests = 'false' in pytest.ini to suppress this warning.",

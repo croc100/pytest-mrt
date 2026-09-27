@@ -17,6 +17,7 @@ cross-migration patterns that per-file analysis cannot see:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -76,13 +77,11 @@ class MigrationGraph:
 
 
 def _build_graph(versions_dir: str) -> MigrationGraph:
-    import re as _re
-
     graph = MigrationGraph()
     for path in sorted(Path(versions_dir).glob("*.py")):
         source = path.read_text(encoding="utf-8")
-        m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
-        m_down = _re.search(r'down_revision\s*=\s*["\']([^"\']+)["\']', source)
+        m_rev = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
+        m_down = re.search(r'down_revision\s*=\s*["\']([^"\']+)["\']', source)
         if not m_rev:
             continue
         revision = m_rev.group(1)

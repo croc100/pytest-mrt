@@ -14,7 +14,10 @@ You can also import individual tests explicitly:
 
 from __future__ import annotations
 
+from collections import defaultdict
+
 import pytest
+from alembic.script import ScriptDirectory
 
 
 def test_mrt_single_head(mrt) -> None:
@@ -28,8 +31,6 @@ def test_mrt_single_head(mrt) -> None:
         executor = mrt._django_verifier.runner._executor()
         leaves = executor.loader.graph.leaf_nodes()
         # Group by app so the error message is actionable
-        from collections import defaultdict
-
         by_app: dict[str, list[str]] = defaultdict(list)
         for app_label, name in leaves:
             by_app[app_label].append(name)
@@ -40,8 +41,6 @@ def test_mrt_single_head(mrt) -> None:
             + "\nRun `python manage.py makemigrations --merge` to create a merge migration."
         )
         return
-
-    from alembic.script import ScriptDirectory
 
     script = ScriptDirectory.from_config(mrt._runner.alembic_cfg)
     heads = script.get_heads()

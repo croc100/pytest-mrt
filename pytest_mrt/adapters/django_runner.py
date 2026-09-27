@@ -21,6 +21,7 @@ from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.pool import NullPool
 
 
@@ -40,8 +41,6 @@ class DjangoMigration:
 
 def _sqlalchemy_url_to_django_db(db_url: str) -> dict[str, Any]:
     """Convert a SQLAlchemy URL to a Django DATABASES entry."""
-    from sqlalchemy.engine.url import make_url
-
     url = make_url(db_url)
     dialect = url.drivername.split("+")[0]
 
@@ -81,6 +80,8 @@ def _configure_django(
 ) -> None:
     """Minimal Django setup sufficient for migration execution."""
     try:
+        # Optional dependency, and Django must be configured before its
+        # modules are imported — so these cannot move to module level.
         import django
         from django.conf import settings as django_settings
     except ImportError as exc:

@@ -595,24 +595,22 @@ def _parse_dependencies(source: str) -> list[str]:
     Entries are therefore resolved one at a time, and a non-literal entry only
     skips itself.
     """
-    import ast as _ast
-
     try:
-        tree = _ast.parse(source)
+        tree = ast.parse(source)
     except SyntaxError:
         return []
 
     parents: list[str] = []
-    for node in _ast.walk(tree):
-        if not isinstance(node, _ast.Assign):
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
             continue
-        if not any(isinstance(t, _ast.Name) and t.id == "dependencies" for t in node.targets):
+        if not any(isinstance(t, ast.Name) and t.id == "dependencies" for t in node.targets):
             continue
-        if not isinstance(node.value, (_ast.List, _ast.Tuple)):
+        if not isinstance(node.value, (ast.List, ast.Tuple)):
             continue
         for element in node.value.elts:
             try:
-                dep = _ast.literal_eval(element)
+                dep = ast.literal_eval(element)
             except ValueError:
                 # swappable_dependency(...) and other computed entries: not a
                 # file-level parent we can resolve statically.
@@ -720,6 +718,7 @@ def analyze_django_migrations(
         source_lines = path.read_text(encoding="utf-8").splitlines()
         checks = list(_DJANGO_CHECKS)
         if check_compat:
+            # Local import, not hoistable: django_compat imports this module.
             from .django_compat import analyze_django_compat
 
             checks.append(analyze_django_compat)

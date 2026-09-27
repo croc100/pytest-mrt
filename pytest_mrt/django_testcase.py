@@ -25,6 +25,10 @@ import os
 import unittest
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import text
+
+from .core.schema import SchemaDiff, SchemaSnapshot
+from .core.seeder import SmartSeeder
 from .core.sql import quote_identifier as q
 
 if TYPE_CHECKING:
@@ -73,6 +77,7 @@ class MRTTestCase(unittest.TestCase):
                 "Example: migrate_from = ('myapp', '0009_prev') ; migrate_to = ('myapp', '0010_target')"
             )
 
+        # Deferred: the Django adapters import Django itself.
         from .adapters.django_runner import DjangoMigrationRunner
         from .adapters.django_verifier import DjangoRollbackVerifier
 
@@ -156,11 +161,6 @@ class MRTTestCase(unittest.TestCase):
                 User.objects.create(name="Alice")
                 self.assertDataIntact()   # Alice must still exist after rollback
         """
-        from sqlalchemy import text
-
-        from .core.schema import SchemaDiff, SchemaSnapshot
-        from .core.seeder import SmartSeeder
-
         engine = self._runner.engine
         schema_before = SchemaSnapshot.capture(engine)
 
@@ -247,6 +247,7 @@ class MRTTestCase(unittest.TestCase):
         on the subclass when ``DjangoMigrationRunner`` was configured to use a
         non-default connection alias.
         """
+        # Optional dependency: pytest-mrt[django]
         from django.db import connections
         from django.db.migrations.executor import MigrationExecutor
 

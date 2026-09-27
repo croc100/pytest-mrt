@@ -8,6 +8,7 @@ line numbers, keyword argument inspection, and context awareness.
 
 from __future__ import annotations
 
+import ast
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -348,11 +349,9 @@ def _check_multi_step_destructive(m: MigrationAST) -> list[RiskWarning]:
 
 
 def _check_cascade_delete(m: MigrationAST) -> list[RiskWarning]:
-    import ast as ast_mod
-
     for c in m.upgrade_calls():
-        for node in ast_mod.walk(c.node):
-            if isinstance(node, ast_mod.Call):
+        for node in ast.walk(c.node):
+            if isinstance(node, ast.Call):
                 ondelete = MigrationAST.kwarg_str(node, "ondelete")
                 if ondelete and ondelete.upper() == "CASCADE":
                     return [
@@ -620,20 +619,18 @@ def _check_bulk_insert_no_reverse(m: MigrationAST) -> list[RiskWarning]:
 
 def _check_context_execute(m: MigrationAST) -> list[RiskWarning]:
     """context.execute() is an alternative to op.execute() with same risks."""
-    import ast as ast_mod
-
     if m.upgrade_fn is None:
         return []
 
     ctx_calls = []
-    for node in ast_mod.walk(m.upgrade_fn):
-        if isinstance(node, ast_mod.Call):
+    for node in ast.walk(m.upgrade_fn):
+        if isinstance(node, ast.Call):
             func = node.func
             # context.execute(...) or ctx.execute(...)
             if (
-                isinstance(func, ast_mod.Attribute)
+                isinstance(func, ast.Attribute)
                 and func.attr == "execute"
-                and isinstance(func.value, ast_mod.Name)
+                and isinstance(func.value, ast.Name)
                 and func.value.id in ("context", "ctx", "conn", "connection")
             ):
                 ctx_calls.append(node)
@@ -644,10 +641,10 @@ def _check_context_execute(m: MigrationAST) -> list[RiskWarning]:
     # Check if downgrade has corresponding execute
     if m.downgrade_fn:
         down_has_execute = any(
-            isinstance(node, ast_mod.Call)
-            and isinstance(node.func, ast_mod.Attribute)
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
             and node.func.attr == "execute"
-            for node in ast_mod.walk(m.downgrade_fn)
+            for node in ast.walk(m.downgrade_fn)
         )
         if down_has_execute:
             return []
@@ -711,19 +708,17 @@ def _check_create_trigger_without_drop(m: MigrationAST) -> list[RiskWarning]:
     the trigger, rolling back leaves a dangling trigger that references potentially removed tables
     or columns, causing unexpected errors on future DML.
     """
-    import re as _re
-
     # Extract string literals from upgrade execute calls
     upgrade_sql = " ".join(
         m.str_arg(c.node, 0) or "" for c in m.upgrade_calls() if c.method == "execute"
     )
-    if not _re.search(r"CREATE\s+TRIGGER", upgrade_sql, _re.IGNORECASE):
+    if not re.search(r"CREATE\s+TRIGGER", upgrade_sql, re.IGNORECASE):
         return []
 
     downgrade_sql = " ".join(
         m.str_arg(c.node, 0) or "" for c in m.downgrade_calls() if c.method == "execute"
     )
-    if _re.search(r"DROP\s+TRIGGER", downgrade_sql, _re.IGNORECASE):
+    if re.search(r"DROP\s+TRIGGER", downgrade_sql, re.IGNORECASE):
         return []
 
     return [
@@ -746,18 +741,16 @@ def _check_create_type_without_drop(m: MigrationAST) -> list[RiskWarning]:
     while any column references them. If downgrade does not drop the type, re-running
     the upgrade later will fail with 'type already exists'.
     """
-    import re as _re
-
     upgrade_sql = " ".join(
         m.str_arg(c.node, 0) or "" for c in m.upgrade_calls() if c.method == "execute"
     )
-    if not _re.search(r"CREATE\s+TYPE", upgrade_sql, _re.IGNORECASE):
+    if not re.search(r"CREATE\s+TYPE", upgrade_sql, re.IGNORECASE):
         return []
 
     downgrade_sql = " ".join(
         m.str_arg(c.node, 0) or "" for c in m.downgrade_calls() if c.method == "execute"
     )
-    if _re.search(r"DROP\s+TYPE", downgrade_sql, _re.IGNORECASE):
+    if re.search(r"DROP\s+TYPE", downgrade_sql, re.IGNORECASE):
         return []
 
     return [
@@ -885,8 +878,6 @@ def _revisions_since(versions_dir: str, since: str) -> set[str]:
     If ``since`` is not found in the chain the function returns an empty set
     and the caller should warn the user rather than silently analysing nothing.
     """
-    import re as _re
-
     # Build two mappings from raw source:
     #   rev_id  → down_revision (str | tuple[str] | None)
     #   rev_id  → path
@@ -895,19 +886,19 @@ def _revisions_since(versions_dir: str, since: str) -> set[str]:
 
     for path in sorted(Path(versions_dir).glob("*.py")):
         source = path.read_text(encoding="utf-8")
-        m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
+        m_rev = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
         if not m_rev:
             continue
         rev_id = m_rev.group(1)
         rev_to_path[rev_id] = path
 
         # down_revision may be a string, a tuple, or None
-        m_down = _re.search(r"down_revision\s*=\s*(.+)", source)
+        m_down = re.search(r"down_revision\s*=\s*(.+)", source)
         parents: list[str] = []
         if m_down:
             raw = m_down.group(1).strip().rstrip(",")
             # collect all quoted revision ids in that expression
-            parents = _re.findall(r'["\']([0-9a-f]+)["\']', raw)
+            parents = re.findall(r'["\']([0-9a-f]+)["\']', raw)
         rev_to_down[rev_id] = parents
 
     # Build children map: parent → [children]
@@ -952,6 +943,7 @@ def analyze_migrations(
         min_revision: If given, skip revisions at or older than this point.
                The two sets are intersected when both are provided.
     """
+    # Local import, not hoistable: core/graph.py imports this module.
     from .graph import analyze_migration_graph
 
     since_set: set[str] | None = None
@@ -967,9 +959,7 @@ def analyze_migrations(
 
     for path in sorted(Path(versions_dir).glob("*.py")):
         source = path.read_text(encoding="utf-8")
-        import re as _re
-
-        m_rev = _re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
+        m_rev = re.search(r'revision\s*=\s*["\']([^"\']+)["\']', source)
         revision = m_rev.group(1) if m_rev else path.stem
 
         if since_set is not None and revision not in since_set:
