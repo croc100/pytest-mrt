@@ -65,9 +65,7 @@ def test_single_head_django_passes_single_leaf_per_app():
 
 
 def test_single_head_django_fails_multiple_leaves_same_app():
-    mrt = _django_mrt_with_leaves(
-        [("users", "0002_add_email"), ("users", "0002_add_phone")]
-    )
+    mrt = _django_mrt_with_leaves([("users", "0002_add_email"), ("users", "0002_add_phone")])
     with pytest.raises(AssertionError, match="multiple leaf"):
         _single_head(mrt)
 

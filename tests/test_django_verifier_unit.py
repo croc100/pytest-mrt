@@ -474,8 +474,14 @@ def test_check_all_min_revision_not_found_tests_all(mock_runner):
     tested = []
 
     with mock.patch.object(
-        verifier, "check_migration",
-        side_effect=lambda m: tested.append(m.revision) or __import__("pytest_mrt.core.verifier", fromlist=["RevisionResult"]).RevisionResult(revision=m.revision, passed=True)
+        verifier,
+        "check_migration",
+        side_effect=lambda m: (
+            tested.append(m.revision)
+            or __import__("pytest_mrt.core.verifier", fromlist=["RevisionResult"]).RevisionResult(
+                revision=m.revision, passed=True
+            )
+        ),
     ):
         results = verifier.check_all()
 

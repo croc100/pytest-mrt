@@ -150,9 +150,7 @@ def test_django_mode_seed_inserts_rows_and_tracks_them(django_runner):
     )
 
     with django_runner.engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT name FROM django_app_widget WHERE id = 999")
-        ).fetchone()
+        row = conn.execute(text("SELECT name FROM django_app_widget WHERE id = 999")).fetchone()
 
     assert row is not None, "seed_custom() did not insert the row"
     assert row[0] == "Sprocket"
@@ -192,9 +190,7 @@ def test_django_mode_mrt_fixture_seed(django_runner):
     )
 
     with django_runner.engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT name FROM django_app_widget WHERE id = 777")
-        ).fetchone()
+        row = conn.execute(text("SELECT name FROM django_app_widget WHERE id = 777")).fetchone()
 
     assert row is not None, "MRTFixture.seed() did not insert the row in Django mode"
     assert row[0] == "Gear"

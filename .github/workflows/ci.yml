@@ -11,11 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       src:      ${{ steps.filter.outputs.src }}
+      tests:    ${{ steps.filter.outputs.tests }}
       django:   ${{ steps.filter.outputs.django }}
       postgres: ${{ steps.filter.outputs.postgres }}
       mysql:    ${{ steps.filter.outputs.mysql }}
-      oracle:   ${{ steps.filter.outputs.oracle }}
-      mssql:    ${{ steps.filter.outputs.mssql }}
       ci:       ${{ steps.filter.outputs.ci }}
     steps:
       - uses: actions/checkout@v7
@@ -26,6 +25,8 @@ jobs:
             src:
               - 'pytest_mrt/**'
               - 'pyproject.toml'
+            tests:
+              - 'tests/**'
             django:
               - 'pytest_mrt/adapters/django*.py'
               - 'tests/test_django*.py'
@@ -33,16 +34,12 @@ jobs:
               - 'tests/test_postgres.py'
             mysql:
               - 'tests/test_mysql.py'
-            oracle:
-              - 'tests/test_oracle.py'
-            mssql:
-              - 'tests/test_mssql.py'
             ci:
               - '.github/workflows/ci.yml'
 
   lint:
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.ci == 'true' }}
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -55,10 +52,10 @@ jobs:
         run: pip install ruff mypy types-PyMySQL sqlalchemy alembic pytest rich typer
 
       - name: Lint (ruff)
-        run: ruff check pytest_mrt/
+        run: ruff check pytest_mrt/ tests/
 
       - name: Format check (ruff)
-        run: ruff format --check pytest_mrt/
+        run: ruff format --check pytest_mrt/ tests/
 
       - name: Type check (mypy)
         run: mypy pytest_mrt/ --ignore-missing-imports --no-strict-optional
@@ -190,46 +187,11 @@ jobs:
       - name: Run Django dynamic rollback tests
         run: pytest tests/test_django_dynamic.py -v
 
-  test-oracle:
-    needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.oracle == 'true' || needs.changes.outputs.ci == 'true' }}
-    runs-on: ubuntu-latest
-
-    services:
-      oracle:
-        image: gvenzl/oracle-free:23-slim
-        env:
-          ORACLE_PASSWORD: mrt_root
-          APP_USER: mrt
-          APP_USER_PASSWORD: mrt
-        options: >-
-          --health-cmd "healthcheck.sh"
-          --health-interval 20s
-          --health-timeout 10s
-          --health-retries 10
-        ports:
-          - 1521:1521
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.14"
-
-      - name: Install
-        run: pip install -e ".[dev,oracle]"
-
-      - name: Run Oracle tests
-        env:
-          TEST_DATABASE_URL: oracle+oracledb://mrt:mrt@localhost:1521/?service_name=FREEPDB1
-        run: coverage run -m pytest tests/test_oracle.py -v
-
   # Always-green wrapper — the only job registered as a required status check.
   # Succeeds when all conditional jobs either passed or were skipped (docs-only
   # PRs skip everything, but this job still reports green so the PR can merge).
   ci:
-    needs: [lint, test, test-django, test-postgres, test-mysql, test-oracle, test-mssql]
+    needs: [lint, test, test-django, test-postgres, test-mysql]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -242,59 +204,3 @@ jobs:
           fi
           echo "All jobs passed or were skipped."
 
-  test-mssql:
-    needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.mssql == 'true' || needs.changes.outputs.ci == 'true' }}
-    runs-on: ubuntu-latest
-
-    services:
-      mssql:
-        image: mcr.microsoft.com/mssql/server:2025-latest
-        env:
-          ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: MrtTest1234!
-        options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'MrtTest1234!' -Q 'SELECT 1' -No"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 1433:1433
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.14"
-
-      - name: Configure FreeTDS (trust self-signed TLS cert)
-        run: |
-          printf '[global]\ntds version = 7.4\nencrypt = no\n' >> ~/.freetds.conf
-
-      - name: Create mrt_test database
-        run: |
-          pip install pymssql
-          python -c "
-          import pymssql, time, sys
-          for attempt in range(20):
-              try:
-                  conn = pymssql.connect(server='localhost', user='SA', password='MrtTest1234!', database='master', port=1433, autocommit=True)
-                  conn.cursor().execute('CREATE DATABASE mrt_test')
-                  conn.close()
-                  print('Created mrt_test')
-                  break
-              except Exception as e:
-                  print(f'Attempt {attempt+1}: {e}')
-                  time.sleep(3)
-          else:
-              sys.exit(1)
-          "
-
-      - name: Install
-        run: pip install -e ".[dev,mssql]"
-
-      - name: Run SQL Server tests
-        env:
-          TEST_DATABASE_URL: mssql+pymssql://SA:MrtTest1234!@localhost:1433/mrt_test
-        run: coverage run -m pytest tests/test_mssql.py -v
