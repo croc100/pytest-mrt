@@ -170,7 +170,7 @@ class MRTTestCase(unittest.TestCase):
             for tname, tinfo in schema_before.tables.items():
                 if tinfo.pk_cols:
                     pk_col = tinfo.pk_cols[0]
-                    rows = (
+                    rows: list[Any] = list(
                         conn.execute(
                             text(f"SELECT {pk_col} FROM {tname}")  # noqa: S608
                         )
@@ -214,7 +214,7 @@ class MRTTestCase(unittest.TestCase):
                         continue  # already reported as a schema-level issue
                     tinfo = schema_before.tables[tname]
                     pk_col = tinfo.pk_cols[0]
-                    after_pks = set(
+                    after_pks: set[Any] = set(
                         conn.execute(
                             text(f"SELECT {pk_col} FROM {tname}")  # noqa: S608
                         )
