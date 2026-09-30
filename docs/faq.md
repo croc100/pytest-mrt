@@ -185,7 +185,7 @@ strategy:
     db: [postgres, mysql]
 ```
 
-See [CI integration examples](../examples/ci-integration/).
+See [Adding to GitHub Actions](quickstart.md#adding-to-github-actions) for a full workflow.
 
 ---
 
