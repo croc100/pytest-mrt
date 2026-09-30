@@ -191,11 +191,52 @@ jobs:
       - name: Run Django dynamic rollback tests
         run: pytest tests/test_django_dynamic.py -v
 
+  build:
+    needs: changes
+    # The distribution was first validated inside publish.yml, which release.yml
+    # dispatches only after the GitHub Release already exists. v1.8.0 is what that
+    # costs: the release was created at 15:57:32 and the upload failed a minute
+    # later on `InvalidDistribution: Metadata-Version '2.5'`, leaving a tagged
+    # release with nothing on PyPI until someone re-dispatched by hand. Building
+    # and checking here moves that failure to before the tag.
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.ci == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Build sdist and wheel
+        run: |
+          pip install hatch twine
+          hatch build
+
+      - name: Check distribution metadata
+        run: twine check --strict dist/*
+
+      - name: Confirm the wheel carries every subpackage
+        run: |
+          python - <<'EOF'
+          import glob, sys, zipfile
+          wheel = sorted(glob.glob("dist/*.whl"))[-1]
+          names = zipfile.ZipFile(wheel).namelist()
+          missing = [
+              p
+              for p in ("pytest_mrt/core/", "pytest_mrt/adapters/", "pytest_mrt/commands/")
+              if not any(n.startswith(p) for n in names)
+          ]
+          if missing:
+              sys.exit(f"{wheel} ships without {missing}")
+          print(f"{wheel}: {sum(1 for n in names if n.startswith('pytest_mrt/'))} modules")
+          EOF
+
   # Always-green wrapper — the only job registered as a required status check.
   # Succeeds when all conditional jobs either passed or were skipped (docs-only
   # PRs skip everything, but this job still reports green so the PR can merge).
   ci:
-    needs: [lint, test, test-django, test-postgres, test-mysql]
+    needs: [lint, test, test-django, test-postgres, test-mysql, build]
     if: always()
     runs-on: ubuntu-latest
     steps:
