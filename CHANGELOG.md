@@ -12,15 +12,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ### Added
 - **MRT504 — `DROP TRIGGER` without recreate.** The mirror of MRT502, and the direction that slips past both halves of a rollback check: after a rollback the schema still matches and every existing row still holds the value the trigger wrote, so only the *next* committed write comes out wrong — no audit row, no denormalised counter, no updated timestamp. Fires when `upgrade()` drops a trigger via raw SQL and `downgrade()` has no `CREATE TRIGGER`.
 - **MRT415 — `PRAGMA foreign_keys=ON` after DML (SQLite).** SQLite ignores a change to `foreign_keys` inside an open transaction, and pysqlite defers the physical `BEGIN` until the first `INSERT`/`UPDATE`/`DELETE`/`REPLACE`. The pragma therefore works at the top of a migration and is a silent no-op once any row has been written: enforcement stays off for the rest of the transaction and orphan rows commit. Two things make it hard to catch by hand — `PRAGMA integrity_check` still returns `ok` afterwards, because only `PRAGMA foreign_key_check` reports orphans, and SQLAlchemy's `Connection.in_transaction()` is `True` in both orderings, so the obvious guard does not discriminate. Reported by nazeeh111 in [sqlalchemy/alembic discussion #1817](https://github.com/sqlalchemy/alembic/discussions/1817); confirmed here against Alembic 1.20.0 / SQLAlchemy 2.0.54 / SQLite 3.37.2 with an unmodified `alembic init` `env.py`.
+- **A duplicate rule code now fails the build.** `scripts/gen_rule_index.py` grew `collect_sites()`, `code_collisions()` and `stale_shared_codes()`, and refuses to generate when one code names two differently-worded rules. That is how MRT413 reached a release candidate: it was given to a new Alembic rule although `django_detector.py` already emitted it, no test failed, and the only trace was a merged row on the index page reading `error / warning` and `Alembic, Django`. Four codes share a body on purpose — the rolling-deploy pair MRT701–MRT704, worded per migration format — so they are listed in `SHARED_CODES` with a reason, and an entry the source stops supporting fails too.
 
 ### Changed
 - MRT502 and MRT503 read raw SQL through two new shared helpers (`_upgrade_sql` / `_downgrade_sql`) instead of each duplicating the same join. Both consequently see `op.execute(sa.text("..."))`, which they missed before — they only looked at a bare string literal.
+- The generator parses each rule emission into a `Site` record before grouping by code, rather than merging as it walks. `collect_rules()` is unchanged in output; the per-site detail it used to discard is what makes a collision detectable.
 
 ### Fixed
 - **The summary tables in `docs/accuracy.md` did not match the entries above them.** The per-file severity split read 13 error / 18 warning against an actual 14 / 17, and the false-positive risk distribution summed to 42 across 44 documented patterns (`None` counted 17 where the entries say 12, `Low` 17 where they say 23). Every figure in both tables is now counted from the entries themselves. The pattern total, quoted in three more places across `docs/accuracy.md` and `README.md`, read 45 against the same 44 entries.
 
 ---
-
+- **`docs/accuracy.md` documented two Django rules at the wrong severity.** D5 (`RunSQL without reverse_sql`, MRT108) and D7 (`RunPython without reverse_code`, MRT107) were listed as warnings while `django_detector.py` emits both as errors. Severity decides `mrt check`'s exit code, so a reader could not tell from the page why their build failed. Both are corrected, the Django column of the summary table moves from 5/5 to 7/3, and a test now compares every documented severity against the source.
 ## [1.9.1] — 2026-09-28
 
 ### Changed

@@ -465,7 +465,7 @@ Confirmed against Alembic 1.20.0 / SQLAlchemy 2.0.54 / SQLite 3.37.2 with an unm
 #### D5. RunSQL without reverse_sql
 | | |
 |---|---|
-| **Severity** | warning |
+| **Severity** | error |
 | **Will catch** | `RunSQL(forward_sql)` without a `reverse_sql` argument |
 | **Will NOT catch** | Reverse SQL that is present but logically incorrect |
 | **False-positive risk** | Low — read-only SQL in `RunSQL` is uncommon; add `reverse_sql=""` to document intentional one-way operations |
@@ -485,7 +485,7 @@ Confirmed against Alembic 1.20.0 / SQLAlchemy 2.0.54 / SQLite 3.37.2 with an unm
 #### D7. RunPython without reverse_code
 | | |
 |---|---|
-| **Severity** | warning |
+| **Severity** | error |
 | **Will catch** | `RunPython(forwards_func)` without `reverse_code=` argument |
 | **Will NOT catch** | Reverse function that exists but does nothing (not checked for no-op) |
 | **False-positive risk** | Low |
@@ -528,8 +528,8 @@ Confirmed against Alembic 1.20.0 / SQLAlchemy 2.0.54 / SQLite 3.37.2 with an unm
 |-------|---------------|-------|---------|
 | Alembic per-file | 33 | 16 | 17 |
 | Alembic graph | 3 | 1 | 2 |
-| Django | 10 | 5 | 5 |
-| **Total** | **46** | **22** | **24** |
+| Django | 10 | 7 | 3 |
+| **Total** | **46** | **24** | **22** |
 
 False-positive risk distribution across all 46 patterns:
 
