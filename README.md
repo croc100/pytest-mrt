@@ -254,7 +254,7 @@ Legacy syntax `# mrt: ignore` is still supported for backward compatibility.
 
 | | pytest-mrt | [pytest-alembic](https://github.com/schireson/pytest-alembic) | [alembic check](https://alembic.sqlalchemy.org/en/latest/ops.html#alembic.operations.Operations.check) | [django-test-migrations](https://github.com/wemake-services/django-test-migrations) |
 |---|:---:|:---:|:---:|:---:|
-| Static analysis (no DB required) | ✅ 45 patterns | ❌ | ❌ | ❌ |
+| Static analysis (no DB required) | ✅ 46 patterns | ❌ | ❌ | ❌ |
 | Dynamic rollback testing | ✅ | ✅ | ❌ | ✅ |
 | **Data survival check** (seeds rows, verifies after rollback) | ✅ | ❌ schema only | ❌ | ❌ |
 | Django support | ✅ | ❌ | ❌ | ✅ |
@@ -293,7 +293,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 Full docs at **[croc100.github.io/pytest-mrt](https://croc100.github.io/pytest-mrt)**
 
 - [Getting started (step-by-step)](https://croc100.github.io/pytest-mrt/quickstart/)
-- [All 45 patterns explained](https://croc100.github.io/pytest-mrt/patterns/)
+- [All 46 patterns explained](https://croc100.github.io/pytest-mrt/patterns/)
 - [Rule index](https://croc100.github.io/pytest-mrt/rules/) — every MRT code, its severity, and which migration format it applies to
 - [CLI & fixture reference](https://croc100.github.io/pytest-mrt/cli/)
 - [Detection accuracy report](docs/accuracy.md) — what each pattern catches and doesn't catch

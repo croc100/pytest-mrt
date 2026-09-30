@@ -98,6 +98,16 @@ def _sql(call) -> str:
     return MigrationAST.sql_content(call).upper()
 
 
+def _upgrade_sql(m: MigrationAST) -> str:
+    """Every raw-SQL string op.execute()'d in upgrade(), joined and upper-cased."""
+    return " ".join(_sql(c.node) for c in m.upgrade_calls() if c.method == "execute")
+
+
+def _downgrade_sql(m: MigrationAST) -> str:
+    """Every raw-SQL string op.execute()'d in downgrade(), joined and upper-cased."""
+    return " ".join(_sql(c.node) for c in m.downgrade_calls() if c.method == "execute")
+
+
 # ─────────────────────────────────────────────────────────────
 # per-file checks
 # ─────────────────────────────────────────────────────────────
@@ -740,15 +750,11 @@ def _check_create_trigger_without_drop(m: MigrationAST) -> list[RiskWarning]:
     or columns, causing unexpected errors on future DML.
     """
     # Extract string literals from upgrade execute calls
-    upgrade_sql = " ".join(
-        m.str_arg(c.node, 0) or "" for c in m.upgrade_calls() if c.method == "execute"
-    )
+    upgrade_sql = _upgrade_sql(m)
     if not re.search(r"CREATE\s+TRIGGER", upgrade_sql, re.IGNORECASE):
         return []
 
-    downgrade_sql = " ".join(
-        m.str_arg(c.node, 0) or "" for c in m.downgrade_calls() if c.method == "execute"
-    )
+    downgrade_sql = _downgrade_sql(m)
     if re.search(r"DROP\s+TRIGGER", downgrade_sql, re.IGNORECASE):
         return []
 
@@ -772,15 +778,11 @@ def _check_create_type_without_drop(m: MigrationAST) -> list[RiskWarning]:
     while any column references them. If downgrade does not drop the type, re-running
     the upgrade later will fail with 'type already exists'.
     """
-    upgrade_sql = " ".join(
-        m.str_arg(c.node, 0) or "" for c in m.upgrade_calls() if c.method == "execute"
-    )
+    upgrade_sql = _upgrade_sql(m)
     if not re.search(r"CREATE\s+TYPE", upgrade_sql, re.IGNORECASE):
         return []
 
-    downgrade_sql = " ".join(
-        m.str_arg(c.node, 0) or "" for c in m.downgrade_calls() if c.method == "execute"
-    )
+    downgrade_sql = _downgrade_sql(m)
     if re.search(r"DROP\s+TYPE", downgrade_sql, re.IGNORECASE):
         return []
 
@@ -830,6 +832,86 @@ def _check_set_not_null_alter_column(m: MigrationAST) -> list[RiskWarning]:
     return warnings
 
 
+def _check_drop_trigger_without_recreate(m: MigrationAST) -> list[RiskWarning]:
+    """
+    op.execute('DROP TRIGGER ...') in upgrade without CREATE TRIGGER in downgrade.
+
+    The mirror of MRT502, and the harder direction to notice. A dropped trigger leaves no trace
+    in either half of what this tool compares: the schema still matches, and every existing row
+    still holds the value the trigger wrote. What rollback does not restore is the trigger's
+    behaviour, so the next committed write is the one that comes out wrong — no audit row, no
+    denormalised counter, no updated timestamp.
+    """
+    if not re.search(r"DROP\s+TRIGGER", _upgrade_sql(m)):
+        return []
+    if re.search(r"CREATE\s+TRIGGER", _downgrade_sql(m)):
+        return []
+
+    return [
+        _warn(
+            m,
+            "DROP TRIGGER without recreate",
+            "upgrade() drops a trigger via SQL but downgrade() does not recreate it. "
+            "Schema and existing rows compare clean after rollback while the trigger's behaviour "
+            "stays lost, so neither a schema diff nor a row comparison catches this. "
+            "Fix: add op.execute('CREATE TRIGGER ...') to downgrade() with the original body.",
+            "error",
+            code="MRT504",
+        )
+    ]
+
+
+# A pragma that turns enforcement on, and a statement that opens SQLite's physical
+# transaction. The DML pattern is anchored at the start of the statement so that
+# "CREATE TRIGGER ... AFTER UPDATE ON t" is not read as an UPDATE.
+_PRAGMA_FK_ON = re.compile(r"PRAGMA\s+FOREIGN_KEYS\s*=\s*(?:ON|1|TRUE)\b")
+_LEADING_DML = re.compile(r"\s*(?:INSERT|UPDATE|DELETE|REPLACE)\b")
+
+
+def _check_pragma_foreign_keys_after_dml(m: MigrationAST) -> list[RiskWarning]:
+    """
+    PRAGMA foreign_keys=ON run after a DML statement in the same function (SQLite).
+
+    SQLite ignores a change to foreign_keys inside an open transaction, and pysqlite defers the
+    physical BEGIN until the first INSERT/UPDATE/DELETE/REPLACE. The pragma therefore applies at
+    the top of a migration and is a silent no-op once any row has been written: enforcement stays
+    off for the rest of the transaction and orphan rows commit.
+
+    Two things make it hard to catch by hand. SQLAlchemy's Connection.in_transaction() is True in
+    both orderings, so the obvious guard does not discriminate; and PRAGMA integrity_check still
+    returns 'ok' afterwards, because only PRAGMA foreign_key_check reports orphans.
+
+    Reported by nazeeh111 in sqlalchemy/alembic discussion #1817. Confirmed against Alembic
+    1.20.0 / SQLAlchemy 2.0.54 / SQLite 3.37.2 with an unmodified `alembic init` env.py.
+    """
+    warnings = []
+    for calls in (m.upgrade_calls(), m.downgrade_calls()):
+        first_dml_line: int | None = None
+        for c in sorted(calls, key=lambda c: c.node.lineno):
+            sql = _sql(c.node) if c.method == "execute" else ""
+            if c.method == "bulk_insert" or _LEADING_DML.match(sql):
+                if first_dml_line is None:
+                    first_dml_line = c.node.lineno
+                continue
+            if first_dml_line is not None and _PRAGMA_FK_ON.search(sql):
+                warnings.append(
+                    _warn(
+                        m,
+                        "PRAGMA foreign_keys after DML",
+                        "PRAGMA foreign_keys=ON runs after a row has already been written on line "
+                        f"{first_dml_line}, so on SQLite it is a silent no-op — enforcement stays "
+                        "off and orphan rows commit. PRAGMA integrity_check still reports 'ok'; "
+                        "only PRAGMA foreign_key_check sees them. "
+                        "Fix: set the pragma on connect (a SQLAlchemy 'connect' event listener) "
+                        "rather than inside the migration, where a transaction is already open.",
+                        "error",
+                        line=c.node.lineno,
+                        code="MRT415",
+                    )
+                )
+    return warnings
+
+
 _PER_FILE_CHECKS = [
     _check_batch_alter_drop,  # first: batch context needs special handling
     _check_downgrade_exists,
@@ -861,6 +943,8 @@ _PER_FILE_CHECKS = [
     _check_create_trigger_without_drop,
     _check_create_type_without_drop,
     _check_set_not_null_alter_column,
+    _check_drop_trigger_without_recreate,
+    _check_pragma_foreign_keys_after_dml,
 ]
 
 

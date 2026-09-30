@@ -2,7 +2,7 @@
 
 # Rule index
 
-Every code `mrt check` can print: **52 rules** across 8 groups. Extracted from the detector sources, so this page cannot drift from the implementation — `tests/test_rule_index.py` fails if it does.
+Every code `mrt check` can print: **54 rules** across 8 groups. Extracted from the detector sources, so this page cannot drift from the implementation — `tests/test_rule_index.py` fails if it does.
 
 Suppress any single rule inline with `# noqa: MRTxxx`, or change its severity with `MRTConfig(severity_overrides={...})`. See the [pattern explanations](patterns.md) for what each one costs you in production.
 
@@ -67,6 +67,7 @@ A rule listed as `error / warning` fires at either severity depending on how cer
 | `MRT412` | error | AlterField to NOT NULL without default | Django | — |
 | `MRT413` | warning | AddIndex without atomic=False | Django | — |
 | `MRT414` | warning | Missing atomic=False | Django | — |
+| `MRT415` | error | PRAGMA foreign_keys after DML | Alembic | — |
 
 ## MRT5xx — Sequences, triggers and types
 
@@ -75,6 +76,7 @@ A rule listed as `error / warning` fires at either severity depending on how cer
 | `MRT501` | warning | SEQUENCE modification | Alembic | [explained](patterns.md#alter-sequence-setval) |
 | `MRT502` | error | CREATE TRIGGER without DROP TRIGGER | Alembic | — |
 | `MRT503` | error | CREATE TYPE without DROP TYPE | Alembic | — |
+| `MRT504` | error | DROP TRIGGER without recreate | Alembic | — |
 
 ## MRT6xx — Squashed migrations (Django)
 
@@ -102,9 +104,9 @@ A rule listed as `error / warning` fires at either severity depending on how cer
 
 ## Counts
 
-- With a prose section in [pattern explanations](patterns.md): **33 of 52**. The rest are described by the message `mrt check` prints; the Django rules are the largest gap and are not yet written up there.
-- Alembic migrations: **39** rules
+- With a prose section in [pattern explanations](patterns.md): **33 of 54**. The rest are described by the message `mrt check` prints; the Django rules are the largest gap and are not yet written up there.
+- Alembic migrations: **41** rules
 - Django migrations: **18** rules
-- Total distinct codes: **52**
+- Total distinct codes: **54**
 
 A rule listed for both formats is implemented once per format, over that format's own syntax — the two detectors share no rule bodies.
