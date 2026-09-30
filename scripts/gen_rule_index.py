@@ -50,6 +50,35 @@ FAMILIES = {
 }
 
 
+# Codes deliberately shared by more than one rule body, and why. Everything else
+# sharing a code is a collision: MRT413 was once given to a new Alembic rule
+# although django_detector.py already emitted it, and nothing failed — the page
+# merged the two into one row reading "error / warning" and "Alembic, Django".
+# An entry here claims that two differently-worded rules are the same rule; a
+# stale entry fails the run, the same way a stale ALIASES entry does.
+SHARED_CODES = {
+    "MRT701": "column disappears during a rolling deploy - one rule, worded per format",
+    "MRT702": "column renamed during a rolling deploy - one rule, worded per format",
+    "MRT703": "table disappears during a rolling deploy - Django reaches it four ways",
+    "MRT704": "NOT NULL column added during a rolling deploy - one rule, worded per format",
+}
+
+
+@dataclass(frozen=True)
+class Site:
+    """One _warn(...) call that can emit a code."""
+
+    code: str
+    pattern: str
+    severity: str
+    fmt: str
+    path: str
+    lineno: int
+
+    def __str__(self) -> str:
+        return f"{self.path}:{self.lineno} [{self.severity}] {self.pattern!r}"
+
+
 @dataclass
 class Rule:
     code: str
@@ -92,8 +121,9 @@ def _arg(call: ast.Call, index: int, name: str) -> ast.expr | None:
     return None
 
 
-def collect_rules() -> dict[str, Rule]:
-    rules: dict[str, Rule] = {}
+def collect_sites() -> list[Site]:
+    """Every _warn(...) call in SOURCES that carries a literal MRT code."""
+    sites: list[Site] = []
     for rel, fmt in SOURCES.items():
         tree = ast.parse((ROOT / rel).read_text(encoding="utf-8"))
         for node in ast.walk(tree):
@@ -114,18 +144,97 @@ def collect_rules() -> dict[str, Rule]:
             code = _literal_str(_arg(node, 99, "code"))
             if not code or not re.fullmatch(r"MRT\d{3}", code):
                 continue
-            pattern = _literal_str(_arg(node, 1, "pattern")) or ""
-            severity = _literal_str(_arg(node, 3, "severity")) or ""
-            if code in rules:
-                existing = rules[code]
-                existing.formats.add(fmt)
-                existing.sites += 1
-                # One code may legitimately fire at two severities — MRT411 is an
-                # error when null=False is explicit and a warning when it is inferred.
-                if severity:
-                    existing.severities.add(severity)
-            else:
-                rules[code] = Rule(code, pattern, {severity} if severity else set(), {fmt}, 1)
+            sites.append(
+                Site(
+                    code=code,
+                    pattern=_literal_str(_arg(node, 1, "pattern")) or "",
+                    severity=_literal_str(_arg(node, 3, "severity")) or "",
+                    fmt=fmt,
+                    path=rel,
+                    lineno=node.lineno,
+                )
+            )
+    return sites
+
+
+def sites_by_code(sites: list[Site]) -> dict[str, list[Site]]:
+    grouped: dict[str, list[Site]] = {}
+    for site in sites:
+        grouped.setdefault(site.code, []).append(site)
+    return grouped
+
+
+def code_collisions(sites: list[Site]) -> dict[str, list[Site]]:
+    """Codes whose emitting rules do not agree on what the rule is called.
+
+    Two sites sharing a code are fine when they are one rule: MRT411 fires at two
+    severities, MRT902 is the same parse failure in both detectors. They are a bug
+    when the pattern strings disagree, because then one code names two rules and
+    the index can only show one of them. SHARED_CODES lists the four codes where
+    the disagreement is deliberate.
+    """
+    return {
+        code: sorted(group, key=lambda s: (s.path, s.lineno))
+        for code, group in sites_by_code(sites).items()
+        if code not in SHARED_CODES and len({s.pattern for s in group}) > 1
+    }
+
+
+def stale_shared_codes(sites: list[Site]) -> list[str]:
+    """SHARED_CODES entries that no longer describe anything.
+
+    Either the code is gone, or its sites now agree on a pattern. Both make the
+    entry a claim about the source that the source no longer makes.
+    """
+    grouped = sites_by_code(sites)
+    return sorted(
+        code
+        for code in SHARED_CODES
+        if code not in grouped or len({s.pattern for s in grouped[code]}) < 2
+    )
+
+
+def collect_rules() -> dict[str, Rule]:
+    sites = collect_sites()
+
+    collisions = code_collisions(sites)
+    if collisions:
+        report = "\n".join(
+            f"  {code} names {len({s.pattern for s in group})} different rules:\n"
+            + "\n".join(f"    {s}" for s in group)
+            for code, group in sorted(collisions.items())
+        )
+        sys.exit(
+            f"one code, more than one rule:\n{report}\n"
+            "Give the new rule the next free code in its family, or - if these really are "
+            "one rule worded per migration format - add it to SHARED_CODES with the reason."
+        )
+
+    stale = stale_shared_codes(sites)
+    if stale:
+        sys.exit(
+            f"SHARED_CODES entries that no longer describe the source: {stale} - "
+            "the code is gone, or its sites now agree on a pattern. Remove them."
+        )
+
+    rules: dict[str, Rule] = {}
+    for site in sites:
+        existing = rules.get(site.code)
+        if existing is None:
+            rules[site.code] = Rule(
+                site.code,
+                site.pattern,
+                {site.severity} if site.severity else set(),
+                {site.fmt},
+                1,
+            )
+            continue
+        existing.formats.add(site.fmt)
+        existing.sites += 1
+        # One code may legitimately fire at two severities — MRT411 is an
+        # error when null=False is explicit and a warning when it is inferred.
+        if site.severity:
+            existing.severities.add(site.severity)
     return rules
 
 

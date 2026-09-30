@@ -63,7 +63,10 @@ jobs:
 
   test:
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.ci == 'true' }}
+    # 'tests' belongs here as much as it does on lint: a pull request that only
+    # adds or changes tests skipped this job entirely, so the tests it added
+    # never ran on CI. #110 was 8 new tests and ran none of them.
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
