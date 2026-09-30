@@ -22,6 +22,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - **The summary tables in `docs/accuracy.md` did not match the entries above them.** The per-file severity split read 13 error / 18 warning against an actual 14 / 17, and the false-positive risk distribution summed to 42 across 44 documented patterns (`None` counted 17 where the entries say 12, `Low` 17 where they say 23). Every figure in both tables is now counted from the entries themselves. The pattern total, quoted in three more places across `docs/accuracy.md` and `README.md`, read 45 against the same 44 entries.
 
 ---
+- **A pull request that only touched tests did not run the tests.** The `test` job in `ci.yml` was gated on the `src` and `ci` path filters but not `tests`, although `lint` already included it. So every test-only change merged without its tests having run once on CI — including the one that added this line. The filter is now on the job.
 - **`docs/accuracy.md` documented two Django rules at the wrong severity.** D5 (`RunSQL without reverse_sql`, MRT108) and D7 (`RunPython without reverse_code`, MRT107) were listed as warnings while `django_detector.py` emits both as errors. Severity decides `mrt check`'s exit code, so a reader could not tell from the page why their build failed. Both are corrected, the Django column of the summary table moves from 5/5 to 7/3, and a test now compares every documented severity against the source.
 ## [1.9.1] — 2026-09-28
 
