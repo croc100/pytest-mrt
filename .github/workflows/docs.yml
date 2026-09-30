@@ -1,25 +1,26 @@
 name: Deploy Docs
 
+# The build runs on pull requests too. Before that it ran only after merge, as
+# the first step of the deploy, so a docs change that broke the build was found
+# by the deploy failing rather than by the pull request that caused it.
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'scripts/gen_rule_index.py'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - uses: actions/checkout@v7
@@ -31,12 +32,38 @@ jobs:
       - name: Install MkDocs
         run: pip install mkdocs-material
 
+      # --strict turns MkDocs' warnings into failures — a nav entry pointing at a
+      # missing page, or a broken internal link between docs pages. It does not
+      # catch links MkDocs only logs at INFO, such as one into a repository
+      # directory the site does not publish.
       - name: Build docs
-        run: mkdocs build
+        run: mkdocs build --strict
 
       - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request'
         with:
           path: site/
 
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    # Scoped to the deploy, not the workflow: at workflow level a pull request's
+    # docs build would sit in the same queue as a deploy from main and hold it up.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - uses: actions/deploy-pages@v5
         id: deployment
