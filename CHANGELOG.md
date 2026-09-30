@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [Unreleased]
+
+### Added
+- **MRT504 — `DROP TRIGGER` without recreate.** The mirror of MRT502, and the direction that slips past both halves of a rollback check: after a rollback the schema still matches and every existing row still holds the value the trigger wrote, so only the *next* committed write comes out wrong — no audit row, no denormalised counter, no updated timestamp. Fires when `upgrade()` drops a trigger via raw SQL and `downgrade()` has no `CREATE TRIGGER`.
+- **MRT415 — `PRAGMA foreign_keys=ON` after DML (SQLite).** SQLite ignores a change to `foreign_keys` inside an open transaction, and pysqlite defers the physical `BEGIN` until the first `INSERT`/`UPDATE`/`DELETE`/`REPLACE`. The pragma therefore works at the top of a migration and is a silent no-op once any row has been written: enforcement stays off for the rest of the transaction and orphan rows commit. Two things make it hard to catch by hand — `PRAGMA integrity_check` still returns `ok` afterwards, because only `PRAGMA foreign_key_check` reports orphans, and SQLAlchemy's `Connection.in_transaction()` is `True` in both orderings, so the obvious guard does not discriminate. Reported by nazeeh111 in [sqlalchemy/alembic discussion #1817](https://github.com/sqlalchemy/alembic/discussions/1817); confirmed here against Alembic 1.20.0 / SQLAlchemy 2.0.54 / SQLite 3.37.2 with an unmodified `alembic init` `env.py`.
+
+### Changed
+- MRT502 and MRT503 read raw SQL through two new shared helpers (`_upgrade_sql` / `_downgrade_sql`) instead of each duplicating the same join. Both consequently see `op.execute(sa.text("..."))`, which they missed before — they only looked at a bare string literal.
+
+### Fixed
+- **The summary tables in `docs/accuracy.md` did not match the entries above them.** The per-file severity split read 13 error / 18 warning against an actual 14 / 17, and the false-positive risk distribution summed to 42 across 44 documented patterns (`None` counted 17 where the entries say 12, `Low` 17 where they say 23). Every figure in both tables is now counted from the entries themselves. The pattern total, quoted in three more places across `docs/accuracy.md` and `README.md`, read 45 against the same 44 entries.
+
+---
+
 ## [1.9.1] — 2026-09-28
 
 ### Changed

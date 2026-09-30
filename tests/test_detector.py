@@ -683,6 +683,207 @@ def test_create_type_with_drop_is_safe(tmp_path):
     assert not any(w.pattern == "CREATE TYPE without DROP TYPE" for w in warnings)
 
 
+# ── Pattern 31: DROP TRIGGER without recreate ─────────────────────────
+
+
+def test_drop_trigger_without_recreate_detected(tmp_path):
+    migration(
+        tmp_path,
+        "001.py",
+        """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute('DROP TRIGGER audit_users ON users')
+        def downgrade():
+            pass
+    """,
+    )
+    warnings = analyze_migrations(str(tmp_path))
+    assert any(w.pattern == "DROP TRIGGER without recreate" for w in warnings)
+
+
+def test_drop_trigger_with_recreate_is_safe(tmp_path):
+    migration(
+        tmp_path,
+        "001.py",
+        """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute('DROP TRIGGER audit_users ON users')
+        def downgrade():
+            op.execute('CREATE TRIGGER audit_users AFTER UPDATE ON users FOR EACH ROW EXECUTE FUNCTION audit()')
+    """,
+    )
+    warnings = analyze_migrations(str(tmp_path))
+    assert not any(w.pattern == "DROP TRIGGER without recreate" for w in warnings)
+
+
+def test_drop_trigger_detected_through_sa_text(tmp_path):
+    """op.execute(sa.text('...')) counts as raw SQL, same as a bare string."""
+    migration(
+        tmp_path,
+        "001.py",
+        """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        import sqlalchemy as sa
+        from alembic import op
+        def upgrade():
+            op.execute(sa.text('DROP TRIGGER audit_users ON users'))
+        def downgrade():
+            pass
+    """,
+    )
+    warnings = analyze_migrations(str(tmp_path))
+    assert any(w.pattern == "DROP TRIGGER without recreate" for w in warnings)
+
+
+# ── Pattern 32: PRAGMA foreign_keys after DML ─────────────────────────
+
+
+def test_pragma_foreign_keys_after_dml_detected(tmp_path):
+    migration(
+        tmp_path,
+        "001.py",
+        """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
+            op.execute('PRAGMA foreign_keys=ON')
+        def downgrade():
+            pass
+    """,
+    )
+    warnings = analyze_migrations(str(tmp_path))
+    hits = [w for w in warnings if w.pattern == "PRAGMA foreign_keys after DML"]
+    assert len(hits) == 1
+    assert hits[0].code == "MRT415"
+
+
+def test_pragma_foreign_keys_before_dml_is_safe(tmp_path):
+    """Set at the top of the migration the pragma applies — pysqlite has not begun yet."""
+    migration(
+        tmp_path,
+        "001.py",
+        """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute('PRAGMA foreign_keys=ON')
+            op.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
+        def downgrade():
+            pass
+    """,
+    )
+    warnings = analyze_migrations(str(tmp_path))
+    assert not any(w.pattern == "PRAGMA foreign_keys after DML" for w in warnings)
+
+
+def test_pragma_foreign_keys_after_bulk_insert_detected(tmp_path):
+    """op.bulk_insert() writes rows too, so it opens the physical transaction."""
+    migration(
+        tmp_path,
+        "001.py",
+        """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.bulk_insert(roles_table, [{'name': 'admin'}])
+            op.execute('PRAGMA foreign_keys = 1')
+        def downgrade():
+            pass
+    """,
+    )
+    warnings = analyze_migrations(str(tmp_path))
+    assert any(w.pattern == "PRAGMA foreign_keys after DML" for w in warnings)
+
+
+def test_create_trigger_after_update_is_not_dml(tmp_path):
+    """'CREATE TRIGGER ... AFTER UPDATE ON t' must not be read as an UPDATE statement."""
+    migration(
+        tmp_path,
+        "001.py",
+        """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute('CREATE TRIGGER audit_users AFTER UPDATE ON users BEGIN SELECT 1; END')
+            op.execute('PRAGMA foreign_keys=ON')
+        def downgrade():
+            op.execute('DROP TRIGGER audit_users')
+    """,
+    )
+    warnings = analyze_migrations(str(tmp_path))
+    assert not any(w.pattern == "PRAGMA foreign_keys after DML" for w in warnings)
+
+
+def test_pragma_foreign_keys_after_dml_in_downgrade_detected(tmp_path):
+    """The same no-op applies in downgrade()."""
+    migration(
+        tmp_path,
+        "001.py",
+        """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute('PRAGMA foreign_keys=ON')
+        def downgrade():
+            op.execute("DELETE FROM users WHERE status = 'active'")
+            op.execute('PRAGMA foreign_keys=ON')
+    """,
+    )
+    warnings = analyze_migrations(str(tmp_path))
+    assert any(w.pattern == "PRAGMA foreign_keys after DML" for w in warnings)
+
+
+def test_pragma_foreign_keys_off_is_not_flagged(tmp_path):
+    """Only turning enforcement ON is the verified silent-no-op case."""
+    migration(
+        tmp_path,
+        "001.py",
+        """
+        revision = '001'
+        down_revision = None
+        branch_labels = None
+        depends_on = None
+        from alembic import op
+        def upgrade():
+            op.execute("UPDATE users SET status = 'active'")
+            op.execute('PRAGMA foreign_keys=OFF')
+        def downgrade():
+            pass
+    """,
+    )
+    warnings = analyze_migrations(str(tmp_path))
+    assert not any(w.pattern == "PRAGMA foreign_keys after DML" for w in warnings)
+
+
 # ── 추가 패턴 커버리지 ──────────────────────────────────────────────────
 
 

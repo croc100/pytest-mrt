@@ -4,7 +4,7 @@ This document describes what each static analysis pattern in pytest-mrt detects,
 and the false-positive risk for each check. The false-positive suite (`tests/test_false_positives.py`)
 enforces the "will NOT trigger" column automatically on every CI run.
 
-Last updated: 2026-06-10 · pytest-mrt v1.4.0 · 34 Alembic patterns + 10 Django patterns
+Last updated: 2026-10-01 · pytest-mrt v1.9.1 · 36 Alembic patterns + 10 Django patterns
 
 ---
 
@@ -12,11 +12,11 @@ Last updated: 2026-06-10 · pytest-mrt v1.4.0 · 34 Alembic patterns + 10 Django
 
 The numbers below are measured against the false-positive test suite
 (`tests/test_false_positives.py`, 310 cases) and the detection test suite
-(`tests/test_detector.py` and `tests/test_django_detector.py`, 45 patterns × multiple variants each; `tests/test_false_positives.py` covers the shapes that must *not* fire).
+(`tests/test_detector.py` and `tests/test_django_detector.py`, 46 patterns × multiple variants each; `tests/test_false_positives.py` covers the shapes that must *not* fire).
 
 | Metric | Alembic | Django |
 |--------|---------|--------|
-| Patterns covered | 34 | 10 |
+| Patterns covered | 36 | 10 |
 | False-positive suite cases | 248 | 62 |
 | **Measured false-positive rate** | **0 %** (0 / 248) | **0 %** (0 / 62) |
 | Detection rate on synthetic cases | 100 % | 100 % |
@@ -39,7 +39,7 @@ The numbers below are measured against the false-positive test suite
 
 ---
 
-## Alembic patterns (34)
+## Alembic patterns (36)
 
 ### Per-file checks
 
@@ -353,6 +353,41 @@ The numbers below are measured against the false-positive test suite
 
 ---
 
+#### 32. DROP TRIGGER without recreate
+| | |
+|---|---|
+| **Severity** | error |
+| **Will catch** | `DROP TRIGGER` SQL in `upgrade()` without `CREATE TRIGGER` SQL in `downgrade()`, including inside `op.execute(sa.text(...))` |
+| **Will NOT catch** | Trigger dropped via a stored procedure or a database-specific API; a `CREATE TRIGGER` in `downgrade()` that recreates the trigger with a different body |
+| **False-positive risk** | Low |
+
+The mirror of #30, and the direction that survives both halves of a rollback check: the schema
+still matches and every existing row keeps the value the trigger wrote, so only the *next*
+committed write comes out wrong.
+
+---
+
+#### 33. PRAGMA foreign_keys after DML
+| | |
+|---|---|
+| **Severity** | error |
+| **Will catch** | `PRAGMA foreign_keys=ON` (or `=1` / `=TRUE`) executed in `upgrade()` or `downgrade()` after an `INSERT` / `UPDATE` / `DELETE` / `REPLACE` statement or an `op.bulk_insert()` in the same function |
+| **Will NOT catch** | DML issued through a construct with no SQL string to read (`op.execute(table.insert())`); a pragma and a DML statement combined inside one multi-statement string; enforcement left off across a whole migration with no pragma present at all |
+| **False-positive risk** | Low — the pragma provably has no effect in this position |
+
+SQLite ignores a change to `foreign_keys` inside an open transaction, and pysqlite defers the
+physical `BEGIN` until the first `INSERT`/`UPDATE`/`DELETE`/`REPLACE`. The pragma therefore works
+at the top of a migration and is a silent no-op after any row has been written — enforcement stays
+off for the rest of the transaction and orphan rows commit. `PRAGMA integrity_check` still returns
+`ok` afterwards; only `PRAGMA foreign_key_check` reports them, and SQLAlchemy's
+`Connection.in_transaction()` is `True` in both orderings, so neither is a usable guard by itself.
+The fix is to set the pragma on connect (a SQLAlchemy `"connect"` event listener) rather than
+inside a migration.
+
+Reported by nazeeh111 in [sqlalchemy/alembic discussion #1817](https://github.com/sqlalchemy/alembic/discussions/1817).
+Confirmed against Alembic 1.20.0 / SQLAlchemy 2.0.54 / SQLite 3.37.2 with an unmodified
+`alembic init` `env.py`.
+
 ### Cross-migration graph checks
 
 #### G1. Multiple migration heads
@@ -491,18 +526,18 @@ The numbers below are measured against the false-positive test suite
 
 | Scope | Total patterns | Error | Warning |
 |-------|---------------|-------|---------|
-| Alembic per-file | 31 | 13 | 18 |
+| Alembic per-file | 33 | 16 | 17 |
 | Alembic graph | 3 | 1 | 2 |
 | Django | 10 | 5 | 5 |
-| **Total** | **44** | **19** | **25** |
+| **Total** | **46** | **22** | **24** |
 
-False-positive risk distribution across all 45 patterns:
+False-positive risk distribution across all 46 patterns:
 
 | Risk level | Count |
 |-----------|-------|
-| None | 17 |
-| Low | 17 |
-| Medium | 8 |
+| None | 12 |
+| Low | 25 |
+| Medium | 9 |
 
 The false-positive test suite (`tests/test_false_positives.py`) enforces 30+ cases that must
 produce zero warnings, covering the most common medium-risk patterns.
